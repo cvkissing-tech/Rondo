@@ -17,7 +17,7 @@ class TaskStoreTests(unittest.TestCase):
     def test_schema_one_migration_preserves_existing_rows(self):
         import sqlite3
         from contextlib import closing
-        from agent_review_loop.store import SCHEMA, APPLICATION_ID
+        from agent_review_loop.store import SCHEMA, APPLICATION_ID, SCHEMA_VERSION
         old = Path(self.temp.name) / 'schema-one.db'
         with closing(sqlite3.connect(old)) as db:
             for statement in SCHEMA:
@@ -31,8 +31,9 @@ class TaskStoreTests(unittest.TestCase):
         self.assertEqual(migrated.get_task(1)['title'], 'keep')
         with closing(sqlite3.connect(old)) as db:
             self.assertEqual(db.execute('SELECT * FROM tasks').fetchall(), before)
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], SCHEMA_VERSION)
             self.assertEqual(db.execute('SELECT count(*) FROM review_jobs').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM task_launches').fetchone()[0], 0)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="任务 协作 ")

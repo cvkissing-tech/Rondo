@@ -8,7 +8,7 @@
 
 在 WorkBuddy「专家·技能·连接器 → 连接器 → 自定义连接器 → 添加 MCP」的 JSON 编辑器，合并生成条目后保存。Windows 本机配置使用既有 Python 解释器、明确 cwd/db/review-root 和 Codex 原生可执行文件；更新 Codex 后旧可执行路径失效时重新生成/核对配置。保留其他连接器。
 
-首次连接会出现本地 MCP 信任提示。由用户在 WorkBuddy 完成该操作；文档或文件存在都不代表已启用。启用后应发现10个工具：原6项任务工具，加 start_review/get_review_status/read_review/cancel_review。
+首次连接会出现本地 MCP 信任提示。由用户在 WorkBuddy 完成该操作；文档或文件存在都不代表已启用。0.7服务提供13个工具，新开发任务从start_task开始，以get_task_context恢复、start_task_review交接审查；原10个工具保留。已有连接需重新加载服务才发现新增工具。
 
 当前 `review-handoff/SKILL.md` 为接入说明，位于 skills 子目录。需要由实际客户端按其技能入口导入或引用，不声称放进仓库就自动可见。它不含密钥。
 

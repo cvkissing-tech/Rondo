@@ -94,3 +94,5 @@ Superset 的完整桌面工作区、云端组织、远程主机与定时自动�
 下一项仍是单一任务：最小 MCP 服务与 SQLite 记录，让两个独立客户端完成一条合成任务的创建、领取、提交和读取；并验证跨进程竞争与重复提交。通过后再进入 Git 快照和审查，避免同时展开多个子系统。
 
 开发进展：上述 MCP 与 SQLite 基础已在 0.2.0 实现并通过 SDK 双客户端验收，业务规则采用 Python 实现，未复制 Go/TypeScript 模块。真实产品接入仍待验收，见[本地验收记录](../../learning/2026-10-25-acceptance.md)。
+
+0.7.0的一键任务入口继续直接复用现有prepare_workspace和[Git原生worktree](https://git-scm.com/docs/git-worktree)，以--detach创建固定提交的独立工作目录；没有增加GitPython或另一套仓库管理器。MCP继续复用已安装官方SDK。新代码只连接任务记录、工作目录和既有审查，不移植其他平台的账号、界面和调度系统。见[第8课](../../learning/08-start-task.md)。

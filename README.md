@@ -4,11 +4,24 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.6.0，可在后台审查前执行本机明确配置的检查，并把证据绑定到固定代码版本；检查失败不启动Codex。** Windows/Python 3.14的85项离线检查通过，另有真实MCP演示，见第7课。先前完成过一次gpt-6.1-sol合成缺陷真实审查，以及WorkBuddy发现10个工具和list_tasks只读连接检查；完整开发与修复闭环尚未验收。产品角色不等于开发本项目的工具分工。
+当前版本：**0.7.0，一次调用即可创建任务、准备独立工作目录并返回执行说明；之后仅用任务编号发起审查。** 复用Git原生worktree、现有SQLite存储和官方MCP SDK。此前已完成检查证据绑定、一次Codex真实合成审查及WorkBuddy只读连接；完整开发与修复闭环仍需实际使用。产品角色不等于开发本项目的工具分工。
 
 首版入口是 WorkBuddy：用户发起开发任务，执行 Agent 完成代码后调用本地 MCP，服务后台启动独立 Codex 审查，执行 Agent 查询并展示意见。**此方向不需要 WorkBuddy 第三方应用。** 接入说明和交接 Skill 见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。独立桌面壳暂不加入。
 
 ## 现在可以运行
+
+### 一次开始任务
+
+执行Agent调用 `start_task(repo, title, instructions, acceptance, request_id)`，即可取得task_id、workspace、base_commit、需求及下一步。默认从HEAD提交建立独立工作目录，不复制源目录未提交的改动。Agent在workspace中实现；换对话时用 `get_task_context(task_id)` 恢复。完成后调用 `start_task_review(task_id, request_id)`，服务直接使用已保存的目录与基础提交，无需再次手填。
+
+也可从CLI使用：
+
+```powershell
+.venv/Scripts/python.exe -X utf8 -m agent_review_loop start --db 'C:/your/local/tasks.sqlite3' --repo 'C:/your/git/project' --title '实现需求' --instructions '具体修改要求' --acceptance '验收条件' --request-id 'feature-001'
+.venv/Scripts/python.exe -X utf8 -m agent_review_loop context --db 'C:/your/local/tasks.sqlite3' 1
+```
+
+替换示例路径，第二条使用第一条实际返回的任务编号。相同开始请求和内容复用原任务，换内容须换request_id；开始任务不调用模型，也不替换宿主应用当前会话或编辑器。默认工作目录位于 `~/.agent-review-loop/tasks/`，start/serve/config可用--task-root指定。详见[第8课：一键开始任务](docs/learning/08-start-task.md)。
 
 在 Windows PowerShell 中：
 
@@ -39,7 +52,7 @@ py -3 -m venv .venv
 
 早期接入准备放在项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，均已忽略于 Git。本轮另经 WorkBuddy 原生配置编辑器保存用户级 `~/.workbuddy/mcp.json`：保留原条目，修改前已备份，保存后与准备文件核对一致。用户完成首次信任后，客户端实际发现10个工具，只读调用轨迹与返回已核对。产品主流程中，由 WorkBuddy 在同一对话内发起与读取审查，用户无需在两个应用之间手动传递任务。
 
-十个工具：任务工具 `create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`，审查工具 `start_review`、`get_review_status`、`read_review`、`cancel_review`。默认领取900秒，可选30–3600秒；长期任务需提前续期。提交保留原 request_id 与内容才能安全重试。submitted 只表示报告已保存，不表示代码通过审查。创建任务没有幂等键，回复丢失时先查列表。
+十三个工具：常用入口 `start_task`、`get_task_context`、`start_task_review`；原任务工具 `create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`；原审查工具 `start_review`、`get_review_status`、`read_review`、`cancel_review`。默认领取900秒，可选30–3600秒；长期任务需提前续期。submit_result重试保留原request_id和内容。submitted只表示报告已保存。旧create_task没有幂等键，新开发任务优先用start_task。
 
 只面向本机同一可信用户。领取凭据不出现在列表和详情里，owner 是显示标签。服务使用 stdio，不监听网络；任务工具不调用模型，显式调用 start_review 会使用本机已登录 Codex 的额度。
 
@@ -49,7 +62,7 @@ start_review 接收 task_id、repo绝对路径、base_ref 和 request_id，先�
 
 用 get_review_status 查询作业；succeeded 后 read_review 默认返回5条意见，最多10条，附快照新旧状态。cancel_review 先返回 cancelling，确认执行退出后才为 cancelled。服务进程丢失所有者锁时记录 interrupted，不自动重跑。准备 Git 包期间在阶段边界处理取消，各 Git 命令自身有超时；不能承诺点击后立即结束。
 
-审查目录默认位于 `~/.agent-review-loop/runs/<数据库路径摘要>/`。serve/config 支持 `--review-root <绝对路径>` 和 `--codex-executable <绝对路径>`；产物目录必须在被捕获仓库之外。SQLite v1数据库自动增量迁移到v2，原任务、领取与提交数据保留。
+审查目录默认位于 `~/.agent-review-loop/runs/<数据库路径摘要>/`。serve/config支持--review-root和--codex-executable绝对路径；产物目录必须在被捕获仓库之外。SQLite schema1/2自动增量迁移到3，原任务、领取、提交和审查数据保留。
 
 examples.async_review_demo 使用真实 MCP 传输和明确标记的 fixture 后端，验证两客户端、重复请求、意见分页、过期和取消；模型调用为0。它不能代替真实 WorkBuddy/Codex 闭环，见 [第6课](docs/learning/06-async-review-mcp.md)。
 
@@ -108,6 +121,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 - [第 5 课：真实 Codex 审查、进程树与成本记录](docs/learning/05-real-codex-runtime.md)
 - [第 6 课：异步审查、幂等、取消与 WorkBuddy 接入](docs/learning/06-async-review-mcp.md)
 - [第 7 课：固定版本的自动化检查与审查门槛](docs/learning/07-snapshot-checks.md)
+- [第 8 课：一键开始任务与接续开发](docs/learning/08-start-task.md)
 - [Hashimoto 项目方法技能](.agents/skills/mitchell-hashimoto-engineering/SKILL.md)与[Willison 项目方法技能](.agents/skills/simon-willison-agent-engineering/SKILL.md)
 
 按下面的里程碑推进，每次完成一个可运行的版本：

@@ -37,6 +37,7 @@ def main():
             command.add_argument('--codex-executable', type=_absolute_path)
             command.add_argument('--check-config', type=_absolute_path,
                                  help='Local trusted JSON argv/timeout; read once at server startup')
+            command.add_argument('--task-root', type=_absolute_path, help='Directory for prepared task workspaces')
         if name == "config":
             command.add_argument("--format", choices=("mcp", "codex"), default="mcp")
         elif name == "create":
@@ -52,6 +53,18 @@ def main():
     workspace.add_argument('--repo', required=True, type=_absolute_path)
     workspace.add_argument('--base', default='HEAD')
     workspace.add_argument('--output', required=True, type=_absolute_path)
+    start = commands.add_parser('start', help='Prepare a task, isolated Git workspace and execution context in one call; no model call')
+    start.add_argument('--db', required=True, type=_absolute_path)
+    start.add_argument('--repo', required=True, type=_absolute_path)
+    start.add_argument('--title', required=True)
+    start.add_argument('--instructions', required=True)
+    start.add_argument('--acceptance', required=True)
+    start.add_argument('--request-id', required=True)
+    start.add_argument('--base', default='HEAD')
+    start.add_argument('--task-root', type=_absolute_path)
+    context = commands.add_parser('context', help='Resume a task with saved workspace, requirements and next action')
+    context.add_argument('--db', required=True, type=_absolute_path)
+    context.add_argument('task_id', type=int)
     package = commands.add_parser('package', help='Capture code and existing task requirements for review')
     package.add_argument('--db', required=True, type=_absolute_path)
     package.add_argument('--task-id', required=True, type=int)
@@ -81,6 +94,8 @@ def main():
             argv.extend(['--codex-executable', str(args.codex_executable)])
         if args.check_config is not None:
             argv.extend(['--check-config', str(args.check_config)])
+        if args.task_root is not None:
+            argv.extend(['--task-root', str(args.task_root)])
         if args.format == "codex":
             print("[mcp_servers.agent_review_loop]")
             print("command = " + json.dumps(sys.executable, ensure_ascii=False))
@@ -128,10 +143,16 @@ def main():
             from .review_jobs import ReviewJobs
             from .checks import load_check_config
             checks = load_check_config(args.check_config) if args.check_config else None
+            from .task_launch import TaskLauncher
             create_server(store, ReviewJobs(store, args.review_root, executable=args.codex_executable,
-                                           check_config=checks)).run()
+                                           check_config=checks), TaskLauncher(store, args.task_root)).run()
             return 0
-        if args.command == "create":
+        if args.command in ('start', 'context'):
+            from .task_launch import TaskLauncher
+            tasks = TaskLauncher(store, args.task_root if args.command == 'start' else None)
+            result = (tasks.start(str(args.repo), args.title, args.instructions, args.acceptance, args.request_id, args.base)
+                      if args.command == 'start' else tasks.context(args.task_id))
+        elif args.command == "create":
             result = store.create_task(args.title, args.instructions, args.acceptance)
         elif args.command == "get":
             result = store.get_task(args.task_id)

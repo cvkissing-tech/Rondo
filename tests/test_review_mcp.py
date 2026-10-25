@@ -100,6 +100,22 @@ class ReviewMCPTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(second['review_approved'])
             self.assertEqual(second['findings'][0]['id'], 'F5')
 
+    async def test_start_task_flows_directly_into_bound_review(self):
+        parameters = self.parameters()
+        parameters.args.extend(['--task-root', str(self.root / 'tasks')])
+        async with Client(parameters) as client:
+            context = await self.tool(client, 'start_task', {'repo': str(self.repo), 'title': 'One entry',
+                'instructions': 'approve', 'acceptance': 'isolated workspace', 'request_id': 'start-1'})
+            workspace = Path(context['workspace'])
+            (workspace / 'code.py').write_bytes(b'print(2)\n')
+            resumed = await self.tool(client, 'get_task_context', {'task_id': context['task_id']})
+            self.assertEqual(resumed['workspace'], str(workspace))
+            job = await self.tool(client, 'start_task_review', {'task_id': context['task_id'], 'request_id': 'review-1'})
+            await self.wait_status(client, job['job_id'], 'succeeded')
+            review = await self.tool(client, 'read_review', {'job_id': job['job_id']})
+            self.assertEqual((review['backend'], review['freshness']), ('fixture', 'current'))
+            self.assertEqual((self.repo / 'code.py').read_bytes(), b'print(1)\n')
+
     async def test_configured_checks_gate_reviewer_over_real_mcp(self):
         config = self.root / 'check.json'
         config.write_text(json.dumps({'argv': [sys.executable, '-c',

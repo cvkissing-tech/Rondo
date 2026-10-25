@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 APPLICATION_ID = 0x41524C31  # ARL1: refuse unrelated SQLite files.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = (
     """CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +72,15 @@ REVIEW_SCHEMA = (
        WHERE state IN ('preparing','running','cancelling')""",
 )
 
+LAUNCH_SCHEMA = (
+    '''CREATE TABLE task_launches (
+        request_id TEXT PRIMARY KEY,
+        fingerprint TEXT NOT NULL,
+        task_id INTEGER NOT NULL UNIQUE REFERENCES tasks(id),
+        context_json TEXT NOT NULL
+    )''',
+)
+
 
 class StoreError(Exception):
     def __init__(self, code: str, message: str):
@@ -109,14 +118,14 @@ class TaskStore:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             if application_id == 0 and version == 0 and not tables:
-                for statement in SCHEMA + REVIEW_SCHEMA:
+                for statement in SCHEMA + REVIEW_SCHEMA + LAUNCH_SCHEMA:
                     db.execute(statement)
                 db.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif application_id != APPLICATION_ID:
                 raise StoreError("FOREIGN_DATABASE", "This file is not an Agent Review Loop database")
-            elif version == 1:
-                for statement in REVIEW_SCHEMA:
+            elif version in (1, 2):
+                for statement in (REVIEW_SCHEMA if version == 1 else ()) + LAUNCH_SCHEMA:
                     db.execute(statement)
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:
@@ -160,16 +169,19 @@ class TaskStore:
         return row
 
     def create_task(self, title, instructions, acceptance):
+        with self._connection(write=True) as db:
+            return self._create_task(db, title, instructions, acceptance)
+
+    def _create_task(self, db, title, instructions, acceptance):
         _text(title, "title", 160)
         _text(instructions, "instructions", 8000)
         _text(acceptance, "acceptance", 4000)
         timestamp = _timestamp(self.clock())
-        with self._connection(write=True) as db:
-            cursor = db.execute(
-                "INSERT INTO tasks (title, instructions, acceptance, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (title, instructions, acceptance, timestamp, timestamp),
-            )
-            return {"task_id": cursor.lastrowid, "status": "ready", "version": 1}
+        cursor = db.execute(
+            "INSERT INTO tasks (title, instructions, acceptance, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (title, instructions, acceptance, timestamp, timestamp),
+        )
+        return {"task_id": cursor.lastrowid, "status": "ready", "version": 1}
 
     @staticmethod
     def _projection(row, attempt, now):

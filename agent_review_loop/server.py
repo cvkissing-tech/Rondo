@@ -13,6 +13,7 @@ import anyio
 from .store import StoreError, TaskStore
 from .snapshots import SnapshotError
 from .review_jobs import ReviewJobs
+from .task_launch import TaskLauncher
 
 
 TaskId = Annotated[int, Field(strict=True, ge=1, le=2**63 - 1)]
@@ -31,8 +32,9 @@ def _invoke(operation, *args):
         raise ToolError(json.dumps({"code": error.code, "message": str(error)}, ensure_ascii=False)) from error
 
 
-def create_server(store: TaskStore, reviews: ReviewJobs | None = None) -> MCPServer:
+def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: TaskLauncher | None = None) -> MCPServer:
     reviews = reviews or ReviewJobs(store)
+    tasks = tasks or TaskLauncher(store)
 
     @asynccontextmanager
     async def lifespan(server):
@@ -43,9 +45,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None) -> MCPSer
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Agent Review Loop", version="0.6.0", log_level="WARNING", lifespan=lifespan,
+        "Agent Review Loop", version="0.7.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
+            "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
+            "When implementation is ready, start_task_review uses the saved workspace and base commit. "
             "Keep the returned attempt_id, claim_token and version; do not publish the token. "
             "Renew long-running claims before expiry. Submit a bounded result with a stable "
             "request_id; retry the same submission only with identical content. "
@@ -57,6 +61,32 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None) -> MCPSer
             " Locally configured checks run on a disposable snapshot copy before Codex; check failures stop generation."
         ),
     )
+
+    @server.tool(structured_output=True)
+    async def start_task(
+        repo: Annotated[str, Field(strict=True, min_length=1, max_length=4096)],
+        title: Annotated[str, Field(strict=True, min_length=1, max_length=160)],
+        instructions: Annotated[str, Field(strict=True, min_length=1, max_length=8000)],
+        acceptance: Annotated[str, Field(strict=True, min_length=1, max_length=4000)],
+        request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+        base_ref: Annotated[str, Field(strict=True, min_length=1, max_length=200)] = 'HEAD',
+    ) -> dict[str, Any]:
+        """Prepare task + isolated Git workspace + fixed base in ONE call. Same request_id/content reuses it. No model call."""
+        return await asyncio.to_thread(_invoke, tasks.start, repo, title, instructions, acceptance, request_id, base_ref)
+
+    @server.tool(structured_output=True)
+    def get_task_context(task_id: TaskId) -> dict[str, Any]:
+        """Resume a prepared task: requirements, workspace, fixed base and next action. No full chat history."""
+        return _invoke(tasks.context, task_id)
+
+    @server.tool(structured_output=True)
+    async def start_task_review(
+        task_id: TaskId,
+        request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+    ) -> dict[str, Any]:
+        """Review a prepared task using its SAVED workspace/base. Stop editing first. Can consume Codex quota."""
+        context = _invoke(tasks.context, task_id)
+        return await asyncio.to_thread(_invoke, reviews.start_review, task_id, context['workspace'], context['base_commit'], request_id)
 
     @server.tool(structured_output=True)
     def create_task(
