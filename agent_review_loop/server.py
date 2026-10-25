@@ -27,7 +27,7 @@ def _invoke(operation, *args):
 
 def create_server(store: TaskStore) -> MCPServer:
     server = MCPServer(
-        "Agent Review Loop", version="0.2.0", log_level="WARNING",
+        "Agent Review Loop", version="0.3.0", log_level="WARNING",
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Keep the returned attempt_id, claim_token and version; do not publish the token. "

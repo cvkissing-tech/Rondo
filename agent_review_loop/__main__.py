@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 
 from .store import StoreError, TaskStore
+from .snapshots import SnapshotError, create_review_package, prepare_workspace, read_json
+from .reviews import review_status, save_review
 
 
 def _absolute_path(value):
     path = Path(value).expanduser()
     if not path.is_absolute():
-        raise argparse.ArgumentTypeError("--db must be an absolute path shared by all clients")
+        raise argparse.ArgumentTypeError("Use an absolute path shared by all clients")
     return path.resolve()
 
 
@@ -20,7 +22,7 @@ def main():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Local MCP task handoff bridge; no model calls.")
+    parser = argparse.ArgumentParser(description="Local agent handoffs and fixed-code review packages; no model calls.")
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
         ("serve", "Serve MCP over stdio; stdout is reserved for the protocol"),
@@ -40,6 +42,23 @@ def main():
         elif name == "list":
             command.add_argument("--limit", type=int, default=10)
             command.add_argument("--after-id", type=int, default=0)
+    workspace = commands.add_parser('workspace', help='Create an isolated worktree from a fixed base')
+    workspace.add_argument('--repo', required=True, type=_absolute_path)
+    workspace.add_argument('--base', default='HEAD')
+    workspace.add_argument('--output', required=True, type=_absolute_path)
+    package = commands.add_parser('package', help='Capture code and existing task requirements for review')
+    package.add_argument('--db', required=True, type=_absolute_path)
+    package.add_argument('--task-id', required=True, type=int)
+    package.add_argument('--repo', required=True, type=_absolute_path)
+    package.add_argument('--base', required=True)
+    package.add_argument('--output', required=True, type=_absolute_path)
+    record = commands.add_parser('record-review', help='Validate and retain a structured review')
+    record.add_argument('--package', required=True, type=_absolute_path)
+    record.add_argument('--file', required=True, type=_absolute_path)
+    status = commands.add_parser('review-status', help='Read a review and optionally compare current code')
+    status.add_argument('--package', required=True, type=_absolute_path)
+    status.add_argument('--review-id', required=True)
+    status.add_argument('--repo', type=_absolute_path)
     args = parser.parse_args()
     if args.command == "config":
         argv = ["-X", "utf8", "-m", "agent_review_loop", "serve", "--db", str(args.db)]
@@ -51,6 +70,20 @@ def main():
             print(json.dumps({"mcpServers": {"agent-review-loop": {"type": "stdio", "command": sys.executable, "args": argv, "cwd": str(Path(__file__).resolve().parents[1])}}}, ensure_ascii=False, indent=2))
         return 0
     try:
+        if args.command in ('workspace', 'package', 'record-review', 'review-status'):
+            if args.command == 'workspace':
+                result = prepare_workspace(args.repo, args.output, args.base)
+            elif args.command == 'package':
+                task = TaskStore(args.db).get_task(args.task_id)
+                manifest = create_review_package(args.repo, args.base, task, args.output)
+                result = {key: manifest[key] for key in ('snapshot_id', 'base_commit', 'target_tree', 'checks')}
+                result.update(package_path=str(args.output), files={side: len(files) for side, files in manifest['files'].items()})
+            elif args.command == 'record-review':
+                result = save_review(args.package, read_json(args.file))
+            else:
+                result = review_status(args.package, args.review_id, args.repo)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         store = TaskStore(args.db)
         if args.command == "serve":
             from .server import create_server
@@ -64,7 +97,7 @@ def main():
             result = store.list_tasks(args.limit, args.after_id)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    except StoreError as error:
+    except (StoreError, SnapshotError) as error:
         print(json.dumps({"code": error.code, "message": str(error)}, ensure_ascii=False), file=sys.stderr)
         return 1
     except OSError as error:
