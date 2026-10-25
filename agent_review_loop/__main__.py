@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import shutil
 from pathlib import Path
 
 from .store import StoreError, TaskStore
@@ -59,6 +60,13 @@ def main():
     status.add_argument('--package', required=True, type=_absolute_path)
     status.add_argument('--review-id', required=True)
     status.add_argument('--repo', type=_absolute_path)
+    review = commands.add_parser('review-codex', help='Run ONE real review using the configured Codex account; consumes quota')
+    review.add_argument('--package', required=True, type=_absolute_path)
+    review.add_argument('--output', required=True, type=_absolute_path)
+    buddy = commands.add_parser('workbuddy-authorize', help='Prepare official OAuth URL and local state; no secret required')
+    buddy.add_argument('--client-id', required=True)
+    buddy.add_argument('--redirect-uri', required=True)
+    buddy.add_argument('--output', required=True, type=_absolute_path)
     args = parser.parse_args()
     if args.command == "config":
         argv = ["-X", "utf8", "-m", "agent_review_loop", "serve", "--db", str(args.db)]
@@ -70,7 +78,20 @@ def main():
             print(json.dumps({"mcpServers": {"agent-review-loop": {"type": "stdio", "command": sys.executable, "args": argv, "cwd": str(Path(__file__).resolve().parents[1])}}}, ensure_ascii=False, indent=2))
         return 0
     try:
-        if args.command in ('workspace', 'package', 'record-review', 'review-status'):
+        if args.command == 'workbuddy-authorize':
+            from .workbuddy import WorkBuddyError, authorization_url
+            try:
+                authorization = authorization_url(args.client_id, args.redirect_uri)
+                args.output.mkdir(parents=True, exist_ok=False)
+                (args.output / 'oauth-request.json').write_text(json.dumps({
+                    **authorization, 'client_id': args.client_id, 'redirect_uri': args.redirect_uri,
+                }, ensure_ascii=False, indent=2), encoding='utf-8')
+            except WorkBuddyError as error:
+                raise SnapshotError('WORKBUDDY_AUTH', str(error)) from error
+            print(json.dumps({'authorization_url': authorization['url'], 'state_file': str(args.output / 'oauth-request.json'),
+                              'credentials_required': False, 'connected': False}, ensure_ascii=False, indent=2))
+            return 0
+        if args.command in ('workspace', 'package', 'record-review', 'review-status', 'review-codex'):
             if args.command == 'workspace':
                 result = prepare_workspace(args.repo, args.output, args.base)
             elif args.command == 'package':
@@ -80,10 +101,16 @@ def main():
                 result.update(package_path=str(args.output), files={side: len(files) for side, files in manifest['files'].items()})
             elif args.command == 'record-review':
                 result = save_review(args.package, read_json(args.file))
+            elif args.command == 'review-codex':
+                from .codex_review import run_codex_review
+                binary = shutil.which('codex')
+                if binary is None:
+                    raise SnapshotError('CODEX_NOT_FOUND', 'Install and authenticate the native Codex CLI first')
+                result = run_codex_review(args.package, args.output, Path(binary))
             else:
                 result = review_status(args.package, args.review_id, args.repo)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
+            return 1 if args.command == 'review-codex' and result['status'] != 'review_saved' else 0
         store = TaskStore(args.db)
         if args.command == "serve":
             from .server import create_server
