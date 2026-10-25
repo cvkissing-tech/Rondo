@@ -8,3 +8,5 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+/.codex/config.toml
+/.workbuddy/mcp.json

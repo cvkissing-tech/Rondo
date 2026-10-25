@@ -32,6 +32,8 @@ py -3 -m venv .venv
 
 第一条生成 mcpServers JSON；第二条生成 Codex TOML。两边指定同一数据库绝对路径。配置命令只打印结果，不修改客户端、不创建数据库。安装为 editable 包后，服务也能从其他目录启动。
 
+本机接入准备已把生成内容分别放入项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，不修改用户级配置。这两个文件含本机绝对路径，因此加入 Git 忽略。两个客户端都需打开本项目目录，并按客户端要求信任项目、重新加载 MCP；生成或放置配置不等于连接成功。当前验收任务 1 已创建，先由 WorkBuddy 通过 MCP 领取并提交，再由 Codex 通过 MCP 读取；不要用脚本直接改数据库冒充产品接入成功。
+
 六个工具：`create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`。默认领取 900 秒，可选 30–3600 秒；长期任务需提前续期。提交保留原 request_id 与内容才能安全重试。submitted 只表示报告已保存，不表示代码通过审查。创建任务没有幂等键，回复丢失时先查列表。
 
 只面向本机同一可信用户。领取凭据不出现在列表和详情里，owner 是显示标签。服务不监听网络、不调用模型，也不主动唤醒其他 Agent。
