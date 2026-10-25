@@ -110,6 +110,8 @@ receipt = save_review(package_dir, review)
 
 在线状态接口即使返回 true，也仅表示本地助理在线。后续还需用只读合成任务确认指定目录、结果关联和完成/停止语义，之后才能执行真实修改。
 
+在没有第三方应用时，下一项优先验证 WorkBuddy 主动调用本地 MCP 的路线：用户在 WorkBuddy 发起一次任务，它完成实现后调用本服务创建快照/启动 Codex 审查，再从同一服务读取意见，后续按用户选择修复。[官方连接器文档](https://open.workbuddy.cn/docs/connector)支持本地 stdio；这是基于文档的接入设计，本机真实导入和调用仍未验收。它不依赖 Open API 从外部向 WorkBuddy 派单的授权，但也不代表外部桌面端已经能自主唤醒并控制 WorkBuddy。下一轮补充有界、可查询状态的审查工具，避免长模型调用阻塞普通 MCP 请求。
+
 ## 参考
 
 - [官方 Codex App Server](https://learn.chatgpt.com/docs/app-server)：生命周期、turn/start/outputSchema 与完成事件。
