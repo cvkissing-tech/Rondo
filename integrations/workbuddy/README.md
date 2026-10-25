@@ -14,7 +14,7 @@
 
 ## 第一项真实客户端验收
 
-仅调用 list_tasks(limit=1)，报告实际工具返回；不启动审查，不扫描其他项目。这能验证 WorkBuddy 与本地服务连接，不消耗 Codex 模型额度。WorkBuddy 自己是否调用模型以及其用量另行记录。
+2026-10-25本机已完成：用户信任后显示10/10工具启用，使用界面所示Deepseek-V4.1-Flash调用 list_tasks(limit=1, after_id=0)。已展开执行轨迹核对工具与参数，最终返回空列表，与本地数据库一致；未创建任务或启动Codex审查。客户端显示完成25秒、消耗0.48（计量单位未知）。详细证据及限制见[第6课后续记录](../../docs/learning/06-async-review-mcp.md#8-后续真实-workbuddy-只读连接验收)。
 
 之后再用用户明确指定的合成仓库验证一次后台审查。普通 unittest 和 async_review_demo 使用明示 fixture 后端，不调用真实模型，也不能代替真实 WorkBuddy 验收。
 

@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.5.0，MCP 可在后台发起、查询、读取和取消 Codex 审查。** 本机 Windows/Python 3.14 的71项离线检查通过；先前完成过一次 gpt-6.1-sol 合成缺陷真实审查。本轮将连接配置保存到 WorkBuddy，其首次信任待用户完成，真实客户端工具发现与修复闭环尚未验收。产品角色不等于开发本项目的工具分工。
+当前版本：**0.5.0，MCP 可在后台发起、查询、读取和取消 Codex 审查。** 本机 Windows/Python 3.14 的71项离线检查通过；先前完成过一次 gpt-6.1-sol 合成缺陷真实审查。用户完成首次信任后，WorkBuddy 已显示10个工具启用，并完成 list_tasks 只读连接检查；开发、审查和修复完整闭环尚未验收。产品角色不等于开发本项目的工具分工。
 
 首版入口是 WorkBuddy：用户发起开发任务，执行 Agent 完成代码后调用本地 MCP，服务后台启动独立 Codex 审查，执行 Agent 查询并展示意见。**此方向不需要 WorkBuddy 第三方应用。** 接入说明和交接 Skill 见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。独立桌面壳暂不加入。
 
@@ -36,7 +36,7 @@ py -3 -m venv .venv
 
 第一条生成 mcpServers JSON；第二条生成 Codex TOML。两边指定同一数据库绝对路径。配置命令只打印结果，不修改客户端、不创建数据库。安装为 editable 包后，服务也能从其他目录启动。
 
-早期接入准备放在项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，均已忽略于 Git。本轮另经 WorkBuddy 原生配置编辑器保存用户级 `~/.workbuddy/mcp.json`：保留原条目，修改前已备份，保存后与准备文件核对一致；当前停在首次信任提示。生成、保存配置不等于连接成功。产品主流程中，由 WorkBuddy 在同一对话内发起与读取审查，用户无需在两个应用之间手动传递任务。
+早期接入准备放在项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，均已忽略于 Git。本轮另经 WorkBuddy 原生配置编辑器保存用户级 `~/.workbuddy/mcp.json`：保留原条目，修改前已备份，保存后与准备文件核对一致。用户完成首次信任后，客户端实际发现10个工具，只读调用轨迹与返回已核对。产品主流程中，由 WorkBuddy 在同一对话内发起与读取审查，用户无需在两个应用之间手动传递任务。
 
 十个工具：任务工具 `create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`，审查工具 `start_review`、`get_review_status`、`read_review`、`cancel_review`。默认领取900秒，可选30–3600秒；长期任务需提前续期。提交保留原 request_id 与内容才能安全重试。submitted 只表示报告已保存，不表示代码通过审查。创建任务没有幂等键，回复丢失时先查列表。
 
@@ -103,7 +103,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 | 阶段 | 可交付结果 | 理解的重点 |
 | --- | --- | --- |
 | 1（完成） | 启动本地测试进程、记录输出、处理失败与超时；8 项检查通过 | 进程、标准输入输出、退出码 |
-| 2（基础完成，真实客户端待验收） | 本地 MCP、共享任务、过期领取、并发与重启验证；下一步接通 WorkBuddy/Codex | 协议、事务、版本、幂等、配置 |
+| 2（协议与 WorkBuddy 只读连接完成） | 本地 MCP、共享任务、过期领取、并发与重启验证；完整开发交接待验收 | 协议、事务、版本、幂等、配置 |
 | 3（快照/契约与 Codex 合成审查完成，WorkBuddy 待接入） | 固定 before/after、差异、任务要求；校验意见与版本 | Git、上下文、版本与状态 |
 | 4（历史/过期检查完成，用户修复流程待接入） | 持久化审查，代码变化后旧审查过期 | 持久化、恢复、验收证据 |
 | 5 | 整理安装说明、示例、必要测试及 CI | 可复现交付与开源协作 |
@@ -147,7 +147,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 - WorkBuddy 支持本地 stdio MCP 连接器：https://open.workbuddy.cn/docs/connector
 - 产品主流程目标为一次发起后自动执行和交接；真实调度尚在验证，不把“支持连接器”当作真实闭环已经通过。
 - WorkBuddy 另有经应用注册和用户授权调用本地助理的 Open API；首版不以开通该接口为前置条件：https://open.workbuddy.cn/docs/openapi
-- 本机已确认 WorkBuddy V5.9.2，安装于 `C:/Users/cvkis/AppData/Local/Programs/WorkBuddy`；本轮已备份并通过原生编辑器增加本服务的用户级 MCP 配置，停在首次信任提示，未通过 WorkBuddy 发起模型调用。
+- 本机已确认 WorkBuddy V5.9.2，安装于 `C:/Users/cvkis/AppData/Local/Programs/WorkBuddy`；本服务用户级配置已备份、保存并由用户信任。客户端只读验收使用界面所示 Deepseek-V4.1-Flash，执行轨迹包含工具搜索和 list tasks；未启动 Codex 审查。详见第6课的后续验收记录。
 
 当前贡献路线是发布独立开源工具和经过验证的 Agent 接入示例；有可复现问题时按各上游项目规则反馈。代码尚未发布到 GitHub；公开发布前再选定许可证并检查日志中是否含私人资料。
 

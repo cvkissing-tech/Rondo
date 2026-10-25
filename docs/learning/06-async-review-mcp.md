@@ -108,6 +108,20 @@ examples.prepare_workbuddy 读取原配置，生成备份与合并文件，不�
 
 连接方向是 WorkBuddy→本地MCP→Codex。正式第三方OAuth相关代码保留为可选路径；本流程不依赖应用申请，也不会读取桌面端私有登录凭据。
 
-当前 WorkBuddy 显示本条目的首次“信任”按钮，尚未启用。该权限决定由用户完成。之后应先观察是否实际发现10个工具，再只调用 list_tasks(limit=1) 验证连接；这不启动Codex审查。WorkBuddy自己的模型调用/用量单独记录。交接Skill位于 integrations/workbuddy/skills/review-handoff，尚未证明被实际客户端导入。
+首次交付时 WorkBuddy 停在本条目的“信任”按钮，未启用；用户随后亲自完成，后续结果见下节。交接Skill位于 integrations/workbuddy/skills/review-handoff，尚未证明被实际客户端导入。
 
 本轮没有验证真实 WorkBuddy 开发→审查→用户选择修复闭环，也没有解决第5课发现的额外模型输入开销。下一步先完成真实客户端的最小只读验收，再用明确指定的合成仓库做一次有预算的完整实验。
+
+## 8. 后续：真实 WorkBuddy 只读连接验收
+
+2026-10-25约20:06（北京时间），用户回复“已点击”后继续检查。此节更新前面的初始待接入状态，不代表完整开发闭环已通过。
+
+- 客户端 MCP 管理页显示 agent-review-loop 绿色状态和10/10工具启用；展开可见全部10个工具名。
+- 使用界面所示 Deepseek-V4.1-Flash 发起一次只读请求，要求仅调用本服务 list_tasks(limit=1, after_id=0)，不创建任务、不启动Codex。
+- 展开执行过程，实际工具轨迹含“搜索工具”与“list tasks”；进一步展开后可见输入为 `{"parameters":{"limit":1,"after_id":0}}`。不是仅凭最终回复中的“调用成功”判定。
+- 最终回复展示 `{"items":[],"has_more":false,"next_after_id":null}`。独立读取本项目 workbuddy.sqlite3，tasks=0、review_jobs=0，与空列表及未创建审查相符。
+- 客户端显示“已完成25s”，以及“共消耗0.48”；后者计量单位未核实，不换算成金额、token或Codex用量。此检查使用了一次WorkBuddy模型交互，Codex审查启动次数为0。
+
+证据范围是原生客户端可见的工具执行轨迹、参数、最终输出与独立数据库核对；未导出WorkBuddy原始协议帧，界面模型名也不是服务端模型身份鉴证。只读连接成立，不推出开发目录选择、技能导入、真实审查和修复已成功。
+
+Computer Use 仅用于这次实际客户端验收，因为当前没有可直接控制WorkBuddy对话的已验证官方接口。本项目核心通过stdio MCP工作，运行不依赖界面坐标或Computer Use；代码开发和协议测试也无需这一路径。界面操作到此停止。
