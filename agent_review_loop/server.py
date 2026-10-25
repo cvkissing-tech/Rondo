@@ -45,7 +45,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Agent Review Loop", version="0.7.0", log_level="WARNING", lifespan=lifespan,
+        "Agent Review Loop", version="0.8.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -78,6 +78,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     def get_task_context(task_id: TaskId) -> dict[str, Any]:
         """Resume a prepared task: requirements, workspace, fixed base and next action. No full chat history."""
         return _invoke(tasks.context, task_id)
+
+    @server.tool(structured_output=True)
+    async def get_task_changes(task_id: TaskId) -> dict[str, Any]:
+        """Read bounded Git changes, including untracked files, in this task's saved workspace. No model call."""
+        return await asyncio.to_thread(_invoke, tasks.changes, task_id)
 
     @server.tool(structured_output=True)
     async def start_task_review(

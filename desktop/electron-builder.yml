@@ -1,0 +1,10 @@
+appId: org.agentreviewloop.workbench
+productName: Agent Review Loop
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+win:
+  executableName: agent-review-loop
+npmRebuild: false

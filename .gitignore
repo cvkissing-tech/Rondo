@@ -10,3 +10,9 @@ build/
 *.egg-info/
 /.codex/config.toml
 /.workbuddy/mcp.json
+node_modules/
+desktop/out/
+desktop/release/
+.eslintcache
+.impeccable/mocks/
+.impeccable/captures/

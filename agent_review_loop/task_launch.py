@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from .snapshots import canonical, digest, prepare_workspace
+from .snapshots import _git, canonical, current_tree, digest, prepare_workspace, repository_root
 from .store import StoreError, TaskStore, _text
 
 
@@ -48,12 +48,22 @@ class TaskLauncher:
         task = self.store.get_task(task_id)
         with self.store._connection() as db:
             launch = db.execute('SELECT context_json FROM task_launches WHERE task_id=?', (task_id,)).fetchone()
+            review = db.execute('SELECT id FROM review_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
         if launch is None:
             raise StoreError('TASK_NOT_PREPARED', 'This task has no managed workspace; use start_task for new tasks')
         context = json.loads(launch['context_json'])
         if not Path(context['workspace']).is_dir():
             raise StoreError('WORKSPACE_MISSING', 'The task workspace is missing; it will not be recreated over existing work')
-        return {**context, 'task': task,
+        return {**context, 'task': task, 'latest_review_job_id': review['id'] if review else None,
                 'next_action': 'Implement the task in workspace only. Read project instructions, run relevant checks, then stop editing and call start_task_review.',
                 'review': {'tool': 'start_task_review', 'arguments': {'task_id': task_id},
                            'request_id_rule': 'Choose a stable review request_id; this does not start a model call.'}}
+
+    def changes(self, task_id):
+        context = self.context(task_id)
+        repo = repository_root(Path(context['workspace']))
+        tree = current_tree(repo)
+        patch = _git(repo, 'diff', '--no-ext-diff', '--no-textconv', '--no-renames', context['base_commit'], tree, '--')
+        limit = 200_000
+        return {'task_id': task_id, 'base_commit': context['base_commit'], 'target_tree': tree,
+                'patch': patch[:limit].decode('utf-8', errors='replace'), 'truncated': len(patch) > limit}

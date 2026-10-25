@@ -34,7 +34,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(first.protocol_version, "2026-07-28")
             self.assertEqual(second.protocol_version, "2025-11-25")
             tools = await first.list_tools()
-            self.assertEqual({tool.name for tool in tools.tools}, {"start_task", "get_task_context", "start_task_review", "create_task", "get_task", "list_tasks", "claim_task", "renew_claim", "submit_result", "start_review", "get_review_status", "read_review", "cancel_review"})
+            self.assertEqual({tool.name for tool in tools.tools}, {"start_task", "get_task_context", "get_task_changes", "start_task_review", "create_task", "get_task", "list_tasks", "claim_task", "renew_claim", "submit_result", "start_review", "get_review_status", "read_review", "cancel_review"})
             self.assertLess(len(tools.model_dump_json().encode()), 18000)
             created = await first.call_tool("create_task", {"title": "SDK 合成任务", "instructions": "返回一条说明，不改代码", "acceptance": "另一个客户端能读取"})
             self.assertFalse(created.is_error, created.content)

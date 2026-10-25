@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T16:29:30Z",
+  "title": "Design System: Agent Review Loop",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "墨绿动作色"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "冷灰工作底"
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "深墨绿导航"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "白色工作面"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "任务标题",
+        "purpose": "常规桌面操作标题，窄窗口使用22px。"
+      },
+      "code": {
+        "displayName": "代码与路径",
+        "purpose": "仅用于实际代码、提交与文件路径。"
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "准备任务主按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "任务表单的主动作。",
+      "html": "<button class=\"arl-primary\">准备任务</button>",
+      "css": ".arl-primary{font:13px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 15px;color:#fff;background:var(--accent,#285b46);border:1px solid var(--accent,#285b46);border-radius:6px;cursor:pointer}.arl-primary:hover{background:#1d4936}.arl-primary:focus-visible{outline:2px solid #2e8060;outline-offset:3px}.arl-primary:disabled{opacity:.48;cursor:default}"
+    },
+    {
+      "name": "项目目录输入",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "有可见标签的本地路径字段。",
+      "html": "<label class=\"arl-label\" for=\"arl-project\">项目目录</label><input class=\"arl-input\" id=\"arl-project\" placeholder=\"选择本机上的 Git 项目\"/>",
+      "css": ".arl-label{display:block;margin:0 0 9px;font:600 13px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:#23342e}.arl-input{font:14px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:#23342e;background:#fff;border:1px solid #ccd5cc;border-radius:6px;padding:11px 12px;width:100%;max-width:360px}.arl-input::placeholder{color:#68776b}.arl-input:focus-visible{outline:2px solid #2e8060;outline-offset:3px}"
+    },
+    {
+      "name": "任务导航项",
+      "kind": "nav",
+      "refersTo": "navigation-selected",
+      "description": "深色侧栏中的当前任务，展示标题与实际状态。",
+      "html": "<nav class=\"arl-nav\" aria-label=\"任务导航示例\"><button class=\"arl-task\" aria-current=\"page\"><span>当前任务<small>任务编号 · 实际状态</small></span></button></nav>",
+      "css": ".arl-nav{width:194px;padding:15px;background:#233e33;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.arl-task{display:flex;width:100%;text-align:left;padding:11px 10px;background:#3b5a49;color:#fff;border:0;border-radius:6px;font:14px 'Segoe UI','Microsoft YaHei UI',sans-serif;cursor:pointer}.arl-task span{line-height:1.5;overflow-wrap:anywhere}.arl-task small{display:block;color:#a6bba9;font-size:11px;margin-top:5px}.arl-task:hover{background:#365447}.arl-task:focus-visible{outline:2px solid #2e8060;outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "事务所项目册",
+    "overview": "稳定导航、灰白工作面、墨绿动作与细边界组织同一项开发任务。视觉层次服务于需求、工作区、差异和审查，状态来自真实服务。",
+    "keyCharacteristics": [
+      "克制的桌面操作布局",
+      "中文系统字体",
+      "平面色阶与细分隔",
+      "明确的真实接入状态"
+    ],
+    "rules": [
+      {
+        "name": "操作色",
+        "body": "墨绿用于主动作和当前选择，正文使用清晰的深灰绿。",
+        "section": "colors"
+      },
+      {
+        "name": "平面层次",
+        "body": "通过色阶与1px边界组织内容，当前界面无投影。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "沿用可见标签、键盘焦点和窄窗口布局",
+      "用文字区分待接入、运行中和终态"
+    ],
+    "donts": [
+      "不用模拟进度冒充Agent执行",
+      "不加入无关装饰图片或指标卡",
+      "不把审查通过等同于测试与人工验收通过"
+    ]
+  }
+}
