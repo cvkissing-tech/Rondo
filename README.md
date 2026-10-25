@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前状态：**第一阶段本地进程模块已实现并通过 8 项离线检查；真实 Agent 接入和完整协作流程尚未完成。** 本项目代码由当前开发会话实现；上述产品角色不等于开发本项目时的人员或工具分工。
+当前版本：**0.2.0，已实现本地 MCP 任务交接服务与 SQLite 持久化，19 项离线检查通过。** 两个官方 SDK 客户端与真实服务子进程已完成合成任务交接；真实 Codex/WorkBuddy 产品接入、Git 快照与完整审查流程尚未完成。上述产品角色不等于开发本项目时的人员或工具分工。
 
 ## 现在可以运行
 
@@ -12,11 +12,29 @@
 
 ```powershell
 Set-Location 'C:/Users/cvkis/Documents/ChatGPT/GitHub/agent-review-loop'
-py -3 -m unittest discover -s tests -v
-py -3 -m examples.process_demo
+py -3 -m venv .venv
+.venv/Scripts/python.exe -m pip install -e .
+.venv/Scripts/python.exe -m unittest discover -s tests -v
+.venv/Scripts/python.exe -m examples.task_demo
+.venv/Scripts/python.exe -m examples.process_demo
 ```
 
-其他系统使用 Python 3.11+，在仓库根目录把 `py -3` 换为 `python3`。当前只实际验证了本机 Windows；尚未验证其他系统。
+本机已准备好 `.venv`，可以直接运行检查与演示。新环境先创建虚拟环境并安装。其他系统使用 Python 3.11+，把 `py -3` 换为 `python3`，后续解释器路径换为 `.venv/bin/python`。当前只实际验证了本机 Windows；Windows/Linux 的 CI 配置已添加，尚未在 GitHub 运行。
+
+任务演示使用真实 stdio MCP 进程：两个客户端创建与领取任务，第二次领取被拒绝，提交后重复调用得到同一回执，服务重启后仍可读取。没有模型调用，不修改现有应用配置。
+
+### 服务与客户端配置
+
+```powershell
+.venv/Scripts/python.exe -m agent_review_loop config --db "$((Get-Location).Path)/.agent-review-loop/acceptance.sqlite3"
+.venv/Scripts/python.exe -m agent_review_loop config --db "$((Get-Location).Path)/.agent-review-loop/acceptance.sqlite3" --format codex
+```
+
+第一条生成 mcpServers JSON；第二条生成 Codex TOML。两边指定同一数据库绝对路径。配置命令只打印结果，不修改客户端、不创建数据库。安装为 editable 包后，服务也能从其他目录启动。
+
+六个工具：`create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`。默认领取 900 秒，可选 30–3600 秒；长期任务需提前续期。提交保留原 request_id 与内容才能安全重试。submitted 只表示报告已保存，不表示代码通过审查。创建任务没有幂等键，回复丢失时先查列表。
+
+只面向本机同一可信用户。领取凭据不出现在列表和详情里，owner 是显示标签。服务不监听网络、不调用模型，也不主动唤醒其他 Agent。
 
 演示依次显示 `completed / 0`、`failed / 7`、`timed_out / 非零退出码`。超时退出码取决于操作系统，不要求固定数值。演示只运行自带 Python 程序，不访问网络和模型，临时输出在演示结束后清理。
 
@@ -35,13 +53,16 @@ py -3 -m examples.process_demo
 
 - [设计与验收标准](docs/superpowers/specs/2026-10-25-agent-review-loop-design.md)
 - [第一阶段实施计划](docs/superpowers/plans/2026-10-25-process-runner.md)
+- [开源借鉴与复用清单](docs/superpowers/specs/2026-10-25-open-source-reuse.md)
+- [第二阶段实施与验收计划](docs/superpowers/plans/2026-10-25-shared-task-mcp.md)
+- [第 2 课：代码讲解、实验与验收过程](docs/learning/02-shared-task-mcp.md)
 
 按下面的里程碑推进，每次完成一个可运行的版本：
 
 | 阶段 | 可交付结果 | 理解的重点 |
 | --- | --- | --- |
 | 1（完成） | 启动本地测试进程、记录输出、处理失败与超时；8 项检查通过 | 进程、标准输入输出、退出码 |
-| 2 | WorkBuddy 领取实现任务并提交结果，Codex 执行独立审查 | 配置加载、MCP、事件解析、角色权限 |
+| 2（基础完成，真实客户端待验收） | 本地 MCP、共享任务、过期领取、并发与重启验证；下一步接通 WorkBuddy/Codex | 协议、事务、版本、幂等、配置 |
 | 3 | 针对同一代码快照完成一次实现与审查交接 | Git、上下文、版本与状态 |
 | 4 | 用户选定意见后修复，保存结果和审查是否过期 | 持久化、恢复、验收证据 |
 | 5 | 整理安装说明、示例、必要测试及 CI | 可复现交付与开源协作 |
@@ -52,7 +73,7 @@ py -3 -m examples.process_demo
 
 - Python 3.11+、Git、SQLite，优先使用标准库。
 - 第一阶段只运行项目自带的测试进程，不访问模型服务、不使用账号。
-- Codex 通过正式程序接口执行审查。WorkBuddy 通过本地 MCP 获取实现或修复任务并提交结果；先验证接入、目录和模型配置，再运行真实代码任务。
+- Codex 与 WorkBuddy 首先通过本地 MCP 共享任务；首版由用户在各自客户端发起操作。主动执行审查或唤醒其他应用的运行适配单独验证；先确认接入、目录和模型配置，再运行真实代码任务。
 - 每轮说明目标、实现一小段、预测结果、主动制造失败、验证实际行为。
 - 模拟检查通过、真实模型调用通过、真实代码任务通过分别记录。
 
@@ -69,7 +90,13 @@ py -3 -m examples.process_demo
 
 先运行检查确认缺少模块而失败，随后实现并通过 8 项检查：中文任务与空格目录、stdout/stderr 分离、非零退出、启动失败、超时、输出覆盖保护、非法超时、非法目录及参数。部分行为合并在同一检查中。
 
-实现只终止直接启动的进程，不承诺清理子孙进程；接入实际 Agent 前必须完成进程树取消验证。当前没有数据库、MCP 连接器或真实模型调用，模拟进程检查不能替代这些验收。
+进程模块只终止直接启动的进程，不承诺清理子孙进程；通过它启动实际 Agent 前必须完成进程树取消验证。数据库与 MCP 已在后续阶段加入；当前仍没有真实模型调用，模拟检查不能替代实际产品验收。
+
+### 第二阶段验证记录（2026-10-25）
+
+共 19 项检查通过：原进程 8、共享存储 7、MCP/CLI 4。实际启动两个服务进程，验证领取竞争、并发重复提交、服务退出与重启后的回执恢复。协议模式分别为 2026-07-28 与 2025-11-25；工具目录实测 4359 UTF-8 字节，不等同于 token 数。`pip check` 通过。
+
+开发中修复了 SQLite 测试连接未关闭、Windows 重定向 JSON 编码、SDK 结构化输出以及续期可能缩短期限的问题。详见学习文档。真实客户端、代码快照与审查尚未通过验收。
 
 ## 接入与贡献边界
 
@@ -77,7 +104,7 @@ py -3 -m examples.process_demo
 
 - Codex 提供非交互执行及 JSONL 输出：https://learn.chatgpt.com/docs/non-interactive-mode
 - WorkBuddy 支持本地 stdio MCP 连接器：https://open.workbuddy.cn/docs/connector
-- 首版由用户在 WorkBuddy 中发起实现或修复，让其调用本地工具读取指定任务和提交结果，再由工具调度 Codex 审查；不把“支持连接器”当作真实闭环已经通过。
+- 首版由用户在 WorkBuddy 中发起实现或修复，并在 Codex 中发起审查，两边调用本地工具读取指定任务和提交结果；自动调度另外验证，不把“支持连接器”当作真实闭环已经通过。
 - WorkBuddy 另有经应用注册和用户授权调用本地助理的 Open API；首版不以开通该接口为前置条件：https://open.workbuddy.cn/docs/openapi
 - 本机已确认 WorkBuddy 正在运行，安装于 `C:/Users/cvkis/AppData/Local/Programs/WorkBuddy`；尚未检查或更改其个人配置，也未执行真实模型调用。
 

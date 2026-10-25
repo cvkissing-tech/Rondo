@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-review-loop"
+version = "0.2.0"
+description = "A local MCP task handoff bridge for coding agents"
+requires-python = ">=3.11"
+dependencies = ["mcp==2.3.0"]
+
+[project.scripts]
+agent-review-loop = "agent_review_loop.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["agent_review_loop*"]
