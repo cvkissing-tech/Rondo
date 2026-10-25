@@ -43,7 +43,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None) -> MCPSer
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Agent Review Loop", version="0.5.0", log_level="WARNING", lifespan=lifespan,
+        "Agent Review Loop", version="0.6.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Keep the returned attempt_id, claim_token and version; do not publish the token. "
@@ -54,6 +54,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None) -> MCPSer
             "Reuse its request_id to recover lost replies; poll status rather than restart. "
             "At most two review attempts per task, including failed/cancelled attempts. "
             "Cancel requests are not completion proof. Review approval is not test success."
+            " Locally configured checks run on a disposable snapshot copy before Codex; check failures stop generation."
         ),
     )
 

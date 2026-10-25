@@ -10,12 +10,14 @@ from agent_review_loop.reviews import save_review
 from agent_review_loop.server import create_server
 from agent_review_loop.snapshots import canonical, verify_package
 from agent_review_loop.store import TaskStore
+from agent_review_loop.checks import load_check_config
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--db', required=True, type=Path)
 parser.add_argument('--root', required=True, type=Path)
 parser.add_argument('--control', required=True, type=Path)
+parser.add_argument('--check-config', type=Path)
 args = parser.parse_args()
 args.control.mkdir(parents=True, exist_ok=True)
 
@@ -54,4 +56,5 @@ def fixture(package, output, executable, *, cancel_check):
 
 import sys
 store = TaskStore(args.db)
-create_server(store, ReviewJobs(store, args.root, runner=fixture, executable=Path(sys.executable), backend='fixture')).run()
+create_server(store, ReviewJobs(store, args.root, runner=fixture, executable=Path(sys.executable), backend='fixture',
+                               check_config=load_check_config(args.check_config) if args.check_config else None)).run()

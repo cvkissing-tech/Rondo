@@ -100,6 +100,32 @@ class ReviewMCPTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(second['review_approved'])
             self.assertEqual(second['findings'][0]['id'], 'F5')
 
+    async def test_configured_checks_gate_reviewer_over_real_mcp(self):
+        config = self.root / 'check.json'
+        config.write_text(json.dumps({'argv': [sys.executable, '-c',
+            'from pathlib import Path; import sys; sys.exit(0 if "2" in Path("code.py").read_text() else 7)'],
+            'timeout_seconds': 5}), encoding='utf-8')
+        parameters = self.parameters()
+        parameters.args.extend(['--check-config', str(config)])
+        async with Client(parameters) as client:
+            task = await self.task(client, 'approve')
+            args = {'task_id': task, 'repo': str(self.repo), 'base_ref': 'HEAD', 'request_id': 'failed'}
+            failed = await self.tool(client, 'start_review', args)
+            status = await self.wait_status(client, failed['job_id'], 'failed')
+            self.assertEqual((status['error_code'], status['checks']['exit_code']), ('CHECK_FAILED', 7))
+            self.assertTrue((Path(status['check_evidence_path']) / 'result.json').is_file())
+            self.assertFalse((self.control / 'calls.ndjson').exists())
+            (self.repo / 'code.py').write_bytes(b'print(2)\n')
+            passed = await self.tool(client, 'start_review', {**args, 'request_id': 'fixed'})
+            await self.wait_status(client, passed['job_id'], 'succeeded')
+            review = await self.tool(client, 'read_review', {'job_id': passed['job_id']})
+            self.assertEqual(review['checks']['status'], 'passed')
+            self.assertEqual(len((self.control / 'calls.ndjson').read_text().splitlines()), 1)
+            (self.runs / passed['job_id'] / 'package/checks/stdout.log').write_bytes(b'changed')
+            invalid = await client.call_tool('read_review', {'job_id': passed['job_id']})
+            self.assertTrue(invalid.is_error)
+            self.assertIn('PACKAGE_CHANGED', invalid.content[0].text)
+
     async def test_abrupt_owner_exit_becomes_interrupted_without_replay(self):
         async with Client(self.parameters()) as observer:
             owner = Client(self.parameters())

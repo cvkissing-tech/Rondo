@@ -116,6 +116,40 @@ class ReviewJobTests(unittest.TestCase):
             self.assert_code('REVIEW_OWNER_LOCK', self.start)
         self.assertEqual(self.calls, 0)
 
+    def checked(self, code):
+        manager = ReviewJobs(self.store, self.root / 'runs', runner=self.first.runner,
+                             executable=Path(sys.executable), backend='fixture',
+                             check_config={'argv': [sys.executable, '-c', code], 'timeout_seconds': 5})
+        self.addCleanup(manager.close)
+        return manager
+
+    def test_check_failure_blocks_reviewer_and_retries_keep_receipt(self):
+        manager = self.checked('import sys; sys.exit(7)')
+        job = manager.start_review(self.task, str(self.repo), 'HEAD', 'checked')
+        deadline = time.monotonic() + 10
+        while manager.status(job['job_id'])['status'] not in ('failed', 'interrupted'):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(.03)
+        status = manager.status(job['job_id'])
+        self.assertEqual((status['status'], status['error_code']), ('failed', 'CHECK_FAILED'))
+        self.assertEqual(status['checks']['exit_code'], 7)
+        self.assertTrue((Path(status['check_evidence_path']) / 'stderr.log').is_file())
+        self.assertEqual(self.calls, 0)
+        self.assertEqual(manager.start_review(self.task, str(self.repo), 'HEAD', 'checked')['job_id'], job['job_id'])
+        self.assert_code('IDEMPOTENCY_CONFLICT', lambda: self.checked('print(42)').start_review(
+            self.task, str(self.repo), 'HEAD', 'checked'))
+
+    def test_passed_check_is_bound_to_final_review_snapshot(self):
+        self.release.set()
+        manager = self.checked('print(42)')
+        job = manager.start_review(self.task, str(self.repo), 'HEAD', 'checked')
+        status = self.wait(job['job_id'], 'succeeded')
+        result = manager.read_review(job['job_id'])
+        self.assertEqual(status['checks']['status'], 'passed')
+        self.assertEqual(status['snapshot_id'], result['snapshot_id'])
+        self.assertEqual(result['checks'], status['checks'])
+        self.assertEqual(self.calls, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

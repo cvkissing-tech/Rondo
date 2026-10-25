@@ -113,6 +113,15 @@ class CodexReviewTests(unittest.TestCase):
         self.assertNotIn('turn/start', FakeRpc.calls)
         self.save.assert_not_called()
 
+    def test_failed_check_package_cannot_bypass_gate_via_direct_adapter(self):
+        self.manifest['checks'] = {'status': 'failed', 'exit_code': 1}
+        from agent_review_loop.snapshots import SnapshotError
+        with self.assertRaises(SnapshotError) as error:
+            self.run_review()
+        self.assertEqual(error.exception.code, 'CHECK_NOT_PASSED')
+        self.assertNotIn('turn/start', FakeRpc.calls)
+        self.save.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

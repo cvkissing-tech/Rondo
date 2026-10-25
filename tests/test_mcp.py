@@ -89,6 +89,13 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         entry = json.loads(config.stdout)["mcpServers"]["agent-review-loop"]
         self.assertEqual(entry["args"][-1], str(self.db))
         self.assertFalse(self.db.exists())
+        checks = Path(self.temp.name) / 'checks.json'
+        configured = subprocess.run(command + ['config', '--db', str(self.db), '--check-config', str(checks)],
+                                    cwd=ROOT, capture_output=True, encoding='utf-8', timeout=15)
+        self.assertEqual(configured.returncode, 0, configured.stderr)
+        self.assertEqual(json.loads(configured.stdout)['mcpServers']['agent-review-loop']['args'][-2:],
+                         ['--check-config', str(checks)])
+        self.assertFalse(self.db.exists())
         invalid = subprocess.run(command + ["serve", "--db", "relative.db"], cwd=ROOT, capture_output=True, timeout=15)
         self.assertNotEqual(invalid.returncode, 0)
         self.assertFalse((ROOT / "relative.db").exists())

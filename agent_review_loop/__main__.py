@@ -23,7 +23,7 @@ def main():
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Local agent handoffs and fixed-code review packages; no model calls.")
+    parser = argparse.ArgumentParser(description="Local agent handoffs and fixed-code reviews; explicit review commands consume quota.")
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
         ("serve", "Serve MCP over stdio; stdout is reserved for the protocol"),
@@ -35,6 +35,8 @@ def main():
         if name in ('serve', 'config'):
             command.add_argument('--review-root', type=_absolute_path)
             command.add_argument('--codex-executable', type=_absolute_path)
+            command.add_argument('--check-config', type=_absolute_path,
+                                 help='Local trusted JSON argv/timeout; read once at server startup')
         if name == "config":
             command.add_argument("--format", choices=("mcp", "codex"), default="mcp")
         elif name == "create":
@@ -77,6 +79,8 @@ def main():
             argv.extend(['--review-root', str(args.review_root)])
         if args.codex_executable is not None:
             argv.extend(['--codex-executable', str(args.codex_executable)])
+        if args.check_config is not None:
+            argv.extend(['--check-config', str(args.check_config)])
         if args.format == "codex":
             print("[mcp_servers.agent_review_loop]")
             print("command = " + json.dumps(sys.executable, ensure_ascii=False))
@@ -122,7 +126,10 @@ def main():
         if args.command == "serve":
             from .server import create_server
             from .review_jobs import ReviewJobs
-            create_server(store, ReviewJobs(store, args.review_root, executable=args.codex_executable)).run()
+            from .checks import load_check_config
+            checks = load_check_config(args.check_config) if args.check_config else None
+            create_server(store, ReviewJobs(store, args.review_root, executable=args.codex_executable,
+                                           check_config=checks)).run()
             return 0
         if args.command == "create":
             result = store.create_task(args.title, args.instructions, args.acceptance)

@@ -18,4 +18,6 @@
 
 之后再用用户明确指定的合成仓库验证一次后台审查。普通 unittest 和 async_review_demo 使用明示 fixture 后端，不调用真实模型，也不能代替真实 WorkBuddy 验收。
 
+0.6新增可选--check-config启动参数：由本机配置检查命令，失败时不进入Codex。配置方式、限制和零模型演示见[第7课](../../docs/learning/07-snapshot-checks.md)。已有连接需使用相应启动参数并重启服务才采用检查配置；本轮未替用户修改全局连接或验证WorkBuddy中的新检查流程。
+
 官方依据：[连接器文档](https://open.workbuddy.cn/docs/connector)。它支持本地 stdio，建议普通请求在30秒内响应；本服务因此将长审查放到后台。

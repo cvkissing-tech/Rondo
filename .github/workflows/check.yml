@@ -24,3 +24,4 @@ jobs:
       - run: python -X utf8 -m examples.task_demo
       - run: python -X utf8 -m examples.review_demo
       - run: python -X utf8 -m examples.async_review_demo
+      - run: python -X utf8 -m examples.checked_review_demo

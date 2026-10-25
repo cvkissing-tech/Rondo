@@ -11,8 +11,9 @@ import time
 from uuid import uuid4
 
 from .codex_review import run_codex_review
+from .checks import run_checks, validate_config
 from .reviews import review_status
-from .snapshots import SnapshotError, canonical, create_review_package, digest
+from .snapshots import SnapshotError, bind_check_evidence, canonical, create_review_package, digest
 from .store import StoreError, TaskStore, _integer, _text
 
 
@@ -50,10 +51,11 @@ class _OwnerLock:
 
 
 class ReviewJobs:
-    def __init__(self, store: TaskStore, root=None, *, runner=run_codex_review, executable=None, backend='codex'):
+    def __init__(self, store: TaskStore, root=None, *, runner=run_codex_review, executable=None, backend='codex', check_config=None):
         self.store = store
         self.root = Path(root).resolve() if root else Path.home() / '.agent-review-loop/runs' / digest(str(store.path).encode())[:16]
         self.runner, self.executable, self.backend = runner, executable, backend
+        self.check_config = validate_config(check_config) if check_config is not None else None
         self._guard = threading.Lock()
         self._workers = {}
         self._closing = False
@@ -69,9 +71,16 @@ class ReviewJobs:
 
     @staticmethod
     def _public(row):
-        return {key: row[key] for key in ('task_id', 'backend', 'snapshot_id', 'created_at', 'updated_at', 'error_code')} | {
+        result = {key: row[key] for key in ('task_id', 'backend', 'snapshot_id', 'created_at', 'updated_at', 'error_code')} | {
             'job_id': row['id'], 'status': row['state'], 'cancel_requested': bool(row['cancel_requested']),
         }
+        if row['result_json']:
+            checks = json.loads(row['result_json']).get('checks')
+            if checks is not None:
+                result['checks'] = checks
+                if checks['status'] != 'not_run':
+                    result['check_evidence_path'] = str(Path(row['directory']) / 'package/checks')
+        return result
 
     def _reconcile(self, db, row):
         if row['state'] in ACTIVE:
@@ -94,7 +103,10 @@ class ReviewJobs:
         if not path.is_absolute() or not path.is_dir():
             raise StoreError('INVALID_ARGUMENT', 'repo must be an existing absolute directory')
         repo = str(path.resolve())
-        fingerprint = digest(canonical([repo, base_ref, {key: task[key] for key in ('title', 'instructions', 'acceptance')}]))
+        parameters = [repo, base_ref, {key: task[key] for key in ('title', 'instructions', 'acceptance')}]
+        if self.check_config is not None:
+            parameters.append({'check_config': self.check_config})
+        fingerprint = digest(canonical(parameters))
         with self._guard:
             if self._closing:
                 raise StoreError('SERVER_CLOSING', 'Review service is closing')
@@ -161,6 +173,17 @@ class ReviewJobs:
                 return
             package = directory / 'package'
             manifest = create_review_package(repo, base_ref, task, package)
+            if self.check_config is not None:
+                check = run_checks(package, directory / 'check-run', self.check_config,
+                                   cancel_check=lambda: self._cancelled(job_id))
+                manifest = bind_check_evidence(package, directory / 'check-run')
+                if check['status'] != 'passed':
+                    with self.store._connection(write=True) as db:
+                        db.execute('UPDATE review_jobs SET snapshot_id=? WHERE id=?', (manifest['snapshot_id'], job_id))
+                    cancelled = check['status'] == 'cancelled' and check['process_tree_closed']
+                    self._finish(job_id, 'cancelled' if cancelled else 'failed', {'checks': manifest['checks']},
+                                 None if cancelled else 'CHECK_FAILED')
+                    return
             with self.store._connection(write=True) as db:
                 db.execute("UPDATE review_jobs SET snapshot_id=?, state=CASE WHEN cancel_requested=1 THEN 'cancelling' ELSE 'running' END, updated_at=? WHERE id=?",
                            (manifest['snapshot_id'], time.time(), job_id))
@@ -168,6 +191,7 @@ class ReviewJobs:
                 self._finish(job_id, 'cancelled')
                 return
             result = self.runner(package, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id))
+            result['checks'] = manifest['checks']
             if result.get('process_tree_closed') is not True:
                 self._finish(job_id, 'failed', result, 'CLEANUP_UNVERIFIED')
             elif result['status'] == 'review_saved' and result.get('snapshot_id') == manifest['snapshot_id']:

@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.5.0，MCP 可在后台发起、查询、读取和取消 Codex 审查。** 本机 Windows/Python 3.14 的71项离线检查通过；先前完成过一次 gpt-6.1-sol 合成缺陷真实审查。用户完成首次信任后，WorkBuddy 已显示10个工具启用，并完成 list_tasks 只读连接检查；开发、审查和修复完整闭环尚未验收。产品角色不等于开发本项目的工具分工。
+当前版本：**0.6.0，可在后台审查前执行本机明确配置的检查，并把证据绑定到固定代码版本；检查失败不启动Codex。** Windows/Python 3.14的85项离线检查通过，另有真实MCP演示，见第7课。先前完成过一次gpt-6.1-sol合成缺陷真实审查，以及WorkBuddy发现10个工具和list_tasks只读连接检查；完整开发与修复闭环尚未验收。产品角色不等于开发本项目的工具分工。
 
 首版入口是 WorkBuddy：用户发起开发任务，执行 Agent 完成代码后调用本地 MCP，服务后台启动独立 Codex 审查，执行 Agent 查询并展示意见。**此方向不需要 WorkBuddy 第三方应用。** 接入说明和交接 Skill 见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。独立桌面壳暂不加入。
 
@@ -21,6 +21,7 @@ py -3 -m venv .venv
 .venv/Scripts/python.exe -m examples.process_demo
 .venv/Scripts/python.exe -X utf8 -m examples.review_demo
 .venv/Scripts/python.exe -X utf8 -m examples.async_review_demo
+.venv/Scripts/python.exe -X utf8 -m examples.checked_review_demo
 ```
 
 本机已准备好 `.venv`，可以直接运行检查与演示。新环境先创建虚拟环境并安装。其他系统使用 Python 3.11+，把 `py -3` 换为 `python3`，后续解释器路径换为 `.venv/bin/python`。当前只实际验证了本机 Windows；Windows/Linux 的 CI 配置已添加，尚未在 GitHub 运行。
@@ -52,6 +53,16 @@ start_review 接收 task_id、repo绝对路径、base_ref 和 request_id，先�
 
 examples.async_review_demo 使用真实 MCP 传输和明确标记的 fixture 后端，验证两客户端、重复请求、意见分页、过期和取消；模型调用为0。它不能代替真实 WorkBuddy/Codex 闭环，见 [第6课](docs/learning/06-async-review-mcp.md)。
 
+### 检查后再审查
+
+serve/config支持 `--check-config <本机JSON绝对路径>`，JSON含argv（绝对可执行程序及参数数组）和timeout_seconds（有限正数，最多180秒）。serve启动时读取并固定配置，MCP不接收任意检查命令，不自动执行仓库配置。未配置仍明确返回not_run。
+
+配置后，服务在固定包的副本after中执行检查，保存退出码、用时、日志和内容摘要；重新校验文件后，将证据绑定到最终snapshot_id。失败、超时、取消、输出超限或文件改变都停止审查，状态附checks摘要与check_evidence_path；每流日志最终最多保存1MiB，运行时可能短暂超过，不是磁盘硬配额。CLI直接审查也拒绝未通过的检查记录。
+
+副本无.git，不安装依赖，不能在包内生成文件；Python缓存默认关闭，临时目录在副本外。须核对实际导入位置，cwd不能保证依赖全部来自副本。进程仍有本机用户权限，副本不提供权限沙箱。详见[第7课](docs/learning/07-snapshot-checks.md)。
+
+examples.checked_review_demo 使用真实unittest和MCP，展示错误代码检查失败且审查器调用0次、修复后通过才进入明示fixture审查、日志篡改后读取被拒绝。模型调用0，不证明真实WorkBuddy完整闭环。本轮没有修改WorkBuddy个人配置或重启其连接。
+
 ### 固定代码与审查
 
 运行 `examples.review_demo` 会自动创建一次性 Git 仓库和独立工作区，保存合成改动，记录预先写好的审查意见，模拟修复并验证旧审查过期。原仓库保持不变；全程模型调用为 0。产物保留在本机 `.agent-review-loop/review-demos/`，末行给出具体路径。
@@ -60,7 +71,7 @@ CLI 提供 `workspace`、`package`、`record-review`、`review-status`；各命�
 
 快照来自 Git 的规范内容，遵循其文本规范化规则；未跟踪且被忽略的文件不纳入。每个版本最多 5000 文件、两个版本共 100 MiB；首版明确拒绝子模块、符号链接/reparse point、稀疏工作区和自定义 Git filter（含 LFS）。导出的目录没有 .git；依赖 Git 的项目检查需要后续运行环境支持。创建产物必须使用源工作目录之外的新路径。
 
-审查前后会校验文件集合、内容和意见位置；对照当前代码时返回 current/stale，没有对照则 unchecked。`review_approved` 只指该审查记录批准当前代码，**不等于项目检查通过或用户最终接受**；本阶段 checks 明确为 not_run。包是可写的本地文件，校验用于检测变化，不能代替权限隔离或数字签名。捕获前须停止执行方写入，连续两次捕获一致也不是跨文件的系统原子快照。
+审查前后会校验文件集合、内容和意见位置；对照当前代码时返回current/stale，没有对照则unchecked。`review_approved`只指该审查记录批准当前代码，**不等于项目检查通过或用户最终接受**；checks单独记录，未配置时为not_run。包是可写的本地文件，校验用于检测变化，不能代替权限隔离或数字签名。捕获前须停止执行方写入，连续两次捕获一致也不是跨文件的系统原子快照。
 
 ### 真实 Codex 审查（显式调用会消耗额度）
 
@@ -96,6 +107,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 - [第 4 课：固定代码版本、审查包与过期检查](docs/learning/04-review-package.md)
 - [第 5 课：真实 Codex 审查、进程树与成本记录](docs/learning/05-real-codex-runtime.md)
 - [第 6 课：异步审查、幂等、取消与 WorkBuddy 接入](docs/learning/06-async-review-mcp.md)
+- [第 7 课：固定版本的自动化检查与审查门槛](docs/learning/07-snapshot-checks.md)
 - [Hashimoto 项目方法技能](.agents/skills/mitchell-hashimoto-engineering/SKILL.md)与[Willison 项目方法技能](.agents/skills/simon-willison-agent-engineering/SKILL.md)
 
 按下面的里程碑推进，每次完成一个可运行的版本：

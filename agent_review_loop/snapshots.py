@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -17,6 +18,7 @@ import tempfile
 MAX_FILES = 5000
 MAX_BYTES = 100 * 1024 * 1024
 MAX_JSON = 8 * 1024 * 1024
+NOT_RUN_CHECKS = {'status': 'not_run', 'reason': 'Check execution has not been attached to this snapshot'}
 
 
 class SnapshotError(Exception):
@@ -261,19 +263,68 @@ def create_review_package(repo, base_ref, task, output_dir):
     (output / 'changes.patch').write_bytes(diff)
     guide = ('Review task requirements in manifest.json against the fixed after/ files.\n'
              'Use before/ for deleted lines and changes.patch for differences.\n'
-             'Project checks have NOT been run. Files are writable: verify integrity after review.\n'
+             'Read manifest.checks for check evidence. Files are writable: verify integrity after review.\n'
              'This package has no .git directory; Git-dependent checks need separate setup.\n').encode()
     (output / 'README.txt').write_bytes(guide)
     manifest = {
         'format_version': 1, 'repository': str(repo), 'git_common_dir': common_directory(repo),
         'base_commit': base, 'target_tree': tree, 'task': bound_task, 'files': files,
         'artifacts': {'changes.patch': digest(diff), 'README.txt': digest(guide)},
-        'checks': {'status': 'not_run', 'reason': 'Check execution has not been attached to this snapshot'},
+        'checks': dict(NOT_RUN_CHECKS),
     }
     manifest['snapshot_id'] = digest(canonical(manifest))
     # Completion marker last: interrupted exports can never pass verification.
     (output / 'manifest.json').write_bytes(canonical(manifest) + b'\n')
     return manifest
+
+
+def _verified_check_summary(directory, input_snapshot_id, *, runtime=False):
+    expected_names = {'result.json', 'stdout.log', 'stderr.log'}
+    allowed = expected_names | ({'workspace', 'tmp'} if runtime else set())
+    if (_is_link(directory) or {p.name for p in directory.iterdir()} != allowed
+            or any(_is_link(directory / name) or not (directory / name).is_file() for name in expected_names)):
+        raise ValueError('Unexpected check evidence')
+    record = read_json(directory / 'result.json')
+    if record['format_version'] != 1 or record['input_snapshot_id'] != input_snapshot_id:
+        raise ValueError('Check belongs to another input snapshot')
+    allowed = {'passed', 'failed', 'changed', 'timed_out', 'cancelled', 'output_limit',
+               'start_failed', 'cleanup_failed', 'io_failed'}
+    if (record['status'] not in allowed or type(record['process_tree_closed']) is not bool
+            or type(record['code_unchanged']) is not bool
+            or (record['exit_code'] is not None and type(record['exit_code']) is not int)
+            or (record['status'] == 'passed' and (record['exit_code'] != 0
+                or not record['process_tree_closed'] or not record['code_unchanged']))):
+        raise ValueError('Invalid check outcome')
+    for name in ('stdout.log', 'stderr.log'):
+        path, metadata = directory / name, record['logs'][name]
+        if path.stat().st_size > 1024 * 1024:
+            raise ValueError('Check log exceeds limit')
+        data = path.read_bytes()
+        if (type(metadata['bytes']) is not int or type(metadata['truncated']) is not bool
+                or len(data) != metadata['bytes'] or digest(data) != metadata['sha256']
+                or (record['status'] == 'passed' and metadata['truncated'])):
+            raise ValueError('Check log changed')
+    return {key: record[key] for key in ('status', 'exit_code', 'process_tree_closed', 'code_unchanged')} | {
+        'record_id': digest(canonical(record)), 'command_id': digest(canonical(record['config']))}
+
+
+def bind_check_evidence(package_dir, evidence_dir):
+    root, evidence = Path(package_dir).resolve(), Path(evidence_dir).resolve()
+    manifest = verify_package(root)
+    if manifest['checks'] != NOT_RUN_CHECKS:
+        raise SnapshotError('CHECKS_ALREADY_ATTACHED', 'Create a new package for another check')
+    try:
+        summary = _verified_check_summary(evidence, manifest['snapshot_id'], runtime=True)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise SnapshotError('INVALID_CHECK_EVIDENCE', 'Check evidence is invalid or belongs to another snapshot') from error
+    (root / 'checks').mkdir(exist_ok=False)
+    for name in ('result.json', 'stdout.log', 'stderr.log'):
+        shutil.copyfile(evidence / name, root / 'checks' / name)
+    manifest['checks'] = summary
+    identity = {key: value for key, value in manifest.items() if key != 'snapshot_id'}
+    manifest['snapshot_id'] = digest(canonical(identity))
+    (root / 'manifest.json').write_bytes(canonical(manifest) + b'\n')
+    return verify_package(root)
 
 
 def verify_package(package_dir):
@@ -284,6 +335,11 @@ def verify_package(package_dir):
         if manifest['format_version'] != 1 or digest(canonical(identity)) != manifest['snapshot_id']:
             raise ValueError('Manifest identity mismatch')
         allowed = {'manifest.json', 'before', 'after', 'changes.patch', 'README.txt', 'reviews'}
+        if manifest['checks']['status'] != 'not_run':
+            allowed.add('checks')
+            original = dict(identity, checks=dict(NOT_RUN_CHECKS))
+            if _verified_check_summary(root / 'checks', digest(canonical(original))) != manifest['checks']:
+                raise ValueError('Check summary changed')
         if any(p.name not in allowed or _is_link(p) for p in root.iterdir()):
             raise ValueError('Unexpected package entry')
         for name in ('changes.patch', 'README.txt'):
