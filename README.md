@@ -32,7 +32,7 @@ py -3 -m venv .venv
 
 第一条生成 mcpServers JSON；第二条生成 Codex TOML。两边指定同一数据库绝对路径。配置命令只打印结果，不修改客户端、不创建数据库。安装为 editable 包后，服务也能从其他目录启动。
 
-本机接入准备已把生成内容分别放入项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，不修改用户级配置。这两个文件含本机绝对路径，因此加入 Git 忽略。两个客户端都需打开本项目目录，并按客户端要求信任项目、重新加载 MCP；生成或放置配置不等于连接成功。当前验收任务 1 已创建，先由 WorkBuddy 通过 MCP 领取并提交，再由 Codex 通过 MCP 读取；不要用脚本直接改数据库冒充产品接入成功。
+本机接入准备已把生成内容分别放入项目的 `.codex/config.toml` 和 `.workbuddy/mcp.json`，不修改用户级配置。这两个文件含本机绝对路径，因此加入 Git 忽略。手动 MCP 接入仅用于独立检查共享任务服务，生成或放置配置不等于连接成功。产品的主要流程将由运行层自动发起执行和审查，用户无需在两个应用之间手动传递任务。
 
 六个工具：`create_task`、`get_task`、`list_tasks`、`claim_task`、`renew_claim`、`submit_result`。默认领取 900 秒，可选 30–3600 秒；长期任务需提前续期。提交保留原 request_id 与内容才能安全重试。submitted 只表示报告已保存，不表示代码通过审查。创建任务没有幂等键，回复丢失时先查列表。
 
@@ -58,6 +58,7 @@ py -3 -m venv .venv
 - [开源借鉴与复用清单](docs/superpowers/specs/2026-10-25-open-source-reuse.md)
 - [第二阶段实施与验收计划](docs/superpowers/plans/2026-10-25-shared-task-mcp.md)
 - [第 2 课：代码讲解、实验与验收过程](docs/learning/02-shared-task-mcp.md)
+- [第 3 课：自动调度实验、实测结果与下一步](docs/learning/03-automatic-runtime-probe.md)
 
 按下面的里程碑推进，每次完成一个可运行的版本：
 
