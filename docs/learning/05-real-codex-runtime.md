@@ -104,7 +104,9 @@ receipt = save_review(package_dir, review)
 
 ## WorkBuddy 的下一步
 
-用户已确认创建过第三方应用，待补充 Client ID 和登记的 redirect_uri。`workbuddy-authorize` 可生成官方授权入口和本地 state 记录；交换函数先检查回调位置、重复参数及 state，再请求令牌。Client Secret 和访问令牌不进入聊天、Git 或报告。目前尚无真实授权或消息发送，不声称已经接通执行方。
+用户最新澄清（2026-10-25）：尚未创建第三方应用，此前“已创建”的记录作废。当前缺少开发者应用及所需权限，不再将缺口描述为仅差 Client ID/redirect_uri。`workbuddy-authorize` 可生成官方授权入口和本地 state 记录；交换函数先检查回调位置、重复参数及 state，再请求令牌。Client Secret 和访问令牌不进入聊天、Git 或报告。目前尚无真实授权或消息发送，不声称已经接通执行方。
+
+再次核对[第三方应用文档](https://open.workbuddy.cn/docs/third-party-app)与[Buddy 应用文档](https://open.workbuddy.cn/docs/buddy-app)：平台存在应用类型、权限申请和审核流程；硬件接入与 Buddy 应用不能简单当作普通个人应用免审核注册。本项目当前账号能否申请并获得本地助理权限尚未验证，不要求用户先搭建整套行业应用，也不把平台批准作为核心开发的前置条件。WorkBuddy 保持候选适配；后续优先验证正式、本地可调用的 Agent 入口和通用交接流程，不擅自把另一个 CLI 或直接模型 API 标记成 WorkBuddy。
 
 在线状态接口即使返回 true，也仅表示本地助理在线。后续还需用只读合成任务确认指定目录、结果关联和完成/停止语义，之后才能执行真实修改。
 
