@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import time
 
-from .codex_rpc import CodexRpc, RpcError
+from .codex_rpc import CodexRpc, RpcError, ReviewCancelled
 from .reviews import save_review
 from .snapshots import SnapshotError, canonical, verify_package
 
@@ -29,7 +29,7 @@ def review_schema(snapshot_id):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
-def run_codex_review(package_dir, output_dir, executable, *, timeout=180):
+def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel_check=None):
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 180:
         raise ValueError('Review timeout must be positive and at most 180 seconds')
     manifest = verify_package(package_dir)
@@ -60,10 +60,12 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180):
               'usage': None, 'cost': None, 'protocol': 'Codex App Server turn/start + outputSchema'}
     started, thread_id, turn_id = time.monotonic(), None, None
     try:
+        if cancel_check and cancel_check():
+            raise ReviewCancelled('Review cancelled before server startup')
         # Root-table overrides merge with installed configuration. Discover names,
         # then explicitly disable each server in this process only.
         with CodexRpc([str(executable), 'app-server', '--stdio'], output,
-                      output / 'stderr.log') as client:
+                      output / 'stderr.log', cancel_check=cancel_check) as client:
             client.initialize()
             config = client.request('config/read', {'includeLayers': False})
             servers = config.get('config', {}).get('mcp_servers') or {}
@@ -72,7 +74,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180):
             if not re.fullmatch('[A-Za-z0-9_-]+', name):
                 raise RpcError('Unsupported MCP server key; no model generation started')
             argv.extend(['-c', f'mcp_servers.{name}.enabled=false'])
-        with CodexRpc(argv, output, output / 'review-stderr.log') as client:
+        with CodexRpc(argv, output, output / 'review-stderr.log', cancel_check=cancel_check) as client:
             client.initialize()
             account = client.request('account/read', {'refreshToken': False})
             if account.get('requiresOpenaiAuth') and account.get('account') is None:
@@ -121,7 +123,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180):
                             break
             except Exception:
                 try:
-                    client.request('turn/interrupt', {'threadId': thread_id, 'turnId': turn_id}, timeout=5)
+                    client.request('turn/interrupt', {'threadId': thread_id, 'turnId': turn_id}, timeout=5, ignore_cancel=True)
                     record['interrupt_requested'] = True
                 except Exception:
                     record['interrupt_requested'] = False
@@ -129,11 +131,15 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180):
             if not isinstance(final_text, str):
                 raise RpcError('Completed turn contained no final assistant message')
             (output / 'response.txt').write_text(final_text, encoding='utf-8')
+            if cancel_check and cancel_check():
+                raise ReviewCancelled('Review cancelled before saving')
             review = json.loads(final_text)
             verify_package(package_dir)
             receipt = save_review(package_dir, review)
             record.update(status='review_saved', **receipt)
         record['process_tree_closed'] = True
+    except ReviewCancelled as error:
+        record.update(status='cancelled', process_tree_closed=True, error_type=type(error).__name__, error=str(error))
     except Exception as error:
         record.update(status='failed', error_type=type(error).__name__, error=str(error)[:2000])
     record['elapsed_seconds'] = round(time.monotonic() - started, 3)

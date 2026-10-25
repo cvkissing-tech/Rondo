@@ -32,6 +32,9 @@ def main():
     ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument("--db", required=True, type=_absolute_path)
+        if name in ('serve', 'config'):
+            command.add_argument('--review-root', type=_absolute_path)
+            command.add_argument('--codex-executable', type=_absolute_path)
         if name == "config":
             command.add_argument("--format", choices=("mcp", "codex"), default="mcp")
         elif name == "create":
@@ -70,6 +73,10 @@ def main():
     args = parser.parse_args()
     if args.command == "config":
         argv = ["-X", "utf8", "-m", "agent_review_loop", "serve", "--db", str(args.db)]
+        if args.review_root is not None:
+            argv.extend(['--review-root', str(args.review_root)])
+        if args.codex_executable is not None:
+            argv.extend(['--codex-executable', str(args.codex_executable)])
         if args.format == "codex":
             print("[mcp_servers.agent_review_loop]")
             print("command = " + json.dumps(sys.executable, ensure_ascii=False))
@@ -114,7 +121,8 @@ def main():
         store = TaskStore(args.db)
         if args.command == "serve":
             from .server import create_server
-            create_server(store).run()
+            from .review_jobs import ReviewJobs
+            create_server(store, ReviewJobs(store, args.review_root, executable=args.codex_executable)).run()
             return 0
         if args.command == "create":
             result = store.create_task(args.title, args.instructions, args.acceptance)

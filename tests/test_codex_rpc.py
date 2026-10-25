@@ -3,9 +3,10 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+import threading
 import unittest
 
-from agent_review_loop.codex_rpc import CodexRpc, RpcError
+from agent_review_loop.codex_rpc import CodexRpc, RpcError, ReviewCancelled
 
 
 class CodexRpcTests(unittest.TestCase):
@@ -14,8 +15,8 @@ class CodexRpcTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
-    def client(self, script):
-        client = CodexRpc([sys.executable, '-X', 'utf8', '-u', '-c', script], self.root, self.root / 'stderr.log')
+    def client(self, script, **kwargs):
+        client = CodexRpc([sys.executable, '-X', 'utf8', '-u', '-c', script], self.root, self.root / 'stderr.log', **kwargs)
         self.addCleanup(client.close)
         return client
 
@@ -56,6 +57,30 @@ for line in sys.stdin:
             client.request('large', {'payload': 'x' * 1000000}, timeout=.1)
         client.close()
         self.assertLess(time.monotonic() - started, 5)
+
+    def test_cancellation_interrupts_wait_after_server_actually_started(self):
+        cancelled = threading.Event()
+        marker = self.root / 'started'
+        script = f'import sys,time; from pathlib import Path; sys.stdin.readline(); Path({str(marker)!r}).touch(); time.sleep(60)'
+        client = self.client(script, cancel_check=cancelled.is_set)
+        errors = []
+        def request():
+            try:
+                client.request('wait', {}, timeout=10)
+            except Exception as error:
+                errors.append(error)
+        worker = threading.Thread(target=request)
+        worker.start()
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertTrue(marker.exists())
+        cancelled.set()
+        worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ReviewCancelled)
+        client.close()
 
 
 if __name__ == '__main__':

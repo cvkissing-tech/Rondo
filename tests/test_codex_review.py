@@ -106,6 +106,13 @@ class CodexReviewTests(unittest.TestCase):
         FakeRpc.close_error = True
         self.assertEqual(self.run_review()['status'], 'failed')
 
+    def test_cancel_before_start_does_not_generate(self):
+        result = run_codex_review(self.package, self.root / 'run', Path(sys.executable), cancel_check=lambda: True)
+        self.assertEqual(result['status'], 'cancelled')
+        self.assertTrue(result['process_tree_closed'])
+        self.assertNotIn('turn/start', FakeRpc.calls)
+        self.save.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

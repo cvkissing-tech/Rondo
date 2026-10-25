@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 APPLICATION_ID = 0x41524C31  # ARL1: refuse unrelated SQLite files.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA = (
     """CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +47,29 @@ SCHEMA = (
         response TEXT NOT NULL,
         PRIMARY KEY (task_id, attempt_id, request_id)
     )""",
+)
+
+REVIEW_SCHEMA = (
+    """CREATE TABLE review_jobs (
+        id TEXT PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id),
+        request_id TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('preparing','running','cancelling','succeeded','failed','cancelled','interrupted')),
+        repo TEXT NOT NULL,
+        base_ref TEXT NOT NULL,
+        directory TEXT NOT NULL,
+        backend TEXT NOT NULL,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        snapshot_id TEXT,
+        result_json TEXT,
+        error_code TEXT,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
+        UNIQUE(task_id, request_id)
+    )""",
+    """CREATE UNIQUE INDEX one_active_review_job ON review_jobs((1))
+       WHERE state IN ('preparing','running','cancelling')""",
 )
 
 
@@ -86,12 +109,16 @@ class TaskStore:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             if application_id == 0 and version == 0 and not tables:
-                for statement in SCHEMA:
+                for statement in SCHEMA + REVIEW_SCHEMA:
                     db.execute(statement)
                 db.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif application_id != APPLICATION_ID:
                 raise StoreError("FOREIGN_DATABASE", "This file is not an Agent Review Loop database")
+            elif version == 1:
+                for statement in REVIEW_SCHEMA:
+                    db.execute(statement)
+                db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:
                 raise StoreError("SCHEMA_VERSION", "Database version is not supported by this build")
 

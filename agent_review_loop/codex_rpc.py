@@ -13,13 +13,18 @@ class RpcError(Exception):
     pass
 
 
+class ReviewCancelled(RpcError):
+    pass
+
+
 class CodexRpc:
-    def __init__(self, argv, cwd, stderr_path, *, env=None):
+    def __init__(self, argv, cwd, stderr_path, *, env=None, cancel_check=None):
         self.process = ProcessTree(argv, cwd, stderr_path, env=env)
         self._messages = queue.Queue(maxsize=256)
         self._notifications = deque()
         self._counter = 0
         self._closed = False
+        self._cancel_check = cancel_check
         self._reader_error = None
         self._writer_error = None
         self._writes = queue.Queue(maxsize=16)
@@ -70,8 +75,10 @@ class CodexRpc:
         except queue.Full as error:
             raise RpcError('App Server write queue is full') from error
 
-    def _receive(self, deadline):
+    def _receive(self, deadline, *, ignore_cancel=False):
         while True:
+            if not ignore_cancel and self._cancel_check and self._cancel_check():
+                raise ReviewCancelled('Review cancellation requested')
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError('App Server request exceeded its deadline')
@@ -91,13 +98,13 @@ class CodexRpc:
                 raise RpcError('App Server needs an interactive capability; execution stopped')
             return value
 
-    def request(self, method, params, *, timeout=20):
+    def request(self, method, params, *, timeout=20, ignore_cancel=False):
         self._counter += 1
         request_id = self._counter
         self.send({'id': request_id, 'method': method, 'params': params})
         deadline = time.monotonic() + timeout
         while True:
-            message = self._receive(deadline)
+            message = self._receive(deadline, ignore_cancel=ignore_cancel)
             if type(message.get('id')) is int and message['id'] == request_id:
                 if 'error' in message:
                     raise RpcError(f'{method}: {message["error"]}')
@@ -110,16 +117,18 @@ class CodexRpc:
                 raise RpcError('Unconsumed notifications exceeded the limit')
             self._notifications.append(message)
 
-    def notification(self, *, timeout=20):
+    def notification(self, *, timeout=20, ignore_cancel=False):
+        if not ignore_cancel and self._cancel_check and self._cancel_check():
+            raise ReviewCancelled('Review cancellation requested')
         if self._notifications:
             return self._notifications.popleft()
-        value = self._receive(time.monotonic() + timeout)
+        value = self._receive(time.monotonic() + timeout, ignore_cancel=ignore_cancel)
         if 'method' not in value:
             raise RpcError('Expected a notification')
         return value
 
     def initialize(self):
-        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.4.0'},
+        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.5.0'},
                                               'capabilities': {'experimentalApi': False}})
         self.send({'method': 'initialized', 'params': {}})
         return result

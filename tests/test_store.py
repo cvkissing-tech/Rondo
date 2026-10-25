@@ -14,6 +14,26 @@ from agent_review_loop.store import StoreError, TaskStore
 
 
 class TaskStoreTests(unittest.TestCase):
+    def test_schema_one_migration_preserves_existing_rows(self):
+        import sqlite3
+        from contextlib import closing
+        from agent_review_loop.store import SCHEMA, APPLICATION_ID
+        old = Path(self.temp.name) / 'schema-one.db'
+        with closing(sqlite3.connect(old)) as db:
+            for statement in SCHEMA:
+                db.execute(statement)
+            db.execute(f'PRAGMA application_id={APPLICATION_ID}')
+            db.execute('PRAGMA user_version=1')
+            db.execute("INSERT INTO tasks(title,instructions,acceptance,created_at,updated_at) VALUES ('keep','instructions','acceptance','then','then')")
+            db.commit()
+            before = db.execute('SELECT * FROM tasks').fetchall()
+        migrated = TaskStore(old)
+        self.assertEqual(migrated.get_task(1)['title'], 'keep')
+        with closing(sqlite3.connect(old)) as db:
+            self.assertEqual(db.execute('SELECT * FROM tasks').fetchall(), before)
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
+            self.assertEqual(db.execute('SELECT count(*) FROM review_jobs').fetchone()[0], 0)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="任务 协作 ")
         self.addCleanup(self.temp.cleanup)

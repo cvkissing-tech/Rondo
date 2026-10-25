@@ -84,6 +84,31 @@ class ProcessTreeTests(unittest.TestCase):
                 self.start(f'from pathlib import Path; Path({str(marker)!r}).touch()')
         self.assertFalse(marker.exists())
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows kill-on-Job-owner-exit')
+    def test_owner_process_death_closes_job_and_stops_agent(self):
+        import _winapi
+        code = '''import os,sys
+from pathlib import Path
+from agent_review_loop.processes import ProcessTree
+p=ProcessTree([sys.executable,'-u','-c','import time; print("ready",flush=True); time.sleep(60)'],Path(sys.argv[1]),Path(sys.argv[1])/'agent.stderr')
+p.stdout.readline()
+print(p.pid,flush=True)
+sys.stdin.readline()
+os._exit(0)
+'''
+        with subprocess.Popen([sys.executable, '-X', 'utf8', '-u', '-c', code, str(self.root)],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              creationflags=subprocess.CREATE_NO_WINDOW) as owner:
+            pid = int(owner.stdout.readline())
+            handle = _winapi.OpenProcess(0x100000, False, pid)
+            try:
+                owner.stdin.write(b'exit\n')
+                owner.stdin.flush()
+                self.assertEqual(owner.wait(timeout=5), 0)
+                self.assertEqual(_winapi.WaitForSingleObject(handle, 5000), 0)
+            finally:
+                _winapi.CloseHandle(handle)
+
 
 if __name__ == '__main__':
     unittest.main()
