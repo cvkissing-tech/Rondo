@@ -30,7 +30,7 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Brand Commitments
 
-Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称完整自动开发已实现。没有已批准的logo或视觉规范。
+Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称完整自动开发已实现。用户明确否定0.8.0墨绿表单界面，授权直接复用开源产品组件；当前界面采用Jean实际组件与中性主题，保留来源记录。
 
 ## Product Principles
 

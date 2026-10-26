@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.8.0，提供 Electron 桌面工作台开发预览。** 在自己的窗口填写需求、创建独立工作区、恢复任务、查看代码差异，并显式发起/查询/取消 Codex 审查。复用 Git 原生 worktree、现有 SQLite/MCP 后端、官方 Electron-vite React 模板及 Pierre Diffs。完整自动开发与修复闭环尚未接通。
+当前版本：**0.8.1，提供基于 Jean 实际组件的桌面工作台开发预览。** 在自己的窗口填写需求、创建独立工作区、恢复任务、查看代码差异，并显式发起/查询/取消 Codex 审查。复用 Git 原生 worktree、现有 SQLite/MCP 后端、官方 Electron-vite React 模板、Jean 的 React 界面组件/主题及 Pierre Diffs。完整自动开发与修复闭环尚未接通。
 
 产品入口是自己的桌面工作台；Codex 负责规划/审查，WorkBuddy 负责执行。当前只有手动准备任务与显式审查可用，Codex 自动拆解和 WorkBuddy 自动执行尚未接入。兼容的另一条入口是让 WorkBuddy 作为 MCP 客户端主动领取任务和请求审查，这不需要第三方应用；**MCP 连接不等于工作台已能启动并指挥 WorkBuddy。** 接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
 
@@ -21,6 +21,8 @@ npm --prefix desktop start
 ```
 
 需要 Node 24+ 和 Python 3.11+。这是依赖源码环境的 Windows 开发预览，还不是可独立分发的安装包。默认使用 `.agent-review-loop/workbuddy.sqlite3`，不会自动发送任务给 WorkBuddy，也不会自动调用模型。按“发起 Codex 审查”才会消耗 Codex 额度。运行配置、关键代码和验收说明见 [第9课：桌面端调用链](docs/learning/09-desktop-workbench.md)。
+
+0.8.1 使用 [Jean](https://github.com/coollabsio/jean) 固定提交的真实侧栏、输入组合、分栏和控件源码，提供任务筛选、Ctrl+B 收起导航、键盘/鼠标调整分栏与持久化浅深主题。来源和适配见 [第10课：直接移植产品 UI](docs/learning/10-reuse-product-ui.md) 及 [源码记录](desktop/src/renderer/src/vendor/jean/NOTICE.md)。根目录启动器把界面偏好保存在忽略于 Git 的 `.agent-review-loop/desktop-profile/`；任务仍保存在 SQLite。
 
 ### 一次开始任务
 

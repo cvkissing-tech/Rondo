@@ -6,6 +6,7 @@ export interface Task {
   acceptance: string
 }
 export interface Context {
+  repository: string
   task_id: number
   workspace: string
   base_commit: string

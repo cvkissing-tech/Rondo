@@ -128,7 +128,7 @@ class CodexRpc:
         return value
 
     def initialize(self):
-        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.8.0'},
+        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.8.1'},
                                               'capabilities': {'experimentalApi': False}})
         self.send({'method': 'initialized', 'params': {}})
         return result

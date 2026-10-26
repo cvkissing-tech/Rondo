@@ -29,5 +29,13 @@ export default defineConfig(
       ...eslintPluginReactRefresh.configs.vite.rules
     }
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
+  {
+    files: ['src/renderer/src/vendor/jean/**/*.{ts,tsx}'],
+    rules: {
+      // Preserve upstream formatting and variant exports for clean source updates.
+      'prettier/prettier': 'off',
+      'react-refresh/only-export-components': 'off'
+    }
+  }
 )

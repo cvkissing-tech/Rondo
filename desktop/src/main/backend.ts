@@ -43,7 +43,7 @@ export class Backend {
     transport.stderr?.on('data', () => {
       /* Drain diagnostics; stdout belongs to MCP. */
     })
-    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.8.0' })
+    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.8.1' })
     client.onclose = () => {
       if (this.client === client) this.client = undefined
     }
@@ -51,7 +51,7 @@ export class Backend {
       await client.connect(transport)
       const catalog = await client.listTools()
       if (!catalog.tools.some((tool) => tool.name === 'get_task_changes'))
-        throw new Error('请更新后端至 0.8.0')
+        throw new Error('请更新后端至 0.8.1')
       this.count = catalog.tools.length
       this.client = client
       return client

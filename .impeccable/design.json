@@ -1,100 +1,177 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-25T16:29:30Z",
+  "generatedAt": "2026-10-26T00:28:51+00:00",
   "title": "Design System: Agent Review Loop",
   "extensions": {
     "colorMeta": {
-      "accent": {
+      "primary": {
         "role": "primary",
-        "displayName": "墨绿动作色"
+        "displayName": "浅色深灰动作色"
       },
-      "canvas": {
+      "dark-primary": {
+        "role": "primary",
+        "displayName": "深色黄色动作色"
+      },
+      "background": {
         "role": "neutral",
-        "displayName": "冷灰工作底"
+        "displayName": "浅色工作面",
+        "tonalRamp": [
+          "#101010",
+          "#141414",
+          "#181818",
+          "#202020",
+          "#242424",
+          "#282828",
+          "#323232",
+          "#fafafa"
+        ]
+      },
+      "dark-background": {
+        "role": "neutral",
+        "displayName": "深色工作面",
+        "tonalRamp": [
+          "#101010",
+          "#141414",
+          "#181818",
+          "#202020",
+          "#242424",
+          "#282828",
+          "#323232",
+          "#fafafa"
+        ]
       },
       "sidebar": {
         "role": "neutral",
-        "displayName": "深墨绿导航"
+        "displayName": "浅灰导航",
+        "tonalRamp": [
+          "#101010",
+          "#141414",
+          "#181818",
+          "#202020",
+          "#242424",
+          "#282828",
+          "#323232",
+          "#fafafa"
+        ]
       },
-      "surface": {
+      "dark-sidebar": {
         "role": "neutral",
-        "displayName": "白色工作面"
+        "displayName": "近黑导航",
+        "tonalRamp": [
+          "#101010",
+          "#141414",
+          "#181818",
+          "#202020",
+          "#242424",
+          "#282828",
+          "#323232",
+          "#fafafa"
+        ]
       }
     },
     "typographyMeta": {
       "headline": {
-        "displayName": "任务标题",
-        "purpose": "常规桌面操作标题，窄窗口使用22px。"
+        "displayName": "新任务标题",
+        "purpose": "操作界面的标题，不承担营销展示角色。"
       },
       "code": {
         "displayName": "代码与路径",
-        "purpose": "仅用于实际代码、提交与文件路径。"
+        "purpose": "只用于实际代码、提交和文件路径。"
       }
     },
     "shadows": [],
-    "motion": [],
+    "motion": [
+      {
+        "name": "sidebar-width",
+        "value": "width 200ms linear",
+        "purpose": "上游侧栏展开与收起。"
+      }
+    ],
     "breakpoints": [
       {
         "name": "compact-desktop",
         "value": "1100px"
+      },
+      {
+        "name": "minimum-window",
+        "value": "960px"
       }
     ]
   },
   "components": [
     {
-      "name": "准备任务主按钮",
+      "name": "主动作",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "任务表单的主动作。",
-      "html": "<button class=\"arl-primary\">准备任务</button>",
-      "css": ".arl-primary{font:13px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 15px;color:#fff;background:var(--accent,#285b46);border:1px solid var(--accent,#285b46);border-radius:6px;cursor:pointer}.arl-primary:hover{background:#1d4936}.arl-primary:focus-visible{outline:2px solid #2e8060;outline-offset:3px}.arl-primary:disabled{opacity:.48;cursor:default}"
+      "description": "准备任务等明确的提交动作；未将上游 raised 下沿列为复用阴影规范。",
+      "html": "<button class=\"ds-btn ds-primary\">准备任务</button>",
+      "css": ".ds-btn{font:500 12px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 12px;border-radius:calc(var(--radius,.5rem) - 2px);cursor:pointer}.ds-btn:disabled{opacity:.5;cursor:default}.ds-primary{color:var(--primary-foreground,oklch(.985 0 0));background:color-mix(in oklab,var(--primary,oklch(.205 0 0)) 80%,transparent);border:1px solid transparent}.ds-primary:hover{background:color-mix(in oklab,var(--primary,oklch(.205 0 0)) 90%,transparent)}.ds-primary:active{opacity:.9}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
+    },
+    {
+      "name": "轻量操作",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "工具栏和次级操作，使用 ghost 变体。",
+      "html": "<button class=\"ds-btn ds-ghost\">刷新改动</button>",
+      "css": ".ds-btn{font:500 12px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:7px 12px;border-radius:calc(var(--radius,.5rem) - 2px);cursor:pointer}.ds-btn:disabled{opacity:.5;cursor:default}.ds-ghost{color:var(--foreground,oklch(.145 0 0));background:transparent;border:1px solid transparent}.ds-ghost:hover,.ds-ghost:active{background:var(--accent,oklch(.97 0 0))}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
     },
     {
       "name": "项目目录输入",
       "kind": "input",
       "refersTo": "input",
-      "description": "有可见标签的本地路径字段。",
-      "html": "<label class=\"arl-label\" for=\"arl-project\">项目目录</label><input class=\"arl-input\" id=\"arl-project\" placeholder=\"选择本机上的 Git 项目\"/>",
-      "css": ".arl-label{display:block;margin:0 0 9px;font:600 13px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:#23342e}.arl-input{font:14px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:#23342e;background:#fff;border:1px solid #ccd5cc;border-radius:6px;padding:11px 12px;width:100%;max-width:360px}.arl-input::placeholder{color:#68776b}.arl-input:focus-visible{outline:2px solid #2e8060;outline-offset:3px}"
+      "description": "关联真实 label 的项目目录输入，支持键盘焦点。",
+      "html": "<label class=\"ds-label\" for=\"ds-project\">项目目录</label><input class=\"ds-input\" id=\"ds-project\" placeholder=\"选择 Git 项目目录\"/>",
+      "css": ".ds-label{display:block;font:500 11px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:var(--foreground,oklch(.145 0 0));margin-bottom:7px}.ds-input{font:12px 'Segoe UI','Microsoft YaHei UI',sans-serif;width:100%;min-width:0;padding:8px 12px;background:transparent;color:var(--foreground,oklch(.145 0 0));border:1px solid var(--input,oklch(.922 0 0));border-radius:calc(var(--radius,.5rem) - 2px)}.ds-input::placeholder{color:var(--muted-foreground,#666)}.ds-input:hover{border-color:var(--ring,oklch(.556 0 0))}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
     },
     {
-      "name": "任务导航项",
+      "name": "任务导航",
       "kind": "nav",
-      "refersTo": "navigation-selected",
-      "description": "深色侧栏中的当前任务，展示标题与实际状态。",
-      "html": "<nav class=\"arl-nav\" aria-label=\"任务导航示例\"><button class=\"arl-task\" aria-current=\"page\"><span>当前任务<small>任务编号 · 实际状态</small></span></button></nav>",
-      "css": ".arl-nav{width:194px;padding:15px;background:#233e33;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.arl-task{display:flex;width:100%;text-align:left;padding:11px 10px;background:#3b5a49;color:#fff;border:0;border-radius:6px;font:14px 'Segoe UI','Microsoft YaHei UI',sans-serif;cursor:pointer}.arl-task span{line-height:1.5;overflow-wrap:anywhere}.arl-task small{display:block;color:#a6bba9;font-size:11px;margin-top:5px}.arl-task:hover{background:#365447}.arl-task:focus-visible{outline:2px solid #2e8060;outline-offset:3px}"
+      "refersTo": "navigation",
+      "description": "紧凑条目显示真实任务标题与状态。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"任务\"><button class=\"ds-selected\" aria-current=\"page\">当前任务<span>#1 · 待执行</span></button><button>另一项任务<span>#2 · 已提交</span></button></nav>",
+      "css": ".ds-nav{padding:8px;background:var(--sidebar,#f7f7f7);color:var(--foreground,oklch(.145 0 0));font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-nav button{font:500 12px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:block;width:100%;min-height:52px;text-align:left;padding:9px 10px;border:0;border-radius:calc(var(--radius,.5rem) - 2px);color:inherit;background:transparent;cursor:pointer}.ds-nav button:hover,.ds-nav .ds-selected{background:var(--sidebar-accent,oklch(.97 0 0))}.ds-nav button:active{background:var(--accent,oklch(.97 0 0))}.ds-nav span{display:block;font-size:10px;font-weight:400;color:var(--muted-foreground,#666);margin-top:4px}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
+    },
+    {
+      "name": "任务编号标记",
+      "kind": "chip",
+      "refersTo": "badge-outline",
+      "description": "编号与紧凑状态标记，不代替执行证据。",
+      "html": "<span class=\"ds-badge\">#1</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;padding:2px 7px;font:500 10px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:var(--foreground,oklch(.145 0 0));border:1px solid var(--border,oklch(.922 0 0));border-radius:calc(var(--radius,.5rem) - 2px)}"
+    },
+    {
+      "name": "需求输入容器",
+      "kind": "custom",
+      "refersTo": "task-composer",
+      "description": "需求与验收共享一个工作容器。",
+      "html": "<div class=\"ds-composer\"><label for=\"ds-prompt\">需求</label><textarea id=\"ds-prompt\" placeholder=\"描述当前行为与期望结果…\"></textarea><label for=\"ds-acceptance\">验收条件</label><textarea id=\"ds-acceptance\" class=\"ds-acceptance\" placeholder=\"写下可检查的结果。\"></textarea></div>",
+      "css": ".ds-composer{background:var(--card,oklch(1 0 0));color:var(--foreground,oklch(.145 0 0));border:1px solid var(--border,oklch(.922 0 0));border-radius:10px;overflow:hidden;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-composer label{display:block;font-size:11px;font-weight:500;color:var(--muted-foreground,#666);padding:15px 17px 0}.ds-composer textarea{display:block;width:100%;min-height:130px;padding:12px 17px;font:14px/1.8 'Segoe UI','Microsoft YaHei UI',sans-serif;color:inherit;background:transparent;border:0;resize:vertical}.ds-composer textarea::placeholder{color:var(--muted-foreground,#666)}.ds-composer textarea:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}.ds-composer .ds-acceptance{min-height:54px;font-size:12px;border-top:1px solid var(--border,oklch(.922 0 0))}"
     }
   ],
   "narrative": {
-    "northStar": "事务所项目册",
-    "overview": "稳定导航、灰白工作面、墨绿动作与细边界组织同一项开发任务。视觉层次服务于需求、工作区、差异和审查，状态来自真实服务。",
+    "northStar": "可操作的开发工作台",
+    "overview": "本体系直接复用 Jean 的 React 控件与语义主题，来源为 `coollabsio/jean` 提交 `cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3`。来源、文件身份和适配说明保存在 `desktop/src/renderer/src/vendor/jean/NOTICE.md`。它取代用户已否定的旧墨绿表单体系。\n\n设计重心是项目、需求与实际代码改动。浅深主题采用同一组语义角色；系统字体承载中文操作与阅读，成熟控件提供导航、焦点、提示和分栏行为。页面不再用常驻角色介绍填满一侧。",
     "keyCharacteristics": [
-      "克制的桌面操作布局",
-      "中文系统字体",
-      "平面色阶与细分隔",
-      "明确的真实接入状态"
+      "中性工作面与紧凑导航。",
+      "需求、代码改动和审查保持同一任务上下文。",
+      "真实源码组件复用，状态说明按需打开。"
     ],
     "rules": [
       {
-        "name": "操作色",
-        "body": "墨绿用于主动作和当前选择，正文使用清晰的深灰绿。",
+        "name": "The Semantic Theme Rule",
+        "body": "页面及复用控件使用语义变量；切换主题时共同变化，不在单个控件中另造浅深配色。",
         "section": "colors"
-      },
-      {
-        "name": "平面层次",
-        "body": "通过色阶与1px边界组织内容，当前界面无投影。",
-        "section": "elevation"
       }
     ],
     "dos": [
-      "沿用可见标签、键盘焦点和窄窗口布局",
-      "用文字区分待接入、运行中和终态"
+      "**Do** 优先使用已移植控件的现有变体、语义颜色与交互。",
+      "**Do** 让需求、代码改动和审查处于同一任务上下文。",
+      "**Do** 为状态、空内容和不可用操作展示真实依据。"
     ],
     "donts": [
-      "不用模拟进度冒充Agent执行",
-      "不加入无关装饰图片或指标卡",
-      "不把审查通过等同于测试与人工验收通过"
+      "**Don't** 恢复用户已否定的墨绿静态角色说明栏。",
+      "**Don't** 为填满界面虚构任务、消息、执行进度或连接成功。",
+      "**Don't** 把本轮桌面最小宽度验证扩大为移动端支持声明。"
     ]
   }
 }

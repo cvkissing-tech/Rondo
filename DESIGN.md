@@ -1,127 +1,175 @@
 ---
 name: Agent Review Loop
-description: 墨绿导航、灰白工作面和清晰状态组成的本地开发工作台
+description: 基于 Jean 实际组件与中性浅深主题的本地开发工作台
 colors:
-  accent: "#285b46"
-  accent-hover: "#1d4936"
-  text: "#23342e"
-  muted: "#5e6b62"
-  canvas: "#f4f5f3"
-  surface: "#ffffff"
-  header: "#fafbf9"
-  sidebar: "#233e33"
-  sidebar-text: "#eff4ef"
-  sidebar-selected: "#3b5a49"
-  agent-surface: "#f0f3ee"
-  line: "#dde2dc"
-  placeholder: "#68776b"
-  pending: "#76643e"
-  focus: "#2e8060"
+  background: "oklch(1 0 0)"
+  foreground: "oklch(0.145 0 0)"
+  primary: "oklch(0.205 0 0)"
+  primary-foreground: "oklch(0.985 0 0)"
+  muted: "oklch(0.97 0 0)"
+  muted-foreground: "#666666"
+  border: "oklch(0.922 0 0)"
+  sidebar: "#f7f7f7"
+  ring: "oklch(0.556 0 0)"
+  dark-background: "#101010"
+  dark-foreground: "#fafafa"
+  dark-card: "#181818"
+  dark-primary: "#fcd452"
+  dark-primary-foreground: "#101010"
+  dark-muted: "#242424"
+  dark-muted-foreground: "#aaaaaa"
+  dark-border: "#323232"
+  dark-sidebar: "#141414"
+  dark-accent: "#282828"
 typography:
   headline:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
     fontSize: "24px"
-    fontWeight: 650
-    lineHeight: 1.45
-    letterSpacing: "-0.02em"
-  title:
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: "-0.025em"
+  document-title:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
-    fontSize: "15px"
-    fontWeight: 650
-  body:
+    fontSize: "19px"
+    fontWeight: 600
+    lineHeight: 1.5
+  toolbar-title:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
     fontSize: "14px"
-    fontWeight: 400
-    lineHeight: 1.75
-  label:
+    fontWeight: 600
+  body:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
     fontSize: "13px"
-    fontWeight: 600
+    fontWeight: 400
+  task-prose:
+    fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
+    fontSize: "13px"
+    lineHeight: 1.9
+  label:
+    fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
+    fontSize: "11px"
+    fontWeight: 500
   code:
-    fontFamily: "Consolas, monospace"
+    fontFamily: "Consolas, Courier New, monospace"
     fontSize: "12px"
 rounded:
-  badge: "4px"
-  control: "6px"
-  agent-icon: "9px"
-  form: "10px"
+  base: "0.5rem"
+  control: "calc(0.5rem - 2px)"
+  composer: "10px"
 spacing:
-  control-gap: "8px"
-  field-padding: "11px 12px"
-  action-padding: "11px 15px"
-  tabs-gap: "24px"
-  primary-padding: "36px 34px 60px"
+  field-padding: "4px 12px"
+  prompt-padding: "12px 17px"
+  document-padding: "26px"
+  compact-document-padding: "22px"
+  toolbar-padding: "0 16px"
 components:
   button-primary:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.surface}"
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.primary-foreground}"
     rounded: "{rounded.control}"
-    padding: "{spacing.action-padding}"
-  button-primary-hover:
-    backgroundColor: "{colors.accent-hover}"
+  button-ghost:
+    textColor: "{colors.foreground}"
+    rounded: "{rounded.control}"
   input:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.text}"
+    textColor: "{colors.foreground}"
     rounded: "{rounded.control}"
     padding: "{spacing.field-padding}"
   navigation:
     backgroundColor: "{colors.sidebar}"
-    textColor: "{colors.sidebar-text}"
-    width: "224px"
-  navigation-selected:
-    backgroundColor: "{colors.sidebar-selected}"
-    textColor: "{colors.surface}"
+    textColor: "{colors.foreground}"
+    width: "240px"
+  badge-outline:
+    textColor: "{colors.foreground}"
+    rounded: "{rounded.control}"
+  task-composer:
+    backgroundColor: "{colors.background}"
+    rounded: "{rounded.composer}"
 ---
 
 # Design System: Agent Review Loop
 
 ## Overview
 
-视觉方向沿用“事务所项目册”：以稳定的导航、白色工作面、墨绿动作和细分隔组织开发任务。克制体现在信息层级与状态表达，不使用纸张纹理、装订装饰或营销式大标题。
+**Creative North Star: "可操作的开发工作台"**
 
-这是一套桌面操作界面。系统字体服务于中文输入、任务阅读和持续使用；代码、路径才使用等宽字体。图标统一来自 Lucide，现有界面不依赖装饰图片。
+本体系直接复用 Jean 的 React 控件与语义主题，来源为 `coollabsio/jean` 提交 `cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3`。来源、文件身份和适配说明保存在 `desktop/src/renderer/src/vendor/jean/NOTICE.md`。它取代用户已否定的旧墨绿表单体系。
+
+设计重心是项目、需求与实际代码改动。浅深主题采用同一组语义角色；系统字体承载中文操作与阅读，成熟控件提供导航、焦点、提示和分栏行为。页面不再用常驻角色介绍填满一侧。
+
+**Key Characteristics:**
+- 中性工作面与紧凑导航。
+- 需求、代码改动和审查保持同一任务上下文。
+- 真实源码组件复用，状态说明按需打开。
 
 ## Colors
 
-墨绿 `accent` 用于主动作和选中标签；更深的 `sidebar` 承载持久任务导航。`canvas`、`surface` 与 `agent-surface` 通过色阶区分主工作区、输入面和角色说明。
+浅色以白色工作面、浅灰导航和深灰文字分层。深色以近黑工作面、较浅的输入/弹出层和浅色文字分层；上游主题的黄色用于深色主动作与焦点。色值以 frontmatter 为准，深色键对应 `.dark` 对同名 CSS 变量的覆盖。
 
-`text` 用于正文，`muted` 用于说明。待接入状态使用 `pending`，同时保留明确文字，不能只靠颜色传达状态。当前占位文字为 `placeholder`，不回退为修复前的浅灰。
+### Primary
+
+浅色主动作使用 `primary` 与 `primary-foreground`；深色使用对应的 `dark-primary` 角色。它们是操作层级，不构成大面积装饰底色。
+
+### Neutral
+
+`background`、`sidebar`、`muted` 和 `border` 承担表面、导航、选中背景与分隔。应用对上游的次级文字和导航底色做了已落地的覆盖，记录于 `assets/main.css`；不要从未覆盖的上游默认值反推最终颜色。
+
+**The Semantic Theme Rule.** 页面及复用控件使用语义变量；切换主题时共同变化，不在单个控件中另造浅深配色。
 
 ## Typography
 
-操作字体为 Segoe UI、Microsoft YaHei UI 和 sans-serif；Consolas 仅用于路径与代码。页面标题 24px/650，窄窗口降为 22px；节标题 15px/650；正文基准 14px，任务说明和表单文字多为 13px。辅助说明为 11–12px，角色状态为 10px，均保留清晰对比。
+操作字体为 Segoe UI、Microsoft YaHei UI 和 sans-serif 回退。系统字体适用于此 Operate 界面；不承担营销展示角色。Consolas 和 Courier New 仅用于实际代码、提交与文件路径。
 
-标题不使用额外的眉题；任务编号、基础提交和状态属于直接关联当前任务的操作信息。
+层级由新任务标题、任务文档标题、工具栏标题、正文和辅助标签构成，具体 token 见 frontmatter。页面 CSS 根字号为 14px，正文覆盖为 13px；因此来自上游的 rem 控件尺寸按当前根字号计算，不把上游默认根字号的像素值直接搬入文档。需求文本保留换行并可换长行，路径允许任意位置折行。
 
 ## Layout
 
-主窗口 1360×900，最小 960×680。左导航固定 224px，顶部栏高 65px；其余区域使用主内容与 240px 角色栏两列，内容总宽最多 1400px。主区域内边距为 36px 34px 60px。
-
-1100px 及以下导航变为 202px、角色栏为 204px、主区域为 30px 22px。任务标题允许换行，长路径省略并保留完整 title 与复制操作。工作内容纵向滚动；当前实现是桌面窗口，不定义手机布局。
+- 外壳占满窗口，页面整体不产生滚动；任务正文、差异和审查区域分别拥有滚动。
+- 侧栏由上游 Sidebar 组件提供，展开宽度 240px，图标收起宽度使用上游 `3rem`；Ctrl+B 或工具栏按钮切换。
+- 顶部工作台工具栏 49px；任务视图工具栏最小高度 61px，分栏标题行 39px。
+- 新任务标题和表单最大宽度 690px；可选任务名位于任务设置中。
+- 单文档区域最大宽度 820px。代码与审查视图使用上游 ResizablePanelGroup，初始上下文/工作面比例 40/60，最小比例 25/40。
+- 1100px 以下工具栏允许换行，文档及审查区域收紧内边距。当前交付的桌面最小窗口宽度是 960px；不将导入组件自带的移动端分支当作已交付手机版。
 
 ## Elevation & Depth
 
-界面不用投影。深度来自深色导航、浅色角色栏、白色输入面和 1px 边界；主动作通过实色强调。焦点使用 2px `focus` 外轮廓，偏移 3px，不作为装饰阴影。
+主工作区域通过色面和细边界区分。弹出层沿用上游 Popover/Tooltip 的边界与覆盖层语法；控件焦点由语义 ring 和可见轮廓表达。
+
+上游 Button 保留的零模糊 raised 下沿属于当前源码携带的处理，未提炼为本产品新增页面应继承的阴影规范，也未纳入 sidecar 的可复用阴影 token。这里记录现状，不借文档把它扩散成新的视觉规则。
 
 ## Shapes
 
-控件统一 6px 圆角，表单容器 10px，角色图标容器 9px，状态标签 4px。标签导航用底部 2px 线表示选中；不为每段正文再套卡片。
+基础圆角沿用语义 `radius`，控件使用 `radius-md` 对它的计算。需求输入组合单独使用已实现的 10px 容器圆角；边界为细实线。展开/收起时品牌文字裁切并省略，长任务名、面包屑保持单行省略，正文与路径允许换行。
 
 ## Components
 
-**按钮。** 主按钮为墨绿底白字，11px 15px 内边距；悬停切换为 accent-hover。普通按钮白底、1px 描边，悬停使用浅绿。禁用状态透明度 0.48，并保留实际 disabled 语义。
+### Buttons
 
-**输入。** 白底、1px `#ccd5cc` 边框，11px 12px 内边距。字段有可见标签，文本框允许纵向调整；错误显示于页面提醒区，已输入内容保留。
+直接使用 Jean Button 的 default、outline 和 ghost 变体及其大小接口。主动作保留文字和真实图标；次级操作用 outline，工具栏与导航相关操作用 ghost。禁用、悬停和焦点由组件实现，不能靠颜色代替不可用语义。
 
-**导航。** 任务项左对齐，标题下方显示编号与实际状态。选中背景为 sidebar-selected；任务列表独立滚动，接入说明和连接状态位于底部。
+### Inputs / Fields
 
-**任务详情。** 标题、工作区路径条和三个内容标签形成稳定框架。路径支持复制与打开；差异使用 Pierre Diffs，异常时退回原始补丁。审查主动作旁说明额度行为；后台终态和测试状态分别呈现。
+使用上游 Field、InputGroup、Input 和 Textarea 组合。需求与验收在同一输入容器中；项目目录位于其上方。需求文本最小高度 130px，验收文本最小高度 54px。焦点仍须可见，label 与实际输入关联。
+
+### Navigation
+
+Sidebar 显示持久化任务、当前项目与真实筛选结果。任务条目按选中状态使用上游语义背景；标题和状态有不同密度。筛选仅作用于已加载任务。底部保留接入说明和本地服务状态。
+
+### Split work area
+
+按需打开任务上下文旁的代码改动或审查面板。分隔条支持拖动与方向键；代码视图保持 Pierre Diffs 并跟随浅深主题。没有改动或结果时使用真实 Empty 状态。
+
+### Connection popover and feedback
+
+连接信息在工具栏 Popover 中查看；未接入能力明确显示，不能用绿色状态或虚构消息填补。错误使用 Alert，简短操作反馈可关闭。Badge 用于任务编号和紧凑结果，不扩展成展示指标。
 
 ## Do's and Don'ts
 
-- **Do** 沿用灰白工作面、细边界与墨绿操作色；扩展界面继续使用现有控件语法。
-- **Do** 使用明确文字区分已完成、待接入、运行中、失败和取消。
-- **Do** 保留可见标签、键盘焦点、长文本换行与窄窗口可操作性。
-- **Don't** 将尚未接通的 Agent 显示为正在执行，或用模拟进度替代真实状态。
-- **Don't** 增加装饰图片、纹理或指标卡来填充空任务列表。
-- **Don't** 将路径截断后的可见文本当作完整路径，也不把审查通过等同于测试或人工验收通过。
+### Do:
+- **Do** 优先使用已移植控件的现有变体、语义颜色与交互。
+- **Do** 让需求、代码改动和审查处于同一任务上下文。
+- **Do** 为状态、空内容和不可用操作展示真实依据。
+
+### Don't:
+- **Don't** 恢复用户已否定的墨绿静态角色说明栏。
+- **Don't** 为填满界面虚构任务、消息、执行进度或连接成功。
+- **Don't** 把本轮桌面最小宽度验证扩大为移动端支持声明。

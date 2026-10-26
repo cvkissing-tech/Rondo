@@ -1,18 +1,68 @@
+import { Button } from '@jean/components/ui/button'
+import { Input } from '@jean/components/ui/input'
+import { Textarea } from '@jean/components/ui/textarea'
+import { Badge } from '@jean/components/ui/badge'
+import { Alert, AlertDescription, AlertTitle } from '@jean/components/ui/alert'
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription
+} from '@jean/components/ui/empty'
+import { Field, FieldGroup, FieldLabel } from '@jean/components/ui/field'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupTextarea
+} from '@jean/components/ui/input-group'
+import { Popover, PopoverContent, PopoverTrigger } from '@jean/components/ui/popover'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@jean/components/ui/resizable'
+import { Separator } from '@jean/components/ui/separator'
+import {
+  Sidebar,
+  SidebarProvider,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarTrigger,
+  SidebarInset,
+  SidebarInput
+} from '@jean/components/ui/sidebar'
+import { ToggleGroup, ToggleGroupItem } from '@jean/components/ui/toggle-group'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@jean/components/ui/tooltip'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
-  ArrowRight,
+  ArrowUp,
   Check,
-  Circle,
+  ChevronRight,
+  Code2,
   Copy,
   FileCode2,
+  FolderGit2,
   FolderOpen,
   GitBranch,
   Layers3,
+  Moon,
+  MoreHorizontal,
+  PanelRightClose,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Square,
-  Workflow
+  Sun,
+  Unplug,
+  Workflow,
+  X
 } from 'lucide-react'
 import type { Context, Review, ReviewStatus, Task } from '../../shared/types'
 const PatchView = lazy(() => import('./PatchView'))
@@ -39,6 +89,16 @@ function errorText(error: unknown): string {
 export default function App() {
   const [connection, setConnection] =
     useState<Awaited<ReturnType<NonNullable<typeof api>['status']>>>()
+  const [search, setSearch] = useState('')
+  const [dark, setDark] = useState(
+    () =>
+      localStorage.getItem('arl.theme') === 'dark' ||
+      (!localStorage.getItem('arl.theme') && matchMedia('(prefers-color-scheme: dark)').matches)
+  )
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('arl.theme', dark ? 'dark' : 'light')
+  }, [dark])
   const [tasks, setTasks] = useState<Task[]>([])
   const [next, setNext] = useState<number | null>(null)
   const [context, setContext] = useState<Context>()
@@ -189,422 +249,603 @@ export default function App() {
     setBusy(false)
     localStorage.removeItem('arl.task')
   }
-  return (
-    <div className="workbench">
-      <nav className="sidebar" aria-label="任务导航">
-        <div className="brand">
-          <Layers3 size={25} />
-          <span>
-            Agent Review Loop<small>本地开发工作台</small>
-          </span>
+  const visibleTasks = [...tasks]
+    .reverse()
+    .filter((task) => task.title.toLowerCase().includes(search.toLowerCase()))
+  const workspaceName =
+    context?.repository?.replace(/\\/g, '/').split('/').pop() ||
+    repo.replace(/\\/g, '/').split('/').pop()
+  const taskDescription = context && (
+    <div className="task-document">
+      <div className="document-heading">
+        <Badge variant="outline">#{context.task_id}</Badge>
+        <span>{states[context.task.status] ?? context.task.status}</span>
+      </div>
+      <h2>{context.task.title}</h2>
+      <section>
+        <h3>需求</h3>
+        <p className="preserve">{context.task.instructions}</p>
+      </section>
+      <section>
+        <h3>验收条件</h3>
+        <p className="preserve">{context.task.acceptance}</p>
+      </section>
+      <div className="workspace-event">
+        <Check />
+        <div>
+          <strong>独立工作区已创建</strong>
+          <p>
+            基于提交 <code>{context.base_commit.slice(0, 10)}</code>，修改将与原目录隔离。
+          </p>
+          <code className="workspace-code">{context.workspace}</code>
+          <div className="document-actions">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => protect(async () => api?.openWorkspace(context.task_id))}
+            >
+              <FolderOpen />
+              打开目录
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                protect(async () => {
+                  await api?.copyWorkspace(context.task_id)
+                  setNotice('工作区路径已复制')
+                })
+              }
+            >
+              <Copy />
+              复制路径
+            </Button>
+          </div>
         </div>
-        <button className="new-task" disabled={busy} onClick={newTask}>
-          <Plus size={17} />
-          新建任务
-        </button>
-        <div className="nav-heading">
-          <span>任务</span>
-          <button
-            className="icon-button"
-            aria-label="刷新任务"
-            onClick={() => protect(() => refresh())}
-          >
-            <RefreshCw size={15} />
-          </button>
-        </div>
-        <div className="task-list">
-          {tasks.length ? (
-            tasks.map((task) => (
-              <button
-                key={task.task_id}
-                className={`task-item ${context?.task_id === task.task_id ? 'selected' : ''}`}
-                disabled={busy}
-                onClick={() => selectTask(task.task_id)}
+      </div>
+      <div className="next-step">
+        <Unplug />
+        <p>WorkBuddy 自动执行尚未接入。现在可在工作区修改代码，再查看差异或发起审查。</p>
+      </div>
+    </div>
+  )
+  const difference = (
+    <div className="pane-body">
+      {!changes ? (
+        <p className="loading-text">正在读取改动…</p>
+      ) : !changes.patch ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FileCode2 />
+            </EmptyMedia>
+            <EmptyTitle>尚无代码改动</EmptyTitle>
+            <EmptyDescription>在任务工作区修改或新增文件后，点刷新查看。</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : changes.truncated ? (
+        <>
+          <p className="supporting">仅显示前 200 KB，完整差异请在工作区查看。</p>
+          <pre>{changes.patch}</pre>
+        </>
+      ) : (
+        <Suspense fallback={<p className="loading-text">加载代码视图…</p>}>
+          <PatchView patch={changes.patch} theme={dark ? 'github-dark' : 'github-light'} />
+        </Suspense>
+      )}
+    </div>
+  )
+  const reviewPanel = (
+    <div className="review-body">
+      <div className="review-intro">
+        <ShieldCheck />
+        <h2>Codex 代码审查</h2>
+      </div>
+      {!job ? (
+        <>
+          <p>代码准备完成后停止编辑，再审查一次固定快照。</p>
+          <div className="quota-note">
+            <span>使用本机 Codex 账号额度</span>
+            <span>每项任务最多两次</span>
+          </div>
+          <Button disabled={busy} onClick={startReview}>
+            <ShieldCheck />
+            发起 Codex 审查
+          </Button>
+        </>
+      ) : (
+        <>
+          <div className="review-status">
+            <Badge variant="secondary">{states[job.status] ?? job.status}</Badge>
+            {!terminal.has(job.status) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  protect(async () => {
+                    const seq = generation.current
+                    const status = await api!.cancelReview(job.job_id)
+                    if (seq === generation.current) setJob(status)
+                  })
+                }
               >
-                <FileCode2 size={16} />
-                <span>
-                  {task.title}
-                  <small>
-                    #{task.task_id} · {states[task.status] ?? task.status}
-                  </small>
-                </span>
-              </button>
-            ))
-          ) : (
-            <p className="nav-empty">
-              你的任务会保存在这里。
-              <br />
-              从一个 Git 项目开始。
-            </p>
+                <Square />
+                停止审查
+              </Button>
+            )}
+          </div>
+          {job.error_code && (
+            <Alert variant="destructive">
+              <AlertTitle>审查未完成</AlertTitle>
+              <AlertDescription>{job.error_code}。请检查本机 Codex 与工作区配置。</AlertDescription>
+            </Alert>
           )}
-          {next !== null && (
-            <button className="load-more" onClick={() => protect(() => refresh(next))}>
-              加载更多任务
-            </button>
+          {review && (
+            <>
+              <p className="preserve">{review.summary}</p>
+              <div className="result-facts">
+                <Badge variant="outline">{review.verdict}</Badge>
+                <span>快照 {review.freshness}</span>
+                <span>检查 {review.checks.status}</span>
+              </div>
+              {review.findings.map((finding, index) => (
+                <article className="finding" key={`${finding.path}:${index}`}>
+                  <strong>
+                    P{finding.priority} · {finding.path}
+                    {finding.line !== null && `:${finding.line}`}
+                  </strong>
+                  <p>{finding.trigger}</p>
+                  <p>{finding.impact}</p>
+                  <pre>{finding.evidence}</pre>
+                </article>
+              ))}
+              {review.next_after_index !== null && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    protect(async () => {
+                      const seq = generation.current
+                      const more = await api!.readReview(job.job_id, review.next_after_index!)
+                      if (seq === generation.current)
+                        setReview({ ...more, findings: [...review.findings, ...more.findings] })
+                    })
+                  }
+                >
+                  加载更多问题
+                </Button>
+              )}
+              <p className="supporting">审查通过不等于测试通过或人工验收完成。</p>
+            </>
           )}
-        </div>
-        <button className="guide" onClick={() => protect(async () => api?.openGuide())}>
-          <Workflow size={17} />
-          Agent 接入说明
-          <ArrowRight size={15} />
-        </button>
-        <div className="sidebar-footer">
-          <span className={`dot ${connection?.connected ? 'connected' : ''}`} />
-          {connection?.connected ? '本地服务已连接' : '等待本地服务'}
-        </div>
-      </nav>
-      <main>
-        <header className="topbar">
-          <span>
-            <GitBranch size={16} />
-            本地工作区
-          </span>
-          <span className="connection" title={connection?.database}>
-            {connection?.connected ? `MCP · ${connection.tools} 个工具可用` : '正在连接 MCP 服务'}
-          </span>
+          {terminal.has(job.status) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                reviewRequest.current = { task: 0, id: '' }
+                startReview()
+              }}
+            >
+              新一轮审查（消耗额度）
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  )
+  return (
+    <SidebarProvider
+      className="app-shell"
+      style={{ '--sidebar-width': '240px' } as React.CSSProperties}
+    >
+      <Sidebar collapsible="icon" className="app-navigation">
+        <SidebarHeader>
+          <div className="app-identity">
+            <Layers3 />
+            <span className="group-data-[collapsible=icon]:hidden">Agent Review Loop</span>
+          </div>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton disabled={busy} onClick={newTask} tooltip="新建任务">
+                <Plus />
+                <span>新建任务</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>工作区</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      if (context) protect(async () => api?.openWorkspace(context.task_id))
+                      else document.getElementById('repo')?.focus()
+                    }}
+                    tooltip={workspaceName || '选择项目'}
+                  >
+                    <FolderGit2 />
+                    <span>{workspaceName || '选择项目'}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup className="task-navigation">
+            <div className="task-section-heading">
+              <SidebarGroupLabel>任务</SidebarGroupLabel>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="刷新任务"
+                onClick={() => protect(() => refresh())}
+              >
+                <RefreshCw />
+              </Button>
+            </div>
+            <div className="nav-search group-data-[collapsible=icon]:hidden">
+              <Search />
+              <SidebarInput
+                aria-label="筛选已加载任务"
+                placeholder="筛选任务…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleTasks.map((task) => (
+                  <SidebarMenuItem key={task.task_id}>
+                    <SidebarMenuButton
+                      className="task-nav"
+                      size="lg"
+                      disabled={busy}
+                      isActive={context?.task_id === task.task_id}
+                      onClick={() => selectTask(task.task_id)}
+                      tooltip={task.title}
+                    >
+                      <FileCode2 />
+                      <div className="task-nav-text">
+                        <span>{task.title}</span>
+                        <small>
+                          #{task.task_id} <span>{states[task.status] ?? task.status}</span>
+                        </small>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+              {!tasks.length && (
+                <p className="sidebar-empty group-data-[collapsible=icon]:hidden">
+                  还没有任务。
+                  <br />
+                  从一个具体的需求开始。
+                </p>
+              )}
+              {!!tasks.length && !visibleTasks.length && (
+                <p className="sidebar-empty">没有匹配的任务。</p>
+              )}
+              {next !== null && (
+                <Button size="sm" variant="ghost" onClick={() => protect(() => refresh(next))}>
+                  加载更多
+                </Button>
+              )}
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => protect(async () => api?.openGuide())}
+                tooltip="Agent 接入说明"
+              >
+                <Workflow />
+                <span>接入说明</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+          <div className="local-status group-data-[collapsible=icon]:hidden">
+            <span className={`status-dot ${connection?.connected ? 'online' : ''}`} />
+            <span>
+              {connection?.connected ? `MCP · ${connection.tools} 个工具可用` : '本地服务未连接'}
+            </span>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset className="app-main">
+        <header className="workbench-toolbar">
+          <SidebarTrigger aria-label="切换侧栏" />
+          <Separator orientation="vertical" />
+          <div className="breadcrumb">
+            <span>{workspaceName || '工作台'}</span>
+            <ChevronRight />
+            <strong>{context ? context.task.title : '新建任务'}</strong>
+          </div>
+          <div className="toolbar-actions">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="ghost">
+                  <span className="status-dot" />
+                  Agent 连接
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end">
+                <h2 className="popover-title">Agent 连接</h2>
+                <div className="connection-row">
+                  <ShieldCheck />
+                  <div>
+                    <strong>Codex</strong>
+                    <span>审查时连接本机 CLI</span>
+                  </div>
+                  <Badge variant="outline">按需</Badge>
+                </div>
+                <div className="connection-row">
+                  <Code2 />
+                  <div>
+                    <strong>WorkBuddy</strong>
+                    <span>自动执行接口尚未接通</span>
+                  </div>
+                  <Badge variant="outline">未接入</Badge>
+                </div>
+                <Separator />
+                <p className="supporting">
+                  Codex 自动拆解尚未接入。创建任务只准备本地工作区，不会自动派发或调用模型。
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => protect(async () => api?.openGuide())}
+                >
+                  查看接入说明
+                </Button>
+              </PopoverContent>
+            </Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={dark ? '切换浅色' : '切换深色'}
+                  onClick={() => setDark(!dark)}
+                >
+                  {dark ? <Sun /> : <Moon />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{dark ? '浅色主题' : '深色主题'}</TooltipContent>
+            </Tooltip>
+          </div>
         </header>
-        {error && (
-          <div className="error" role="alert">
-            {error}
-            <button onClick={() => setError('')} aria-label="关闭错误">
-              关闭
-            </button>
-          </div>
-        )}
-        {connection?.error && (
-          <div className="error" role="alert">
-            {connection.error}
-          </div>
+        {(error || connection?.error) && (
+          <Alert variant="destructive" className="app-alert">
+            <AlertTitle>操作未完成</AlertTitle>
+            <AlertDescription>
+              {error || connection?.error}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setError('')
+                  protect(() => refresh())
+                }}
+              >
+                重新连接 / 刷新
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
         {notice && (
-          <div className="notice" role="status">
-            {notice}
-            <button onClick={() => setNotice('')}>知道了</button>
-          </div>
+          <Alert className="app-alert">
+            <AlertDescription>
+              <span role="status">{notice}</span>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="关闭提示"
+                onClick={() => setNotice('')}
+              >
+                <X />
+              </Button>
+            </AlertDescription>
+          </Alert>
         )}
-        <div className="content-grid">
-          <section className="primary">
-            {!context ? (
-              <>
-                <div className="page-heading">
-                  <h1>开始一项开发任务</h1>
-                  <p>先写清需求，再让每个 Agent 接手适合的工作。</p>
-                </div>
-                <form onSubmit={prepare} className="task-form">
-                  <label htmlFor="repo">项目目录</label>
-                  <div className="path-input">
-                    <input
+        {!context ? (
+          <div className="new-task-canvas">
+            <div className="new-task-heading">
+              <div className="project-mark">
+                <FolderGit2 />
+              </div>
+              <h1>新的开发任务</h1>
+              <p>选择项目，写下这次要完成的工作。</p>
+            </div>
+            <form onSubmit={prepare} className="new-task-form">
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="repo" className="sr-only">
+                    项目目录
+                  </FieldLabel>
+                  <InputGroup>
+                    <FolderOpen className="project-input-icon" />
+                    <InputGroupInput
                       id="repo"
                       value={repo}
-                      onChange={(e) => setRepo(e.target.value)}
+                      onChange={(event) => setRepo(event.target.value)}
                       required
-                      placeholder="选择本机上的 Git 项目"
+                      placeholder="选择 Git 项目目录"
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        protect(async () => {
-                          const path = await api?.chooseProject()
-                          if (path) setRepo(path)
-                        })
-                      }
-                    >
-                      <FolderOpen size={17} />
-                      选择目录
-                    </button>
-                  </div>
-                  <p className="hint">从已提交的 HEAD 建立独立工作区。未提交的改动不会复制过去。</p>
-                  <label htmlFor="title">
-                    任务名称 <span>可选</span>
-                  </label>
-                  <input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    maxLength={160}
-                    placeholder="例如：修复导出文件时的中文编码问题"
-                  />
-                  <label htmlFor="instructions">你想实现什么？</label>
-                  <textarea
-                    id="instructions"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    maxLength={8000}
-                    rows={6}
-                    required
-                    placeholder="描述当前行为、期望结果，以及需要保留的功能。"
-                  />
-                  <label htmlFor="acceptance">怎样算完成？</label>
-                  <textarea
-                    id="acceptance"
-                    value={acceptance}
-                    onChange={(e) => setAcceptance(e.target.value)}
-                    maxLength={4000}
-                    rows={3}
-                    required
-                    placeholder="写下可以验证的结果，例如：导出后中文无乱码，已有测试通过。"
-                  />
-                  <div className="form-footer">
-                    <span>准备任务不调用模型，不消耗模型额度。</span>
-                    <button
-                      className="primary-button"
-                      disabled={busy || !connection?.connected}
-                      type="submit"
-                    >
-                      {busy ? '正在准备…' : '准备任务'}
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </form>
-              </>
-            ) : (
-              <>
-                <div className="page-heading">
-                  <div className="title-row">
-                    <h1>{context.task.title}</h1>
-                    <span className="badge">
-                      {states[context.task.status] ?? context.task.status}
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        size="sm"
+                        onClick={() =>
+                          protect(async () => {
+                            const path = await api?.chooseProject()
+                            if (path) setRepo(path)
+                          })
+                        }
+                      >
+                        浏览目录
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                </Field>
+                <div className="task-composer">
+                  <Field>
+                    <FieldLabel htmlFor="instructions" className="composer-label">
+                      需求
+                    </FieldLabel>
+                    <InputGroup className="prompt-group">
+                      <InputGroupTextarea
+                        id="instructions"
+                        rows={6}
+                        maxLength={8000}
+                        required
+                        value={instructions}
+                        onChange={(event) => setInstructions(event.target.value)}
+                        placeholder="你想实现什么？描述当前行为与期望结果…"
+                        aria-label="你想实现什么？"
+                      />
+                    </InputGroup>
+                  </Field>
+                  <Separator />
+                  <Field className="acceptance-field">
+                    <FieldLabel htmlFor="acceptance">验收条件</FieldLabel>
+                    <Textarea
+                      id="acceptance"
+                      rows={2}
+                      maxLength={4000}
+                      required
+                      value={acceptance}
+                      onChange={(event) => setAcceptance(event.target.value)}
+                      placeholder="怎样才算完成？写下可检查的结果。"
+                      aria-label="怎样算完成？"
+                    />
+                  </Field>
+                  <div className="composer-footer">
+                    <span>
+                      <GitBranch />从 HEAD 创建独立工作区
                     </span>
+                    <Button type="submit" disabled={busy || !connection?.connected}>
+                      {busy ? '正在准备…' : '准备任务'}
+                      <ArrowUp />
+                    </Button>
                   </div>
-                  <p>
-                    任务 #{context.task_id} · 基于提交{' '}
-                    <code>{context.base_commit.slice(0, 10)}</code>
-                  </p>
                 </div>
-                <div className="workspace-path">
-                  <FolderOpen size={18} />
-                  <code title={context.workspace}>{context.workspace}</code>
-                  <button
-                    className="icon-button"
-                    aria-label="复制工作区路径"
-                    onClick={() =>
-                      protect(async () => {
-                        await api?.copyWorkspace(context.task_id)
-                        setNotice('工作区路径已复制。')
-                      })
-                    }
-                  >
-                    <Copy size={16} />
-                  </button>
-                  <button onClick={() => protect(async () => api?.openWorkspace(context.task_id))}>
-                    打开目录
-                  </button>
-                </div>
-                <div className="tabs" aria-label="任务视图">
-                  {[
-                    ['task', '任务说明'],
-                    ['changes', '代码改动'],
-                    ['review', '审查结果']
-                  ].map(([key, label]) => (
-                    <button
-                      key={key}
-                      aria-pressed={tab === key}
-                      className={tab === key ? 'active' : ''}
-                      onClick={() => (key === 'changes' ? showChanges() : setTab(key))}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {tab === 'task' && (
-                  <div className="task-details">
-                    <h2>需求</h2>
-                    <p className="preserve">{context.task.instructions}</p>
-                    <h2>验收条件</h2>
-                    <p className="preserve">{context.task.acceptance}</p>
-                    <div className="handoff-note">
-                      <Check size={18} />
-                      <div>
-                        <strong>工作区已准备好</strong>
-                        <p>
-                          在上方目录中修改代码，再查看改动并发起审查。目前尚不会自动派发给
-                          WorkBuddy。
-                        </p>
-                      </div>
+                <details className="task-settings">
+                  <summary>
+                    <MoreHorizontal />
+                    任务设置<span>可选</span>
+                  </summary>
+                  <Field>
+                    <FieldLabel htmlFor="title">任务名称</FieldLabel>
+                    <Input
+                      id="title"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      maxLength={160}
+                      placeholder="留空时使用需求第一行"
+                    />
+                  </Field>
+                </details>
+              </FieldGroup>
+              <div className="form-footnote">
+                <span>准备任务不消耗模型额度。</span>
+                <span>WorkBuddy 自动执行未接入</span>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <>
+            <div className="task-toolbar">
+              <div>
+                <Badge variant="outline">#{context.task_id}</Badge>
+                <h1>{context.task.title}</h1>
+              </div>
+              <ToggleGroup
+                type="single"
+                size="sm"
+                value={tab}
+                aria-label="任务视图"
+                onValueChange={(value) => {
+                  if (value === 'changes') showChanges()
+                  else if (value) setTab(value)
+                }}
+              >
+                <ToggleGroupItem value="task" aria-label="任务说明">
+                  任务说明
+                </ToggleGroupItem>
+                <ToggleGroupItem value="changes" aria-label="代码改动">
+                  代码改动
+                </ToggleGroupItem>
+                <ToggleGroupItem value="review" aria-label="审查结果">
+                  审查结果
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            {tab === 'task' ? (
+              <div className="single-document">{taskDescription}</div>
+            ) : (
+              <ResizablePanelGroup direction="horizontal" className="task-panels">
+                <ResizablePanel defaultSize={40} minSize={25}>
+                  <div className="context-pane">
+                    <div className="pane-title">
+                      <span>
+                        <FileCode2 />
+                        任务上下文
+                      </span>
                     </div>
+                    {taskDescription}
                   </div>
-                )}
-                {tab === 'changes' && (
-                  <div className="changes">
-                    {!changes ? (
-                      <p className="empty">正在读取工作区改动…</p>
-                    ) : !changes.patch ? (
-                      <div className="empty">
-                        <FileCode2 size={30} />
-                        <h2>尚无代码改动</h2>
-                        <p>工作区内的修改和新增文件会出现在这里。</p>
-                      </div>
-                    ) : changes.truncated ? (
-                      <>
-                        <p className="hint">改动较大，仅显示前 200 KB。完整内容请在工作区查看。</p>
-                        <pre>{changes.patch}</pre>
-                      </>
-                    ) : (
-                      <Suspense fallback={<p className="empty">正在加载代码视图…</p>}>
-                        <PatchView patch={changes.patch} />
-                      </Suspense>
-                    )}
-                  </div>
-                )}
-                {tab === 'review' && (
-                  <section className="review-panel">
-                    <div className="review-heading">
-                      <ShieldCheck size={23} />
-                      <div>
-                        <h2>Codex 代码审查</h2>
-                        <p>审查固定快照，返回问题与依据。</p>
-                      </div>
-                    </div>
-                    {!job ? (
-                      <>
-                        <p>
-                          代码准备完成后，停止编辑，再发起一次审查。此操作会调用本机
-                          Codex，消耗对应账号的额度；每个任务最多两次。
-                        </p>
-                        <button className="primary-button" disabled={busy} onClick={startReview}>
-                          发起 Codex 审查
-                          <ArrowRight size={16} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="review-state">
-                          <strong>{states[job.status] ?? job.status}</strong>
-                          {!terminal.has(job.status) && (
-                            <button
-                              onClick={() =>
-                                protect(async () => {
-                                  const seq = generation.current
-                                  const status = await api!.cancelReview(job.job_id)
-                                  if (seq === generation.current) setJob(status)
-                                })
-                              }
-                            >
-                              <Square size={13} />
-                              停止审查
-                            </button>
-                          )}
-                        </div>
-                        {job.error_code && (
-                          <p role="alert">{job.error_code}。请检查本机 Codex 配置与任务工作区。</p>
-                        )}
-                        {review && (
+                </ResizablePanel>
+                <ResizableHandle />
+                <ResizablePanel defaultSize={60} minSize={40}>
+                  <div className="work-pane">
+                    <div className="pane-title">
+                      <span>
+                        {tab === 'changes' ? (
                           <>
-                            <p className="review-summary">{review.summary}</p>
-                            <div className="result-facts">
-                              <span>结论：{review.verdict}</span>
-                              <span>快照：{review.freshness}</span>
-                              <span>检查：{review.checks.status}</span>
-                            </div>
-                            {review.findings.map((finding, index) => (
-                              <article
-                                className="finding"
-                                key={`${finding.path}:${finding.line}:${index}`}
-                              >
-                                <strong>
-                                  {finding.priority} · {finding.path}:{finding.line}
-                                </strong>
-                                <p>{finding.trigger}</p>
-                                <p>{finding.impact}</p>
-                                <pre>{finding.evidence}</pre>
-                              </article>
-                            ))}
-                            {review.next_after_index !== null && (
-                              <button
-                                onClick={() =>
-                                  protect(async () => {
-                                    const seq = generation.current
-                                    const more = await api!.readReview(
-                                      job.job_id,
-                                      review.next_after_index!
-                                    )
-                                    if (seq === generation.current)
-                                      setReview({
-                                        ...more,
-                                        findings: [...review.findings, ...more.findings]
-                                      })
-                                  })
-                                }
-                              >
-                                加载更多问题
-                              </button>
-                            )}
-                            <p className="hint">审查通过不等于测试通过，也不等于人工验收完成。</p>
+                            <GitBranch />
+                            工作区改动
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck />
+                            审查结果
                           </>
                         )}
-                        {terminal.has(job.status) && (
-                          <button
-                            className="secondary-review"
-                            disabled={busy}
-                            onClick={() => {
-                              reviewRequest.current = { task: 0, id: '' }
-                              startReview()
-                            }}
+                      </span>
+                      <div>
+                        {tab === 'changes' && (
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="刷新改动"
+                            onClick={showChanges}
                           >
-                            发起新一轮审查（消耗额度）
-                          </button>
+                            <RefreshCw />
+                          </Button>
                         )}
-                      </>
-                    )}
-                  </section>
-                )}
-              </>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="收起右侧面板"
+                          onClick={() => setTab('task')}
+                        >
+                          <PanelRightClose />
+                        </Button>
+                      </div>
+                    </div>
+                    {tab === 'changes' ? difference : reviewPanel}
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             )}
-          </section>
-          <aside className="agents">
-            <h2>协作分工</h2>
-            <div className="agent-row">
-              <div className="agent-icon">
-                <ShieldCheck size={21} />
-              </div>
-              <div>
-                <strong>Codex</strong>
-                <span>规划 · 审查</span>
-              </div>
-            </div>
-            <p>审查可按需发起。需求拆解与自动调度尚未接入。</p>
-            <div className="role-status">
-              <Circle size={9} />
-              发起审查时连接本机 CLI
-            </div>
-            <div className="agent-row worker">
-              <div className="agent-icon">
-                <FileCode2 size={21} />
-              </div>
-              <div>
-                <strong>WorkBuddy</strong>
-                <span>编码 · 运行检查</span>
-              </div>
-            </div>
-            <p>保留自己的模型、Skills 与环境。自动执行接口尚未接通。</p>
-            <div className="role-status pending">
-              <Circle size={9} />
-              等待执行适配器
-            </div>
-            <div className="flow">
-              <h3>任务如何流转</h3>
-              <ol>
-                <li className={context ? 'done' : ''}>
-                  需求与工作区{context && <Check size={14} />}
-                </li>
-                <li>
-                  Codex 拆解任务<span>待接入</span>
-                </li>
-                <li>
-                  WorkBuddy 执行<span>待接入</span>
-                </li>
-                <li>
-                  检查与 Codex 审查<span>按需发起</span>
-                </li>
-              </ol>
-            </div>
-            <p className="local-note">
-              <GitBranch size={15} />
-              任务与审查记录保存在本机。
-            </p>
-          </aside>
-        </div>
-      </main>
-    </div>
+          </>
+        )}
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

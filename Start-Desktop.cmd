@@ -11,4 +11,4 @@ if not exist "desktop\out\main\index.js" (
   if errorlevel 1 exit /b 1
 )
 set ELECTRON_RUN_AS_NODE=
-start "Agent Review Loop" "desktop\node_modules\electron\dist\electron.exe" "desktop"
+start "Agent Review Loop" "desktop\node_modules\electron\dist\electron.exe" "desktop" "--user-data-dir=%~dp0.agent-review-loop\desktop-profile"
