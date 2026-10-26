@@ -64,7 +64,8 @@ import {
   Workflow,
   X
 } from 'lucide-react'
-import type { Context, Review, ReviewStatus, Task } from '../../shared/types'
+import type { Context, PlanResult, Review, ReviewStatus, Task } from '../../shared/types'
+import PlanPanel from './PlanPanel'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -114,10 +115,14 @@ export default function App() {
   const [changes, setChanges] = useState<{ patch: string; truncated: boolean }>()
   const [job, setJob] = useState<ReviewStatus>()
   const [review, setReview] = useState<Review>()
+  const [planJob, setPlanJob] = useState<ReviewStatus>()
+  const [planResult, setPlanResult] = useState<PlanResult>()
   const [notice, setNotice] = useState('')
   const generation = useRef(0)
   const startRequest = useRef({ fingerprint: '', id: '' })
   const reviewRequest = useRef({ task: 0, id: '' })
+  const planRequest = useRef({ task: 0, id: '' })
+  const pendingPlanRequest = useRef(false)
   const protect = useCallback(async (operation: () => Promise<unknown>) => {
     setError('')
     try {
@@ -144,6 +149,8 @@ export default function App() {
     setChanges(undefined)
     setJob(undefined)
     setReview(undefined)
+    setPlanJob(undefined)
+    setPlanResult(undefined)
     setTab('task')
     try {
       const selected = await api.context(id)
@@ -153,6 +160,10 @@ export default function App() {
       if (selected.latest_review_job_id) {
         const status = await api.reviewStatus(selected.latest_review_job_id)
         if (seq === generation.current) setJob(status)
+      }
+      if (selected.latest_plan_job_id) {
+        const status = await api.planStatus(selected.latest_plan_job_id)
+        if (seq === generation.current) setPlanJob(status)
       }
     } catch (e) {
       if (seq === generation.current) setError(errorText(e))
@@ -193,6 +204,59 @@ export default function App() {
       clearTimeout(timer)
     }
   }, [jobId])
+  const planJobId = planJob?.job_id
+  useEffect(() => {
+    if (!api || !planJobId) return
+    let active = true
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      try {
+        const status = await api.planStatus(planJobId)
+        if (!active) return
+        setPlanJob(status)
+        if (status.status === 'succeeded') {
+          const result = await api.readPlan(planJobId)
+          if (active) setPlanResult(result)
+        } else if (!terminal.has(status.status)) timer = setTimeout(poll, 2500)
+      } catch (error) {
+        if (active) setError(errorText(error))
+      }
+    }
+    poll()
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [planJobId])
+  async function refreshPlan() {
+    if (!api || !planJob) return
+    const seq = generation.current
+    const status = await api.planStatus(planJob.job_id)
+    if (seq !== generation.current) return
+    setPlanJob(status)
+    if (status.status === 'succeeded') {
+      const result = await api.readPlan(planJob.job_id)
+      if (seq === generation.current) setPlanResult(result)
+    }
+  }
+  async function startPlan(fresh = false) {
+    if (!api || !context) return
+    const id = context.task_id,
+      seq = generation.current
+    if ((fresh && !pendingPlanRequest.current) || planRequest.current.task !== id)
+      planRequest.current = { task: id, id: crypto.randomUUID() }
+    pendingPlanRequest.current = true
+    setBusy(true)
+    await protect(async () => {
+      const status = await api.startPlan(id, planRequest.current.id)
+      pendingPlanRequest.current = false
+      if (seq === generation.current) {
+        setPlanResult(undefined)
+        setPlanJob(status)
+      }
+    })
+    if (seq === generation.current) setBusy(false)
+  }
   async function prepare(event: React.FormEvent) {
     event.preventDefault()
     if (!api) return
@@ -225,6 +289,10 @@ export default function App() {
   }
   async function startReview() {
     if (!api || !context) return
+    if (planJob && !terminal.has(planJob.status)) {
+      setError('正在生成计划，请先等待完成或停止生成。')
+      return
+    }
     const id = context.task_id
     const seq = generation.current
     setBusy(true)
@@ -244,6 +312,8 @@ export default function App() {
     setContext(undefined)
     setJob(undefined)
     setReview(undefined)
+    setPlanJob(undefined)
+    setPlanResult(undefined)
     setChanges(undefined)
     setError('')
     setBusy(false)
@@ -305,8 +375,18 @@ export default function App() {
       </div>
       <div className="next-step">
         <Unplug />
-        <p>WorkBuddy 自动执行尚未接入。现在可在工作区修改代码，再查看差异或发起审查。</p>
+        <p>可以先生成执行计划。WorkBuddy 自动执行尚未接入；修改代码后可查看差异并发起审查。</p>
       </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setTab('plan')
+          if (planJob) protect(refreshPlan)
+        }}
+      >
+        查看执行计划
+      </Button>
     </div>
   )
   const difference = (
@@ -594,7 +674,8 @@ export default function App() {
                 </div>
                 <Separator />
                 <p className="supporting">
-                  Codex 自动拆解尚未接入。创建任务只准备本地工作区，不会自动派发或调用模型。
+                  可在任务内显式生成 Codex
+                  执行计划。创建任务只准备本地工作区，不会自动派发或调用模型。
                 </p>
                 <Button
                   variant="outline"
@@ -771,11 +852,17 @@ export default function App() {
                 aria-label="任务视图"
                 onValueChange={(value) => {
                   if (value === 'changes') showChanges()
-                  else if (value) setTab(value)
+                  else if (value === 'plan') {
+                    setTab('plan')
+                    if (planJob) protect(refreshPlan)
+                  } else if (value) setTab(value)
                 }}
               >
                 <ToggleGroupItem value="task" aria-label="任务说明">
                   任务说明
+                </ToggleGroupItem>
+                <ToggleGroupItem value="plan" aria-label="执行计划">
+                  执行计划
                 </ToggleGroupItem>
                 <ToggleGroupItem value="changes" aria-label="代码改动">
                   代码改动
@@ -813,7 +900,7 @@ export default function App() {
                         ) : (
                           <>
                             <ShieldCheck />
-                            审查结果
+                            {tab === 'plan' ? '执行计划' : '审查结果'}
                           </>
                         )}
                       </span>
@@ -838,7 +925,26 @@ export default function App() {
                         </Button>
                       </div>
                     </div>
-                    {tab === 'changes' ? difference : reviewPanel}
+                    {tab === 'changes' ? (
+                      difference
+                    ) : tab === 'plan' ? (
+                      <PlanPanel
+                        job={planJob}
+                        result={planResult}
+                        busy={busy || Boolean(job && !terminal.has(job.status))}
+                        onStart={startPlan}
+                        onRefresh={() => protect(refreshPlan)}
+                        onCancel={() =>
+                          protect(async () => {
+                            const seq = generation.current
+                            const status = await api!.cancelPlan(planJob!.job_id)
+                            if (seq === generation.current) setPlanJob(status)
+                          })
+                        }
+                      />
+                    ) : (
+                      reviewPanel
+                    )}
                   </div>
                 </ResizablePanel>
               </ResizablePanelGroup>

@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { _electron } from 'playwright'
 const desktop = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const root = resolve(desktop, '..')
+const realPlan = process.env.ARL_SMOKE_REAL_PLAN === '1'
+let completedPlan
 await mkdir(join(root, '.agent-review-loop'), { recursive: true })
 const evidence = await mkdtemp(join(root, '.agent-review-loop', 'desktop-smoke-'))
 const repo = join(evidence, 'sample-repo')
@@ -24,7 +26,8 @@ const env = {
   ...process.env,
   ARL_PROJECT_ROOT: root,
   ARL_DATABASE: join(evidence, 'tasks.sqlite3'),
-  ARL_TASK_ROOT: join(evidence, 'tasks')
+  ARL_TASK_ROOT: join(evidence, 'tasks'),
+  ARL_REVIEW_ROOT: join(evidence, 'runs')
 }
 delete env.ELECTRON_RUN_AS_NODE
 const errors = []
@@ -44,7 +47,7 @@ async function launch() {
   page.on('console', (message) => {
     if (message.type() === 'error') console.error('CONSOLE', message.text())
   })
-  await page.getByText('MCP · 14 个工具可用', { exact: true }).waitFor({ timeout: 30000 })
+  await page.getByText('MCP · 18 个工具可用', { exact: true }).waitFor({ timeout: 30000 })
   return page
 }
 try {
@@ -67,8 +70,63 @@ try {
   assert.notEqual(context.workspace, repo)
   assert.equal(await readFile(join(context.workspace, 'sample.py'), 'utf8'), 'print(1)\n')
   await page.screenshot({ animations: 'disabled', path: join(evidence, '02-task-1360.png') })
+  await page.getByLabel('执行计划', { exact: true }).click()
+  await page.getByRole('button', { name: '生成 Codex 计划', exact: true }).waitFor()
+  if (realPlan) {
+    console.log('Starting ONE real Codex planning turn. Evidence: ' + evidence)
+    await page.getByRole('button', { name: '生成 Codex 计划', exact: true }).click()
+    const deadline = Date.now() + 210000
+    let lastStatus = ''
+    while (Date.now() < deadline) {
+      const task = await page.evaluate(() => window.workbench.context(1))
+      if (task.latest_plan_job_id) {
+        const state = await page.evaluate(
+          (id) => window.workbench.planStatus(id),
+          task.latest_plan_job_id
+        )
+        if (state.status !== lastStatus) {
+          console.log('Plan status: ' + state.status)
+          lastStatus = state.status
+        }
+        if (['succeeded', 'failed', 'cancelled', 'interrupted'].includes(state.status)) break
+      } else if (await page.locator('.app-alert').count())
+        throw new Error(await page.locator('.app-alert').innerText())
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+    const planContext = await page.evaluate(() => window.workbench.context(1))
+    assert.ok(planContext.latest_plan_job_id, await page.locator('body').innerText())
+    const status = await page.evaluate(
+      (id) => window.workbench.planStatus(id),
+      planContext.latest_plan_job_id
+    )
+    await writeFile(join(evidence, 'real-plan-status.json'), JSON.stringify(status, null, 2))
+    assert.equal(status.status, 'succeeded', JSON.stringify(status))
+    completedPlan = await page.evaluate((id) => window.workbench.readPlan(id), status.job_id)
+    assert.equal(completedPlan.freshness, 'current')
+    assert.ok(completedPlan.plan.steps.length > 0)
+    await page.getByText('计划已生成', { exact: true }).waitFor()
+    await page.getByText(completedPlan.plan.summary, { exact: true }).waitFor()
+    await page.screenshot({ animations: 'disabled', path: join(evidence, '07-plan-1360.png') })
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
+    await page.screenshot({ animations: 'disabled', path: join(evidence, '08-plan-960.png') })
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
+    await writeFile(join(evidence, 'real-plan.json'), JSON.stringify(completedPlan, null, 2))
+  } else {
+    await page.screenshot({
+      animations: 'disabled',
+      path: join(evidence, '07-plan-entry-1360.png')
+    })
+  }
   await writeFile(join(context.workspace, 'sample.py'), 'print(2)\n')
   await writeFile(join(context.workspace, 'README.md'), '# Desktop smoke\n')
+  if (realPlan) {
+    await page.getByRole('button', { name: '刷新计划状态', exact: true }).click()
+    await page.getByText('代码已变化，计划已过期', { exact: true }).waitFor()
+    await page.screenshot({
+      animations: 'disabled',
+      path: join(evidence, '09-plan-stale-1360.png')
+    })
+  }
   await page.getByLabel('代码改动', { exact: true }).click()
   await page.locator('diffs-container').first().waitFor({ timeout: 10000 })
   await page.screenshot({ animations: 'disabled', path: join(evidence, '03-changes-1360.png') })
@@ -114,6 +172,16 @@ try {
   page = await launch()
   await page.getByRole('heading', { name: '桌面端真实链路验收', exact: true, level: 1 }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), true)
+  if (realPlan) {
+    await page.getByLabel('执行计划', { exact: true }).click()
+    await page.getByText('计划已生成', { exact: true }).waitFor()
+    const restored = await page.evaluate(
+      (id) => window.workbench.readPlan(id),
+      completedPlan.job_id
+    )
+    assert.equal(restored.plan_id, completedPlan.plan_id)
+    assert.equal(restored.freshness, 'stale')
+  }
   assert.equal(errors.length, 0, errors.join('\n'))
   await writeFile(
     join(evidence, 'result.json'),
@@ -136,7 +204,8 @@ try {
           'dark theme persists after restart',
           'no renderer exceptions'
         ],
-        modelCalls: 0
+        modelCalls: realPlan ? 1 : 0,
+        realPlanSavedAndResumed: realPlan
       },
       null,
       2

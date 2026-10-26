@@ -22,11 +22,11 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Operating Context
 
-本机项目、独立Git工作目录、持久任务、检查与代码审查。当前已具备14个MCP工具及CLI；Workbench首版连接真实任务创建、恢复、查看。WorkBuddy外部派发尚未接通，不能用模拟进度显示为完成。Codex模型调用会使用额度，准备任务本身不调用模型。
+本机项目、独立Git工作目录、持久任务、检查与代码审查。当前已具备18个MCP工具及CLI；Workbench首版连接真实任务创建、恢复、查看。WorkBuddy外部派发尚未接通，不能用模拟进度显示为完成。Codex模型调用会使用额度，准备任务本身不调用模型。
 
 ## Capabilities and Constraints
 
-已有TaskLauncher、ReviewJobs、版本绑定检查和Codex原生审查。WorkBuddy需要正式执行接入及授权，当前无第三方应用。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
+已有TaskLauncher、PlanJobs、ReviewJobs、版本绑定检查和Codex原生审查。显式计划生成、读取、取消与恢复已接入，代码变化时标记过期。WorkBuddy需要正式执行接入及授权，当前无第三方应用。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
 
 ## Brand Commitments
 
@@ -41,4 +41,4 @@ Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称
 
 ## Evidence on Hand
 
-真实SQLite/MCP/CLI、Git任务目录和一次真实Codex合成审查；WorkBuddy只读调用已观察。界面无既有视觉资产，不伪造活跃任务、模型用量或成功记录。
+真实SQLite/MCP/CLI、Git任务目录、一次真实Codex合成审查和一次真实Codex计划生成；WorkBuddy只读调用已观察。界面无既有视觉资产，不伪造活跃任务、模型用量或成功记录。

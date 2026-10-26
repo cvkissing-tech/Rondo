@@ -49,12 +49,14 @@ class TaskLauncher:
         with self.store._connection() as db:
             launch = db.execute('SELECT context_json FROM task_launches WHERE task_id=?', (task_id,)).fetchone()
             review = db.execute('SELECT id FROM review_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
+            plan = db.execute('SELECT id FROM plan_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
         if launch is None:
             raise StoreError('TASK_NOT_PREPARED', 'This task has no managed workspace; use start_task for new tasks')
         context = json.loads(launch['context_json'])
         if not Path(context['workspace']).is_dir():
             raise StoreError('WORKSPACE_MISSING', 'The task workspace is missing; it will not be recreated over existing work')
         return {**context, 'task': task, 'latest_review_job_id': review['id'] if review else None,
+                'latest_plan_job_id': plan['id'] if plan else None,
                 'next_action': 'Implement the task in workspace only. Read project instructions, run relevant checks, then stop editing and call start_task_review.',
                 'review': {'tool': 'start_task_review', 'arguments': {'task_id': task_id},
                            'request_id_rule': 'Choose a stable review request_id; this does not start a model call.'}}

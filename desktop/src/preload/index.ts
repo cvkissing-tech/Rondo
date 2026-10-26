@@ -13,6 +13,10 @@ const api: DesktopAPI = {
   reviewStatus: (id) => invoke('review-status', id),
   readReview: (id, after = 0) => invoke('read-review', id, after),
   cancelReview: (id) => invoke('cancel-review', id),
+  startPlan: (id, request) => invoke('start-plan', id, request),
+  planStatus: (id) => invoke('plan-status', id),
+  readPlan: (id) => invoke('read-plan', id),
+  cancelPlan: (id) => invoke('cancel-plan', id),
   openWorkspace: (id) => invoke('open-workspace', id),
   copyWorkspace: (id) => invoke('copy-workspace', id),
   openGuide: () => invoke('open-guide')

@@ -57,9 +57,35 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
               canonical(payload).decode('utf-8'))
     if len(prompt.encode('utf-8')) > 64 * 1024:
         raise SnapshotError('REVIEW_LIMIT', 'Initial inline reviewer is limited to 64 KiB of input')
+    record = run_inline_json(prompt, review_schema(manifest['snapshot_id']), package_dir, output,
+                             executable, timeout=timeout, cancel_check=cancel_check)
+    data = record.pop('data', None)
+    record['snapshot_id'] = manifest['snapshot_id']
+    if record['status'] == 'completed':
+        try:
+            if cancel_check and cancel_check():
+                raise ReviewCancelled('Review cancelled before saving')
+            verify_package(package_dir)
+            record.update(status='review_saved', **save_review(package_dir, data))
+        except ReviewCancelled:
+            record['status'] = 'cancelled'
+        except Exception as error:
+            record.update(status='failed', error_type=type(error).__name__, error=str(error)[:2000])
+    (output / 'result.json').write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+    return record
+
+
+def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, cancel_check=None,
+                    instructions='Use only supplied code and task data. Do not use tools. Output valid structured JSON. Never claim tests were run.'):
+    """One bounded structured turn, shared by review and planning; no model retries."""
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 180:
+        raise ValueError('Turn timeout must be positive and at most 180 seconds')
+    if len(prompt.encode('utf-8')) > 64 * 1024:
+        raise SnapshotError('CONTEXT_LIMIT', 'Inline generation is limited to 64 KiB of input')
+    cwd, output = Path(cwd).resolve(), Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     (output / 'request.txt').write_text(prompt, encoding='utf-8')
-    record = {'snapshot_id': manifest['snapshot_id'], 'status': 'failed', 'turns_started': 0,
+    record = {'status': 'failed', 'turns_started': 0,
               'usage': None, 'cost': None, 'protocol': 'Codex App Server turn/start + outputSchema'}
     started, thread_id, turn_id = time.monotonic(), None, None
     try:
@@ -88,17 +114,17 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
                 raise RpcError('MCP override did not disable inherited servers; no generation started')
             record['mcp_servers_disabled'] = len(effective)
             thread = client.request('thread/start', {
-                'cwd': str(package_dir), 'ephemeral': True, 'sandbox': 'read-only', 'approvalPolicy': 'never',
-                'baseInstructions': 'You are an independent code reviewer. Use only supplied code. Do not use tools. Output valid structured JSON. Never claim tests were run.',
+                'cwd': str(cwd), 'ephemeral': True, 'sandbox': 'read-only', 'approvalPolicy': 'never',
+                'baseInstructions': instructions,
             })
             thread_id = thread['thread']['id']
             record.update(thread_id=thread_id, model=thread.get('model'), provider=thread.get('modelProvider'),
                           sandbox=thread.get('sandbox'), cwd=thread.get('cwd'))
-            if Path(thread['cwd']).resolve() != package_dir:
+            if Path(thread['cwd']).resolve() != cwd:
                 raise RpcError('Server started in the wrong working directory')
             turn = client.request('turn/start', {'threadId': thread_id, 'effort': 'low',
                                    'input': [{'type': 'text', 'text': prompt}],
-                                   'outputSchema': review_schema(manifest['snapshot_id'])})
+                                   'outputSchema': schema})
             turn_id = turn['turn']['id']
             record.update(turn_id=turn_id, turns_started=1)
             final_text = None
@@ -136,15 +162,12 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
             (output / 'response.txt').write_text(final_text, encoding='utf-8')
             if cancel_check and cancel_check():
                 raise ReviewCancelled('Review cancelled before saving')
-            review = json.loads(final_text)
-            verify_package(package_dir)
-            receipt = save_review(package_dir, review)
-            record.update(status='review_saved', **receipt)
+            record.update(status='completed', data=json.loads(final_text))
         record['process_tree_closed'] = True
     except ReviewCancelled as error:
         record.update(status='cancelled', process_tree_closed=True, error_type=type(error).__name__, error=str(error))
     except Exception as error:
         record.update(status='failed', error_type=type(error).__name__, error=str(error)[:2000])
     record['elapsed_seconds'] = round(time.monotonic() - started, 3)
-    (output / 'result.json').write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+    (output / 'result.json').write_text(json.dumps({key: value for key, value in record.items() if key != 'data'}, ensure_ascii=False, indent=2), encoding='utf-8')
     return record

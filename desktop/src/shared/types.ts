@@ -12,6 +12,21 @@ export interface Context {
   base_commit: string
   task: Task
   latest_review_job_id: string | null
+  latest_plan_job_id: string | null
+}
+export interface PlanResult {
+  usage?: { total?: { totalTokens?: number; inputTokens?: number; outputTokens?: number } } | null
+  cost?: number | null
+  job_id: string
+  plan_id: string
+  freshness: string
+  plan: {
+    context_id: string
+    summary: string
+    steps: { title: string; details: string; files: string[]; verification: string[] }[]
+    assumptions: string[]
+  }
+  context: { files: string[]; file_count: number; file_list_truncated: boolean }
 }
 export interface ReviewStatus {
   job_id: string
@@ -51,6 +66,10 @@ export interface DesktopAPI {
   reviewStatus(id: string): Promise<ReviewStatus>
   readReview(id: string, after?: number): Promise<Review>
   cancelReview(id: string): Promise<ReviewStatus>
+  startPlan(id: number, request: string): Promise<ReviewStatus>
+  planStatus(id: string): Promise<ReviewStatus>
+  readPlan(id: string): Promise<PlanResult>
+  cancelPlan(id: string): Promise<ReviewStatus>
   openWorkspace(id: number): Promise<void>
   copyWorkspace(id: number): Promise<void>
   openGuide(): Promise<void>

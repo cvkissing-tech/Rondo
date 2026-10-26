@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 APPLICATION_ID = 0x41524C31  # ARL1: refuse unrelated SQLite files.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA = (
     """CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,6 +81,9 @@ LAUNCH_SCHEMA = (
     )''',
 )
 
+# The same durable job receipt/owner contract, kept separate from legacy reviews.
+PLAN_SCHEMA = tuple(statement.replace('review_job', 'plan_job') for statement in REVIEW_SCHEMA)
+
 
 class StoreError(Exception):
     def __init__(self, code: str, message: str):
@@ -118,14 +121,15 @@ class TaskStore:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             if application_id == 0 and version == 0 and not tables:
-                for statement in SCHEMA + REVIEW_SCHEMA + LAUNCH_SCHEMA:
+                for statement in SCHEMA + REVIEW_SCHEMA + LAUNCH_SCHEMA + PLAN_SCHEMA:
                     db.execute(statement)
                 db.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif application_id != APPLICATION_ID:
                 raise StoreError("FOREIGN_DATABASE", "This file is not an Agent Review Loop database")
-            elif version in (1, 2):
-                for statement in (REVIEW_SCHEMA if version == 1 else ()) + LAUNCH_SCHEMA:
+            elif version in (1, 2, 3):
+                for statement in ((REVIEW_SCHEMA if version == 1 else ()) +
+                                  (LAUNCH_SCHEMA if version < 3 else ()) + PLAN_SCHEMA):
                     db.execute(statement)
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif version != SCHEMA_VERSION:

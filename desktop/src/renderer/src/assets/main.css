@@ -9,6 +9,7 @@
   --sidebar: #f7f7f7;
 }
 .dark {
+  --destructive: #f87171;
   --muted-foreground: #aaa;
   --sidebar: #141414;
 }
@@ -708,5 +709,91 @@ textarea {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+.plan-body {
+  padding: 26px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.plan-body > .supporting {
+  margin: 14px 0;
+}
+.plan-body > button {
+  margin: 12px 0;
+}
+.plan-summary {
+  margin: 20px 0;
+}
+.plan-steps {
+  list-style: decimal;
+  margin: 24px 0;
+  padding-left: 22px;
+}
+.plan-steps > li {
+  padding: 0 0 22px 5px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.plan-steps > li::marker {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.plan-steps h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+.plan-steps p {
+  font-size: 12px;
+}
+.plan-files {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.plan-files code {
+  font-size: 10px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--muted);
+  overflow-wrap: anywhere;
+}
+.plan-verification {
+  font-size: 11px;
+  line-height: 1.9;
+  margin-top: 13px;
+  color: var(--muted-foreground);
+}
+.plan-verification strong {
+  font-weight: 500;
+}
+.plan-verification ul,
+.plan-assumptions ul {
+  list-style: disc;
+  padding-left: 17px;
+  margin: 7px 0 0;
+}
+.plan-assumptions {
+  font-size: 12px;
+  line-height: 1.9;
+  margin: 18px 0;
+}
+.plan-assumptions summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.plan-body .next-step {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 1100px) {
+  .plan-body {
+    padding: 22px 18px;
   }
 }

@@ -26,6 +26,11 @@ function handlers(): void {
     'read-review': (id: string, after = 0) =>
       backend.call('read_review', { job_id: id, after_index: after, limit: 5 }),
     'cancel-review': (id: string) => backend.call('cancel_review', { job_id: id }),
+    'start-plan': (id: number, request: string) =>
+      backend.call('start_task_plan', { task_id: id, request_id: request }),
+    'plan-status': (id: string) => backend.call('get_plan_status', { job_id: id }),
+    'read-plan': (id: string) => backend.call('read_plan', { job_id: id }),
+    'cancel-plan': (id: string) => backend.call('cancel_plan', { job_id: id }),
     'open-workspace': async (id: number) => {
       const context = await backend.call<Context>('get_task_context', { task_id: id })
       const error = await shell.openPath(context.workspace)

@@ -51,6 +51,9 @@ class _OwnerLock:
 
 
 class ReviewJobs:
+    table = 'review_jobs'
+    error_prefix = 'REVIEW'
+
     def __init__(self, store: TaskStore, root=None, *, runner=run_codex_review, executable=None, backend='codex', check_config=None):
         self.store = store
         self.root = Path(root).resolve() if root else Path.home() / '.agent-review-loop/runs' / digest(str(store.path).encode())[:16]
@@ -60,13 +63,12 @@ class ReviewJobs:
         self._workers = {}
         self._closing = False
 
-    @staticmethod
-    def _row(db, job_id):
+    def _row(self, db, job_id):
         if not isinstance(job_id, str) or not re.fullmatch('[a-f0-9]{32}', job_id):
             raise StoreError('INVALID_ARGUMENT', 'Expected a review job ID')
-        row = db.execute('SELECT * FROM review_jobs WHERE id=?', (job_id,)).fetchone()
+        row = db.execute(f'SELECT * FROM {self.table} WHERE id=?', (job_id,)).fetchone()
         if row is None:
-            raise StoreError('REVIEW_NOT_FOUND', 'Review does not exist')
+            raise StoreError(f'{self.error_prefix}_NOT_FOUND', 'Job does not exist')
         return row
 
     @staticmethod
@@ -82,16 +84,19 @@ class ReviewJobs:
                     result['check_evidence_path'] = str(Path(row['directory']) / 'package/checks')
         return result
 
-    def _reconcile(self, db, row):
+    def _reconcile(self, db, row, table=None):
+        table = table or self.table
+        if table not in ('review_jobs', 'plan_jobs'):
+            raise ValueError('Unknown job table')
         if row['state'] in ACTIVE:
             lock = _OwnerLock.acquire(Path(row['directory']) / 'owner.lock')
             if lock is not None:
                 try:
-                    db.execute("UPDATE review_jobs SET state='interrupted', error_code='OWNER_LOST', updated_at=? WHERE id=?",
+                    db.execute(f"UPDATE {table} SET state='interrupted', error_code='OWNER_LOST', updated_at=? WHERE id=?",
                                (time.time(), row['id']))
                 finally:
                     lock.close()
-                row = self._row(db, row['id'])
+                row = db.execute(f'SELECT * FROM {table} WHERE id=?', (row['id'],)).fetchone()
         return row
 
     def start_review(self, task_id, repo, base_ref, request_id):
@@ -111,16 +116,17 @@ class ReviewJobs:
             if self._closing:
                 raise StoreError('SERVER_CLOSING', 'Review service is closing')
             with self.store._connection(write=True) as db:
-                previous = db.execute('SELECT * FROM review_jobs WHERE task_id=? AND request_id=?', (task_id, request_id)).fetchone()
+                previous = db.execute(f'SELECT * FROM {self.table} WHERE task_id=? AND request_id=?', (task_id, request_id)).fetchone()
                 if previous:
                     if previous['fingerprint'] != fingerprint:
                         raise StoreError('IDEMPOTENCY_CONFLICT', 'request_id already belongs to different review parameters')
                     return self._public(self._reconcile(db, previous))
-                for row in db.execute("SELECT * FROM review_jobs WHERE state IN ('preparing','running','cancelling')").fetchall():
-                    if self._reconcile(db, row)['state'] in ACTIVE:
-                        raise StoreError('REVIEW_BUSY', 'One review is active; read its state before starting another')
-                if db.execute('SELECT count(*) FROM review_jobs WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
-                    raise StoreError('REVIEW_BUDGET_EXHAUSTED', 'This task has used its two review attempts; no automatic reset')
+                for table in ('review_jobs', 'plan_jobs'):
+                    for row in db.execute(f"SELECT * FROM {table} WHERE state IN ('preparing','running','cancelling')").fetchall():
+                        if self._reconcile(db, row, table)['state'] in ACTIVE:
+                            raise StoreError(f'{self.error_prefix}_BUSY', 'One Codex job is active; read its state before starting another')
+                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
+                    raise StoreError(f'{self.error_prefix}_BUDGET_EXHAUSTED', 'This task has used its two attempts for this operation; no automatic reset')
                 executable = self.executable or shutil.which('codex')
                 if executable is None or not Path(executable).is_file():
                     raise StoreError('CODEX_NOT_FOUND', 'Native Codex CLI is not available')
@@ -129,10 +135,10 @@ class ReviewJobs:
                 directory.mkdir(parents=True, exist_ok=False)
                 lock = _OwnerLock.acquire(directory / 'owner.lock')
                 if lock is None:
-                    raise StoreError('REVIEW_OWNER_LOCK', 'Could not own the new review; no worker was started')
+                    raise StoreError(f'{self.error_prefix}_OWNER_LOCK', 'Could not own the new job; no worker was started')
                 now = time.time()
                 try:
-                    db.execute('''INSERT INTO review_jobs
+                    db.execute(f'''INSERT INTO {self.table}
                         (id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at)
                         VALUES (?,?,?,?,'preparing',?,?,?,?,?,?)''',
                                (job_id, task_id, request_id, fingerprint, repo, base_ref, str(directory), self.backend, now, now))
@@ -163,7 +169,7 @@ class ReviewJobs:
             row = self._row(db, job_id)
             if row['cancel_requested'] and state == 'succeeded':
                 state = 'cancelled'
-            db.execute('UPDATE review_jobs SET state=?, result_json=?, error_code=?, updated_at=? WHERE id=?',
+            db.execute(f'UPDATE {self.table} SET state=?, result_json=?, error_code=?, updated_at=? WHERE id=?',
                        (state, json.dumps(result) if result else None, error, time.time(), job_id))
 
     def _work(self, job_id, task, repo, base_ref, directory, executable, lock):
@@ -179,13 +185,13 @@ class ReviewJobs:
                 manifest = bind_check_evidence(package, directory / 'check-run')
                 if check['status'] != 'passed':
                     with self.store._connection(write=True) as db:
-                        db.execute('UPDATE review_jobs SET snapshot_id=? WHERE id=?', (manifest['snapshot_id'], job_id))
+                        db.execute(f'UPDATE {self.table} SET snapshot_id=? WHERE id=?', (manifest['snapshot_id'], job_id))
                     cancelled = check['status'] == 'cancelled' and check['process_tree_closed']
                     self._finish(job_id, 'cancelled' if cancelled else 'failed', {'checks': manifest['checks']},
                                  None if cancelled else 'CHECK_FAILED')
                     return
             with self.store._connection(write=True) as db:
-                db.execute("UPDATE review_jobs SET snapshot_id=?, state=CASE WHEN cancel_requested=1 THEN 'cancelling' ELSE 'running' END, updated_at=? WHERE id=?",
+                db.execute(f"UPDATE {self.table} SET snapshot_id=?, state=CASE WHEN cancel_requested=1 THEN 'cancelling' ELSE 'running' END, updated_at=? WHERE id=?",
                            (manifest['snapshot_id'], time.time(), job_id))
             if self._cancelled(job_id):
                 self._finish(job_id, 'cancelled')
@@ -216,7 +222,7 @@ class ReviewJobs:
         with self.store._connection(write=True) as db:
             row = self._reconcile(db, self._row(db, job_id))
             if row['state'] in ACTIVE:
-                db.execute("UPDATE review_jobs SET cancel_requested=1, state='cancelling', updated_at=? WHERE id=?", (time.time(), job_id))
+                db.execute(f"UPDATE {self.table} SET cancel_requested=1, state='cancelling', updated_at=? WHERE id=?", (time.time(), job_id))
             return self._public(self._row(db, job_id))
 
     def read_review(self, job_id, limit=5, after_index=0):

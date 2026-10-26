@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T00:28:51+00:00",
+  "generatedAt": "2026-10-26T01:00:59+00:00",
   "title": "Design System: Agent Review Loop",
   "extensions": {
     "colorMeta": {
@@ -67,6 +67,9 @@
           "#323232",
           "#fafafa"
         ]
+      },
+      "dark-destructive": {
+        "displayName": "深色错误与计划过期提示色"
       }
     },
     "typographyMeta": {
@@ -146,6 +149,13 @@
       "description": "需求与验收共享一个工作容器。",
       "html": "<div class=\"ds-composer\"><label for=\"ds-prompt\">需求</label><textarea id=\"ds-prompt\" placeholder=\"描述当前行为与期望结果…\"></textarea><label for=\"ds-acceptance\">验收条件</label><textarea id=\"ds-acceptance\" class=\"ds-acceptance\" placeholder=\"写下可检查的结果。\"></textarea></div>",
       "css": ".ds-composer{background:var(--card,oklch(1 0 0));color:var(--foreground,oklch(.145 0 0));border:1px solid var(--border,oklch(.922 0 0));border-radius:10px;overflow:hidden;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-composer label{display:block;font-size:11px;font-weight:500;color:var(--muted-foreground,#666);padding:15px 17px 0}.ds-composer textarea{display:block;width:100%;min-height:130px;padding:12px 17px;font:14px/1.8 'Segoe UI','Microsoft YaHei UI',sans-serif;color:inherit;background:transparent;border:0;resize:vertical}.ds-composer textarea::placeholder{color:var(--muted-foreground,#666)}.ds-composer textarea:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}.ds-composer .ds-acceptance{min-height:54px;font-size:12px;border-top:1px solid var(--border,oklch(.922 0 0))}"
+    },
+    {
+      "name": "执行计划步骤",
+      "kind": "custom",
+      "description": "计划条目结构示例：原生有序步骤、文件 code 与尚未执行的验收方式；假设使用默认展开的 details。所在面板复用可调整分栏，生成标明额度，刷新只读，tokens 来自真实返回，WorkBuddy 自动执行未接入。",
+      "html": "<section class=\"ds-plan\" aria-label=\"执行计划条目示例\"><ol class=\"ds-plan-steps\"><li><h3>步骤标题</h3><p>本步执行说明。</p><div class=\"ds-plan-files\"><code>src/example.ts</code></div><div class=\"ds-plan-verification\"><strong>验收方式</strong><ul><li>说明本步可检查的结果。</li></ul></div></li></ol><details class=\"ds-plan-assumptions\" open><summary>假设与待确认项</summary><ul><li>列出执行前需要核对的依据。</li></ul></details><p class=\"ds-plan-note\">条目结构示例；验收方式尚未执行。</p></section>",
+      "css": ".ds-plan{color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;overflow-wrap:anywhere}.ds-plan-steps{list-style:decimal;margin:24px 0;padding-left:22px}.ds-plan-steps>li{padding:0 0 22px 5px;margin-bottom:22px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-plan-steps>li::marker{font-size:12px;color:var(--muted-foreground,#666)}.ds-plan-steps h3{font-size:14px;font-weight:600;line-height:1.6;margin:0 0 10px}.ds-plan-steps p{font-size:12px;line-height:1.9;white-space:pre-wrap}.ds-plan-files{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.ds-plan-files code{font:10px Consolas,\"Courier New\",monospace;padding:4px 6px;border-radius:4px;background:var(--muted,oklch(.97 0 0));overflow-wrap:anywhere}.ds-plan-verification{font-size:11px;line-height:1.9;margin-top:13px;color:var(--muted-foreground,#666)}.ds-plan-verification strong{font-weight:500}.ds-plan-verification ul,.ds-plan-assumptions ul{list-style:disc;padding-left:17px;margin:7px 0 0}.ds-plan-assumptions{font-size:12px;line-height:1.9;margin:18px 0}.ds-plan-assumptions summary{cursor:pointer;font-weight:500}.ds-plan-assumptions summary:hover{color:var(--muted-foreground,#666)}.ds-plan-assumptions summary:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-plan-note{font-size:11px;line-height:1.9;color:var(--muted-foreground,#666)}"
     }
   ],
   "narrative": {
@@ -166,7 +176,8 @@
     "dos": [
       "**Do** 优先使用已移植控件的现有变体、语义颜色与交互。",
       "**Do** 让需求、代码改动和审查处于同一任务上下文。",
-      "**Do** 为状态、空内容和不可用操作展示真实依据。"
+      "**Do** 为状态、空内容和不可用操作展示真实依据。",
+      "**Do** 区分计划生成的额度消耗、只读刷新、真实 tokens 与尚未执行的验收方式。"
     ],
     "donts": [
       "**Don't** 恢复用户已否定的墨绿静态角色说明栏。",
