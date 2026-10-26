@@ -2,7 +2,15 @@ import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from 
 
 export const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 export type TaskAction =
-  'plan' | 'review' | 'execute' | 'refresh' | 'changes' | 'guide' | 'plan-record' | 'review-record'
+  | 'plan'
+  | 'review'
+  | 'execute'
+  | 'repair'
+  | 'refresh'
+  | 'changes'
+  | 'guide'
+  | 'plan-record'
+  | 'review-record'
 export function taskFlow(
   context: Context,
   planJob?: ReviewStatus,
@@ -19,7 +27,9 @@ export function taskFlow(
           ? 'WorkBuddy 等待你处理权限或输入'
           : execution.status === 'cancelling'
             ? '正在停止 WorkBuddy'
-            : 'WorkBuddy 正在执行',
+            : execution.mode === 'repair'
+              ? 'WorkBuddy 正在返修'
+              : 'WorkBuddy 正在执行',
       detail: '在专用原生会话执行；完成提交后自动接续检查与 Codex 审查。',
       action: 'refresh' as TaskAction,
       button: '刷新执行记录'
@@ -55,6 +65,18 @@ export function taskFlow(
       action: 'refresh' as TaskAction,
       button: '刷新记录'
     }
+  if (execution && terminal.has(execution.status) && execution.status !== 'succeeded')
+    return {
+      label:
+        execution.phase === 'dispatch_unknown' || execution.status === 'interrupted'
+          ? '执行状态需要核对'
+          : execution.mode === 'repair'
+            ? 'WorkBuddy 返修未完成'
+            : 'WorkBuddy 执行未完成',
+      detail: execution.summary || '读取原执行记录；不会自动重发任务。',
+      action: 'refresh' as TaskAction,
+      button: '刷新执行记录'
+    }
   if (review) {
     if (review.freshness !== 'current')
       return {
@@ -63,6 +85,30 @@ export function taskFlow(
         action: 'changes' as TaskAction,
         button: '核对代码改动'
       }
+    if (review.verdict === 'changes_requested') {
+      const repaired = execution?.mode === 'repair' || Boolean(execution?.repair_job_id)
+      const reviewCount = new Set([
+        ...(context.activity || []).filter((row) => row.kind === 'review').map((row) => row.id),
+        ...(reviewJob ? [reviewJob.job_id] : [])
+      ]).size
+      const canRepair = !repaired && reviewCount < 2 && context.task.status === 'submitted'
+      return {
+        label: repaired
+          ? '返修后仍有问题，需要处理'
+          : reviewCount >= 2
+            ? '审查仍有问题，次数已用完'
+            : '审查要求修改',
+        detail: repaired
+          ? '本任务的一次返修已用完，查看剩余问题后决定下一步。'
+          : reviewCount >= 2
+            ? '本任务的两次审查已用完，查看剩余问题后决定下一步。'
+            : execution?.repair_error
+              ? `自动交接已停止：${execution.repair_error}。核对记录后可继续交接。`
+              : '将根据当前审查定位的问题返修一次，然后自动复查；使用两边账号额度。',
+        action: canRepair ? ('repair' as TaskAction) : ('review-record' as TaskAction),
+        button: canRepair ? '交给 WorkBuddy 返修（消耗额度）' : '查看剩余问题'
+      }
+    }
     return {
       label: '审查结果已返回',
       detail: `结论 ${review.verdict} · 检查 ${review.checks.status}；仍需核对问题与验收条件。`,
@@ -76,16 +122,6 @@ export function taskFlow(
       detail: '查看失败、取消或中断原因，再决定是否重新发起。',
       action: 'review-record' as TaskAction,
       button: '查看审查记录'
-    }
-  if (execution && terminal.has(execution.status) && execution.status !== 'succeeded')
-    return {
-      label:
-        execution.phase === 'dispatch_unknown' || execution.status === 'interrupted'
-          ? '执行状态需要核对'
-          : 'WorkBuddy 执行未完成',
-      detail: execution.summary || '读取原执行记录；不会自动重发任务。',
-      action: 'refresh' as TaskAction,
-      button: '刷新执行记录'
     }
   if (context.task.status === 'claimed')
     return {
@@ -125,9 +161,9 @@ export function taskFlow(
       }
     return {
       label: '计划就绪，可以交给 WorkBuddy',
-      detail: '启动一次原生执行；提交结果后自动检查并交给 Codex 审查。两者均使用各自账号额度。',
+      detail: '执行后自动检查、审查；需要修改时至多返修并复查一次。使用双方账号额度。',
       action: 'execute' as TaskAction,
-      button: '执行并审查（消耗额度）'
+      button: '执行、审查与一次返修（消耗额度）'
     }
   }
   if (planJob && terminal.has(planJob.status))

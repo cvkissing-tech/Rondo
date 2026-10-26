@@ -34,7 +34,12 @@ const phases: Record<string, string> = {
   turn_ended: '执行回合结束',
   cancelled: '已停止',
   failed: '执行失败',
-  dispatch_unknown: '需要核对原生会话'
+  dispatch_unknown: '需要核对原生会话',
+  completed: '流程已返回',
+  repairing: '已交接返修',
+  needs_attention: '需要处理剩余问题',
+  handoff_stopped: '自动交接已停止',
+  review_stopped: '检查或审查已停止'
 }
 function stateLabel(job?: ReviewStatus) {
   return job ? (labels[job.status] ?? job.status) : '尚未发起'
@@ -79,7 +84,9 @@ export function TaskTimeline({
   const flow = taskFlow(context, planJob, plan, reviewJob, review, patch, execution)
   const planOpen = expanded.plan ?? Boolean(planJob && !reviewJob)
   const reviewOpen = expanded.review ?? Boolean(reviewJob)
-  const executionOpen = expanded.execution ?? Boolean(execution && execution.status !== 'succeeded')
+  const executionOpen =
+    expanded.execution ??
+    Boolean(execution && (execution.status !== 'succeeded' || execution.repair_error))
   const executionSummary =
     execution?.summary ||
     context.task.result?.summary ||
@@ -99,7 +106,7 @@ export function TaskTimeline({
     }
     onAction(value)
   }
-  const count = (kind: 'plan' | 'review', current?: ReviewStatus) =>
+  const count = (kind: 'plan' | 'review' | 'execution', current?: ReviewStatus) =>
     new Set([
       ...(context.activity ?? []).filter((row) => row.kind === kind).map((row) => row.id),
       ...(current ? [current.job_id] : [])
@@ -204,7 +211,9 @@ export function TaskTimeline({
               icon={<GitBranch className="size-4" />}
               label={
                 context.task.status === 'submitted'
-                  ? '执行结果已提交'
+                  ? execution?.mode === 'repair'
+                    ? '返修结果已提交'
+                    : '执行结果已提交'
                   : context.task.status === 'claimed'
                     ? `执行任务已领取 · ${context.task.owner || '未提供名称'}`
                     : execution
@@ -226,10 +235,19 @@ export function TaskTimeline({
                       {execution.model && <> · {execution.model}</>}
                     </p>
                   )}
+                  {execution?.source_review_job_id && (
+                    <p>
+                      返修依据审查 <code>{execution.source_review_job_id}</code> ·
+                      本任务最多返修一次。
+                    </p>
+                  )}
                   {execution?.review_error && (
                     <p>
                       执行已提交，自动审查未启动：{execution.review_error}。可使用审查入口继续。
                     </p>
+                  )}
+                  {execution?.repair_error && (
+                    <p>自动返修已停止：{execution.repair_error}。查看当前审查与原生会话记录。</p>
                   )}
                   {execution && !terminal.has(execution.status) && (
                     <Button
@@ -270,7 +288,8 @@ export function TaskTimeline({
         </WorkLogList>
         <details className="job-history">
           <summary>
-            已保存作业记录 · 计划 {count('plan', planJob)}/2 · 审查 {count('review', reviewJob)}/2
+            已保存作业记录 · 计划 {count('plan', planJob)}/2 · 执行/返修{' '}
+            {count('execution', execution)}/2 · 审查 {count('review', reviewJob)}/2
           </summary>
           <p className="supporting">失败、取消也计入；本区域只读取记录，不发起模型调用。</p>
           {(context.activity ?? []).map((row) => (

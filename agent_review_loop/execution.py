@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -11,8 +12,9 @@ from uuid import uuid4
 
 from .processes import ProcessTree
 from .review_jobs import ReviewJobs
-from .snapshots import canonical, current_tree
-from .store import StoreError, _text
+from .repair import repair_context, unauthorized_changed_files
+from .snapshots import _git, canonical, current_tree
+from .store import StoreError, _text, _timestamp
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / 'integrations/workbuddy/native-driver.mjs'
@@ -118,17 +120,22 @@ class ExecutionJobs(ReviewJobs):
         result = ReviewJobs._public(row)
         details = json.loads(row['result_json']) if row['result_json'] else {}
         return {**result, **{key: details.get(key) for key in
-                            ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model')}}
+                            ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model',
+                             'mode', 'source_review_job_id', 'repair_job_id', 'repair_error')}}
 
     def start_execution(self, task_id, request_id):
         context = self.tasks.context(task_id)
         _text(request_id, 'request_id', 128)
+        if request_id.startswith('repair-'):
+            raise StoreError('INVALID_ARGUMENT', 'repair- request IDs are reserved for reviewed repairs')
         with self.store._connection() as db:
-            previous = db.execute('SELECT * FROM execution_jobs WHERE task_id=?', (task_id,)).fetchone()
+            previous = db.execute('SELECT * FROM execution_jobs WHERE task_id=? AND request_id=?',
+                                  (task_id, request_id)).fetchone()
+            exists = db.execute('SELECT 1 FROM execution_jobs WHERE task_id=? LIMIT 1', (task_id,)).fetchone()
         if previous:
-            if previous['request_id'] != request_id:
-                raise StoreError('EXECUTION_EXISTS', 'This task already has an execution receipt; inspect it rather than dispatch again')
             return self.status(previous['id'])
+        if exists:
+            raise StoreError('EXECUTION_EXISTS', 'This task already has an execution receipt; inspect it rather than dispatch again')
         if context['task']['status'] != 'ready':
             raise StoreError('TASK_NOT_READY', 'Task is already claimed or submitted')
         plan_id = context['latest_plan_job_id']
@@ -145,24 +152,107 @@ class ExecutionJobs(ReviewJobs):
             self.executable = str(node_executable())
         return self.start_review(task_id, context['workspace'], context['base_commit'], request_id)
 
+    def start_repair(self, source_review_job_id):
+        if not isinstance(source_review_job_id, str) or not re.fullmatch('[a-f0-9]{32}', source_review_job_id):
+            raise StoreError('INVALID_ARGUMENT', 'Expected a source review job ID')
+        request_id = 'repair-' + source_review_job_id
+        with self.store._connection() as db:
+            previous = db.execute('SELECT * FROM execution_jobs WHERE request_id=?', (request_id,)).fetchone()
+            source = db.execute('SELECT task_id FROM review_jobs WHERE id=?', (source_review_job_id,)).fetchone()
+        if previous:
+            return self.status(previous['id'])
+        if not source:
+            raise StoreError('REVIEW_NOT_FOUND', 'Source review does not exist')
+        context = self.tasks.context(source['task_id'])
+        # Validate before connecting, then repeat under the reservation transaction.
+        with self.store._connection() as db:
+            repair_context(db, source['task_id'], source_review_job_id, context['workspace'])
+        if self.runner is native_run:
+            connection = workbuddy_connection(self.root)
+            if not connection.get('connected'):
+                raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
+        return self.start_review(source['task_id'], context['workspace'], context['base_commit'], request_id)
+
+    def _prepare_start(self, db, task, repo, request_id):
+        count = db.execute('SELECT count(*) FROM execution_jobs WHERE task_id=?', (task['task_id'],)).fetchone()[0]
+        row = self.store._task(db, task['task_id'])
+        if not request_id.startswith('repair-'):
+            if count:
+                raise StoreError('EXECUTION_EXISTS', 'Initial execution already has a durable receipt')
+            active = db.execute("SELECT 1 FROM attempts WHERE task_id=? AND state='active' AND expires_at>?",
+                                (task['task_id'], self.store.clock())).fetchone()
+            if row['state'] != 'ready' or active:
+                raise StoreError('TASK_NOT_READY', 'Task is already claimed or submitted')
+            return {'mode': 'implementation'}
+        prior = db.execute("SELECT 1 FROM execution_jobs WHERE task_id=? AND request_id LIKE 'repair-%'",
+                           (task['task_id'],)).fetchone()
+        if prior:
+            raise StoreError('REPAIR_BUDGET_EXHAUSTED', 'This task already used its one repair')
+        if row['state'] != 'submitted':
+            raise StoreError('TASK_NOT_SUBMITTED', 'A repair requires the previous submitted result')
+        inputs = repair_context(db, task['task_id'], request_id[7:], repo)
+        db.execute("UPDATE tasks SET state='ready',version=version+1,updated_at=? WHERE id=?",
+                   (_timestamp(self.store.clock()), task['task_id']))
+        return {'mode': 'repair', 'source_review_job_id': request_id[7:], 'repair_input': inputs}
+
+    def _continue_after_review(self, job_id, details):
+        # Aider's bounded reflection rule: one repair only; never reset on refresh/restart.
+        try:
+            while not self._closing:
+                state = self.reviews.status(details['review_job_id'])
+                if state['status'] in ('succeeded', 'failed', 'cancelled', 'interrupted'):
+                    break
+                time.sleep(.25)
+            if self._closing:
+                return
+            if state['status'] != 'succeeded':
+                details['phase'] = 'review_stopped'
+            else:
+                review = self.reviews.read_review(details['review_job_id'])
+                if review['verdict'] == 'approved':
+                    details['phase'] = 'completed'
+                elif details['mode'] == 'repair':
+                    details['phase'] = 'needs_attention'
+                else:
+                    repair = self.start_repair(details['review_job_id'])
+                    details.update(phase='repairing', repair_job_id=repair['job_id'])
+        except Exception as error:
+            details.update(phase='handoff_stopped', repair_error=getattr(error, 'code', 'REPAIR_HANDOFF_FAILED'))
+        self._save_details(job_id, details)
+
     def _save_details(self, job_id, details):
         with self.store._connection(write=True) as db:
             db.execute('UPDATE execution_jobs SET result_json=?,updated_at=? WHERE id=?',
                        (json.dumps(details, ensure_ascii=False), time.time(), job_id))
 
     def _work(self, job_id, task, repo, base_ref, directory, executable, lock):
-        details = {'session_id': str(uuid4()), 'phase': 'preparing', 'review_job_id': None,
-                   'wake_id': 'wake-run-' + str(uuid4())}
+        with self.store._connection() as db:
+            details = json.loads(self._row(db, job_id)['result_json'] or '{}')
+        details.update(session_id=str(uuid4()), phase='preparing', review_job_id=None,
+                       wake_id='wake-run-' + str(uuid4()))
         try:
             context = self.tasks.context(task['task_id'])
-            plan = self.plans.read_plan(context['latest_plan_job_id'])
-            if plan['freshness'] != 'current':
-                raise StoreError('PLAN_STALE', 'Plan changed before dispatch')
+            repairing = details.get('mode') == 'repair'
+            if repairing:
+                inputs = details['repair_input']
+                if current_tree(repo) != inputs['source_tree']:
+                    raise StoreError('REPAIR_SOURCE_STALE', 'Code changed after repair reservation; no prompt sent')
+                plan = {'plan_id': inputs['review_id'], 'plan': inputs}
+            else:
+                plan = self.plans.read_plan(context['latest_plan_job_id'])
+                if plan['freshness'] != 'current':
+                    raise StoreError('PLAN_STALE', 'Plan changed before dispatch')
             details.update(plan_id=plan['plan_id'], input_tree=current_tree(repo))
             self._save_details(job_id, details)  # Save identity BEFORE any native request.
             owner = 'rondo-workbuddy-' + job_id
+            repair_instruction = (
+                '这是唯一一轮返修。下面 plan 是固定的审查问题，不是新的需求。先检查触发条件并尽量复现，'
+                '只修复 allowed_files 内列出的文件，保留原验收要求，不删改测试以掩盖失败。'
+                '需要扩大范围或无法复现时停止并如实提交说明。逐项报告修复与运行的检查。\n'
+            ) if repairing else ''
             prompt = (
                 '你是 Rondo 的 WorkBuddy 执行者。使用你当前的模型、Skills 和工具完成下面的开发任务。\n'
+                + repair_instruction +
                 '先通过 agent-review-loop MCP 的 get_task_context 读取任务，并核对返回的 workspace 与以下路径完全一致。'
                 '若工具不可用或目录不一致，停止并说明原因。\n'
                 f"task_id={task['task_id']}\nworkspace={repo}\n"
@@ -175,7 +265,7 @@ class ExecutionJobs(ReviewJobs):
                              'acceptance': task['acceptance'], 'plan': plan['plan']}).decode('utf-8')
             )
             payload = {'command': 'run', 'session_id': details['session_id'], 'wake_id': details['wake_id'],
-                       'workspace': str(repo), 'title': task['title'], 'prompt': prompt}
+                       'workspace': str(repo), 'title': ('返修 · ' if repairing else '') + task['title'], 'prompt': prompt}
             model = os.environ.get('ARL_WORKBUDDY_MODEL')
             if model:
                 payload['model'] = model
@@ -214,7 +304,15 @@ class ExecutionJobs(ReviewJobs):
                                      (report.get('attempt_id'), task['task_id'])).fetchone()
             if submitted['status'] != 'submitted' or not attempt or attempt['owner'] != owner:
                 raise StoreError('EXECUTION_REPORT_MISSING', 'Native turn ended without a result from this WorkBuddy execution')
-            details.update(phase='submitted', summary=report['summary'], output_tree=current_tree(repo))
+            output_tree = current_tree(repo)
+            if repairing:
+                if output_tree == details['input_tree']:
+                    raise StoreError('REPAIR_NO_PROGRESS', 'Repair submitted without code changes; no review quota consumed')
+                names = _git(repo, 'diff', '--name-only', '-z', details['input_tree'], output_tree, '--').split(b'\0')
+                outside = unauthorized_changed_files([name.decode('utf-8') for name in names if name], inputs['allowed_files'])
+                if outside:
+                    raise StoreError('REPAIR_SCOPE_EXCEEDED', 'Repair changed files outside findings: ' + ', '.join(outside)[:1000])
+            details.update(phase='submitted', summary=report['summary'], output_tree=output_tree)
             self._finish(job_id, 'succeeded', details)
             try:
                 review = self.reviews.start_review(task['task_id'], str(repo), base_ref, 'execution-' + job_id)
@@ -222,6 +320,8 @@ class ExecutionJobs(ReviewJobs):
             except Exception as error:
                 details['review_error'] = getattr(error, 'code', 'AUTO_REVIEW_FAILED')
             self._save_details(job_id, details)
+            if details.get('review_job_id'):
+                self._continue_after_review(job_id, details)
         except Exception as error:
             code = getattr(error, 'code', 'EXECUTION_FAILED')
             details.update(phase='dispatch_unknown' if code in ('DISPATCH_UNKNOWN', 'EXECUTION_STOP_UNKNOWN') else 'failed',

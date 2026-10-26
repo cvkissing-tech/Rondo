@@ -47,4 +47,48 @@ assert.equal(
   }).label,
   '执行状态需要核对'
 )
-console.log('Task flow: 15 state assertions passed; no model calls.')
+const rejected = { ...review, verdict: 'changes_requested' }
+const submitted = { task: { status: 'submitted' }, activity: [] }
+assert.equal(
+  taskFlow(submitted, undefined, undefined, state('succeeded'), rejected).action,
+  'repair'
+)
+assert.equal(
+  taskFlow(submitted, undefined, undefined, state('succeeded'), rejected, undefined, {
+    ...state('running'),
+    mode: 'repair'
+  }).label,
+  'WorkBuddy 正在返修'
+)
+assert.equal(
+  taskFlow(submitted, undefined, undefined, state('succeeded'), rejected, undefined, {
+    ...state('succeeded'),
+    mode: 'repair'
+  }).action,
+  'review-record'
+)
+assert.equal(
+  taskFlow(submitted, undefined, undefined, state('succeeded'), rejected, undefined, {
+    ...state('failed'),
+    mode: 'repair',
+    summary: 'No progress'
+  }).label,
+  'WorkBuddy 返修未完成'
+)
+assert.equal(
+  taskFlow(
+    {
+      ...submitted,
+      activity: [
+        { id: 'first', kind: 'review' },
+        { id: 'fixture', kind: 'review' }
+      ]
+    },
+    undefined,
+    undefined,
+    state('succeeded'),
+    rejected
+  ).action,
+  'review-record'
+)
+console.log('Task flow: 20 state assertions passed; no model calls.')

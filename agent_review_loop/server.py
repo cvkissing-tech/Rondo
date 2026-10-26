@@ -52,7 +52,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Rondo", version="0.11.0", log_level="WARNING", lifespan=lifespan,
+        "Rondo", version="0.12.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -103,7 +103,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         task_id: TaskId,
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
     ) -> dict[str, Any]:
-        """Dispatch ONE native WorkBuddy execution of the saved current plan. Consumes WorkBuddy quota and automatically starts ONE Codex review after a verified submission. Never replay unknown dispatches."""
+        """Run a saved current plan in native WorkBuddy, then Codex review; changes_requested may trigger ONE repair and final review. At most two native turns and two reviews, using both quotas. Never replay unknown dispatches."""
         return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id)
 
     @server.tool(structured_output=True)
@@ -115,6 +115,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     def cancel_execution(job_id: JobId) -> dict[str, Any]:
         """Request cancellation of this job's dedicated WorkBuddy session; poll for confirmed terminal state."""
         return _invoke(executions.cancel, job_id)
+
+    @server.tool(structured_output=True)
+    async def start_task_repair(source_review_job_id: JobId) -> dict[str, Any]:
+        """Run the task's ONE native WorkBuddy repair from its latest current changes_requested review, then one Codex re-review. Consumes both quotas. Stable source identity reuses the same repair; no third round."""
+        return await asyncio.to_thread(_invoke, executions.start_repair, source_review_job_id)
 
     @server.tool(structured_output=True)
     async def start_task_plan(

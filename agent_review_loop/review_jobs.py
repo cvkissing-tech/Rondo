@@ -125,7 +125,7 @@ class ReviewJobs:
                     for row in db.execute(f"SELECT * FROM {table} WHERE state IN ('preparing','running','cancelling')").fetchall():
                         if self._reconcile(db, row, table)['state'] in ACTIVE:
                             raise StoreError(f'{self.error_prefix}_BUSY', 'One Codex job is active; read its state before starting another')
-                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= (1 if self.table == 'execution_jobs' else 2):
+                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
                     raise StoreError(f'{self.error_prefix}_BUDGET_EXHAUSTED', 'This task has used its two attempts for this operation; no automatic reset')
                 executable = self.executable or shutil.which('codex')
                 if executable is None or not Path(executable).is_file():
@@ -138,10 +138,12 @@ class ReviewJobs:
                     raise StoreError(f'{self.error_prefix}_OWNER_LOCK', 'Could not own the new job; no worker was started')
                 now = time.time()
                 try:
+                    metadata = self._prepare_start(db, task, repo, request_id)
                     db.execute(f'''INSERT INTO {self.table}
-                        (id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at)
-                        VALUES (?,?,?,?,'preparing',?,?,?,?,?,?)''',
-                               (job_id, task_id, request_id, fingerprint, repo, base_ref, str(directory), self.backend, now, now))
+                        (id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at,result_json)
+                        VALUES (?,?,?,?,'preparing',?,?,?,?,?,?,?)''',
+                               (job_id, task_id, request_id, fingerprint, repo, base_ref, str(directory), self.backend, now, now,
+                                json.dumps(metadata) if metadata else None))
                 except BaseException:
                     lock.close()
                     raise
@@ -156,6 +158,10 @@ class ReviewJobs:
                 self._finish(job_id, 'failed', None, 'WORKER_START_FAILED')
                 raise
             return result
+
+    def _prepare_start(self, db, task, repo, request_id):
+        """Reserve subclass-specific state in the SAME transaction as the new job."""
+        return None
 
     def _cancelled(self, job_id):
         if self._closing:

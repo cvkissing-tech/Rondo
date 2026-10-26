@@ -19,6 +19,7 @@ const api: DesktopAPI = {
   cancelPlan: (id) => invoke('cancel-plan', id),
   workbuddyStatus: (launch = false) => invoke('workbuddy-status', launch),
   startExecution: (id, request) => invoke('start-execution', id, request),
+  startRepair: (id) => invoke('start-repair', id),
   executionStatus: (id) => invoke('execution-status', id),
   cancelExecution: (id) => invoke('cancel-execution', id),
   openWorkspace: (id) => invoke('open-workspace', id),

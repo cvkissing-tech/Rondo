@@ -205,7 +205,7 @@ class TaskStore:
             row = self._task(db, task_id)
             attempt = db.execute("SELECT owner, expires_at FROM attempts WHERE task_id=? AND state='active'", (task_id,)).fetchone()
             result = self._projection(row, attempt, self.clock())
-            submission = db.execute("SELECT response FROM submissions WHERE task_id=? LIMIT 1", (task_id,)).fetchone()
+            submission = db.execute("SELECT response FROM submissions WHERE task_id=? ORDER BY rowid DESC LIMIT 1", (task_id,)).fetchone()
             result.update(
                 instructions=row["instructions"], acceptance=row["acceptance"],
                 result=json.loads(submission["response"]) if submission else None,

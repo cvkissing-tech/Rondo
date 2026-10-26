@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.11.0，接通 WorkBuddy 原生执行与自动审查。** 在 Rondo 提需求、准备独立工作区并生成 Codex 计划，点击“执行并审查”后，在 WorkBuddy 专用桌面会话中完成修改、通过 MCP 提交，再由 Rondo 接续检查及 Codex 审查。界面继续复用 Jean、Vibe Kanban、T3 Code、REA 恢复的 Codex 输入样式及 Pierre Diffs。审查意见自动返修尚未实现。
+当前版本：**0.12.0，执行、审查与一次自动返修。** 在 Rondo 提需求、准备独立工作区并生成 Codex 计划，点击“执行并审查”后，在 WorkBuddy 专用桌面会话中完成修改、通过 MCP 提交，再由 Rondo 接续检查及 Codex 审查。界面继续复用 Jean、Vibe Kanban、T3 Code、REA 恢复的 Codex 输入样式及 Pierre Diffs。首次审查要求修改时，自动在同一任务和工作区返修一次，再检查、复查；复查仍有问题时停止。
 
 本机已通过真实任务验证“计划 → 原生执行 → MCP 提交 → 固定检查 → Codex 审查”。本地通道不需要第三方 Open API 应用；适配 WorkBuddy 5.9.2 的原生 RPC，后续版本需要核对兼容性。接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
 
@@ -189,7 +189,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 
 - Codex 提供非交互执行及 JSONL 输出：https://learn.chatgpt.com/docs/non-interactive-mode
 - WorkBuddy 支持本地 stdio MCP 连接器：https://open.workbuddy.cn/docs/connector
-- 0.11.0 已在 Windows / WorkBuddy 5.9.2 完成一次原生执行、结果提交、固定检查及 Codex 审查；自动返修尚未实现。
+- 0.11.0 验证原生执行与审查；0.12.0 增加一次自动返修和复查，真实返修实验见第15课。
 - WorkBuddy 另有经应用注册和用户授权调用本地助理的 Open API；首版不以开通该接口为前置条件：https://open.workbuddy.cn/docs/openapi
 - 本机已确认 WorkBuddy V5.9.2，安装于 `C:/Users/cvkis/AppData/Local/Programs/WorkBuddy`；本服务用户级配置已备份、保存并由用户信任。客户端只读验收使用界面所示 Deepseek-V4.1-Flash，执行轨迹包含工具搜索和 list tasks；未启动 Codex 审查。详见第6课的后续验收记录。
 
@@ -220,3 +220,5 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 0.10.0 工作记录：[第13课：任务页面围绕开发过程组织](docs/learning/13-task-work-records.md)。状态断言：`node desktop/scripts/flow-check.mjs`；桌面默认 smoke 不调用模型。
 
 0.11.0 原生执行：[第14课：从 Rondo 指挥 WorkBuddy 并自动交给 Codex 审查](docs/learning/14-workbuddy-native-execution.md)。
+
+0.12.0 返修：[第15课：把审查问题自动交回执行者](docs/learning/15-bounded-repair.md)。新增 `start_task_repair`，工具共23个；普通刷新不发起模型调用。

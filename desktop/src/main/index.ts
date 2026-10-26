@@ -34,6 +34,7 @@ function handlers(): void {
     'workbuddy-status': (launch = false) => backend.call('workbuddy_status', { launch }),
     'start-execution': (id: number, request: string) =>
       backend.call('start_task_execution', { task_id: id, request_id: request }),
+    'start-repair': (id: string) => backend.call('start_task_repair', { source_review_job_id: id }),
     'execution-status': (id: string) => backend.call('get_execution_status', { job_id: id }),
     'cancel-execution': (id: string) => backend.call('cancel_execution', { job_id: id }),
     'open-workspace': async (id: number) => {

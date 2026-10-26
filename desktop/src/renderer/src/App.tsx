@@ -227,6 +227,10 @@ export default function App() {
     }
   }, [planJobId])
   const selectedTaskId = context?.task_id
+  const reviewAttempts = new Set([
+    ...(context?.activity || []).filter((row) => row.kind === 'review').map((row) => row.id),
+    ...(job ? [job.job_id] : [])
+  ]).size
   useEffect(() => {
     if (!api || !selectedTaskId) return
     let active = true,
@@ -388,6 +392,7 @@ export default function App() {
     if (action === 'plan') startPlan()
     else if (action === 'review') startReview()
     else if (action === 'execute') startExecution()
+    else if (action === 'repair') startRepair()
     else if (action === 'refresh') protect(refreshTask)
     else if (action === 'changes') showChanges()
     else if (action === 'guide') protect(async () => api?.openGuide())
@@ -411,6 +416,16 @@ export default function App() {
       if (executionRequest.current.task !== id)
         executionRequest.current = { task: id, id: crypto.randomUUID() }
       const started = await api.startExecution(id, executionRequest.current.id)
+      if (seq === generation.current) setExecution(started)
+    })
+    if (seq === generation.current) setBusy(false)
+  }
+  async function startRepair() {
+    if (!api || !job) return
+    const seq = generation.current
+    setBusy(true)
+    await protect(async () => {
+      const started = await api.startRepair(job.job_id)
       if (seq === generation.current) setExecution(started)
     })
     if (seq === generation.current) setBusy(false)
@@ -569,13 +584,13 @@ export default function App() {
             <Button
               size="sm"
               variant="outline"
-              disabled={busy}
+              disabled={busy || reviewAttempts >= 2}
               onClick={() => {
                 reviewRequest.current = { task: 0, id: '' }
                 startReview()
               }}
             >
-              新一轮审查（消耗额度）
+              {reviewAttempts >= 2 ? '审查次数已用完（2/2）' : '新一轮审查（消耗额度）'}
             </Button>
           )}
         </>

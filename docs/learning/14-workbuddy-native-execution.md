@@ -1,5 +1,7 @@
 # 第14课：Rondo 指挥 WorkBuddy 原生执行
 
+本文记录0.11.0；后续一次自动返修见[第15课](15-bounded-repair.md)。
+
 本次将两段现成能力连起来：开源项目提供的 WorkBuddy 原生会话 RPC，以及 Rondo 已有的任务、MCP 提交、固定快照检查和 Codex 审查。产品界面继续使用 Jean / T3 WorkLog，不增加一套新视觉系统。
 
 ## 1. 真正接入的是 Agent 环境

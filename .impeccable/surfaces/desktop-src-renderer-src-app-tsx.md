@@ -32,6 +32,16 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Native execution extension · 2026-10-26
 
-普通 extension，对照既有工作台验收；Rondo 名称、连接检查/启动、原生会话与停止操作均落在现有导航、Popover、Button 和 WorkLog 中。无新品牌 token、组件视觉变体或布局；Jean / T3 / Vibe / Codex / Pierre 的来源与主题边界保持原约定。计划、执行、检查与审查是不同事实，模型回合结束不能单独表示提交或验收成功。自动返修尚未交付。
+普通 extension，对照既有工作台验收；Rondo 名称、连接检查/启动、原生会话与停止操作均落在现有导航、Popover、Button 和 WorkLog 中。无新品牌 token、组件视觉变体或布局；Jean / T3 / Vibe / Codex / Pierre 的来源与主题边界保持原约定。计划、执行、检查与审查是不同事实，模型回合结束不能单独表示提交或验收成功。0.12.0 的一次返修与自动复查沿用下述工作记录扩展。
 
 已逐张核对 `.impeccable/review/desktop.png`、`desktop-960.png`、`desktop-dark.png` 和 `connection.png`：浅深主题、窄桌面、连接 Popover 和执行成功摘要均延续既有层级。源码核对范围为本 brief 的四个 target；实时验收及 102 Python、4 native fixture、15 flow assertions 的记录见 `docs/learning/14-workbuddy-native-execution.md`。这些记录证明已列出的场景，不扩大为所有 WorkBuddy 版本或完整自动开发能力。
+
+## Bounded repair extension · 2026-10-26
+
+普通 extension，仅在 `App.tsx`、`taskFlow.ts` 与 `TaskTimeline.tsx` 的既有 Jean Button / T3 WorkLog 中表达返修模式、来源审查、停止原因与额度边界；不增加 CSS、token、组件视觉变体或视觉世界。计划就绪的主动作明确包含执行、审查与一次返修，以及双方账号额度。首次审查要求修改且快照 current 时，可自动交给 WorkBuddy 返修一次并复查；旧任务或尚未开始的交接可从当前审查显式发起。
+
+工作记录区分“正在返修”“返修结果已提交”及“返修未完成”，展开后读取原生会话、模型、来源审查 ID 与最多返修一次的说明。成功摘要仍默认收起；失败或自动交接停止时保留原因并展开记录。过期审查引导核对代码；取消、派发不明确、未产生改动、范围外改动或次数耗尽均停止，不把刷新和恢复变成重新派发。范围检查在执行后比较 Git tree，不是写入前的文件系统沙箱。
+
+已保存作业区显示计划、执行/返修与审查各自的 `n/2` 计数，失败和取消也计入；执行/返修上限对应首次执行加一次返修。返修后仍有问题时转为查看剩余问题；审查达到 `2/2` 时，新审查按钮显示“审查次数已用完（2/2）”并原生禁用。恢复只读取已有作业；自动交接需要 Rondo 服务持续运行，重启不自动重放付费调用。
+
+本轮浅色主窗口、960px窄桌面、返修记录、深色主题与次数用完的历史状态已逐张核对，截图为 `.impeccable/review/repair/desktop.png`、`desktop-960.png`、`repair-record.png`、`desktop-dark.png`、`budget-history.png`。事实与验证范围以 `PRODUCT.md` 和 `docs/learning/15-bounded-repair.md` 为准：108项 Python、20项前端状态断言、零模型 Electron smoke 与构建通过。真实验收以明确预埋缺陷开始，真实 Codex 提出1项 `changes_requested`，显式发起原生 DeepSeek 返修，随后自动真实 Codex 复查为 `approved`，最终 `current`；首次审查自动交回返修的调度分支由离线测试覆盖。此证据不扩大为首次缺陷由 Agent 写出、所有 WorkBuddy 版本兼容或完整自动开发。

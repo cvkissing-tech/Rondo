@@ -46,6 +46,10 @@ export interface ReviewStatus {
   error_code?: string
 }
 export interface ExecutionStatus extends ReviewStatus {
+  mode?: 'implementation' | 'repair' | null
+  source_review_job_id?: string | null
+  repair_job_id?: string | null
+  repair_error?: string | null
   model?: string | null
   session_id?: string | null
   phase?: string | null
@@ -98,6 +102,7 @@ export interface DesktopAPI {
   cancelPlan(id: string): Promise<ReviewStatus>
   workbuddyStatus(launch?: boolean): Promise<WorkBuddyConnection>
   startExecution(id: number, request: string): Promise<ExecutionStatus>
+  startRepair(sourceReviewId: string): Promise<ExecutionStatus>
   executionStatus(id: string): Promise<ExecutionStatus>
   cancelExecution(id: string): Promise<ExecutionStatus>
   openWorkspace(id: number): Promise<void>
