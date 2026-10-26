@@ -35,8 +35,6 @@ import {
   GitBranch,
   Moon,
   MoreHorizontal,
-  PanelRightClose,
-  RefreshCw,
   ShieldCheck,
   Square,
   Sun,
@@ -55,6 +53,7 @@ import type {
 import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
+import { WorkspaceInspector } from './WorkspaceInspector'
 import type { TaskAction } from './taskFlow'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
@@ -108,7 +107,8 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [next, setNext] = useState<number | null>(null)
   const [context, setContext] = useState<Context>()
-  const [changesOpen, setChangesOpen] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(true)
+  const [diffRequest, setDiffRequest] = useState(0)
   const [error, setError] = useState(
     api ? '' : '请通过桌面应用打开工作台，浏览器预览无法调用本地服务。'
   )
@@ -168,7 +168,7 @@ export default function App() {
     setReview(undefined)
     setPlanJob(undefined)
     setPlanResult(undefined)
-    setChangesOpen(false)
+    setChangesOpen(true)
     setExecution(undefined)
     try {
       const selected = await api.context(id)
@@ -563,7 +563,9 @@ export default function App() {
           {job.error_code && (
             <Alert variant="destructive">
               <AlertTitle>审查未完成</AlertTitle>
-              <AlertDescription>{job.error_code}。请检查本机 Codex 与工作区配置。</AlertDescription>
+              <AlertDescription>
+                {job.error_message || job.error_code}。请检查原生会话与工作区配置。
+              </AlertDescription>
             </Alert>
           )}
           {review && (
@@ -651,7 +653,15 @@ export default function App() {
             </div>
             <div className="toolbar-actions">
               {context && (
-                <Button size="sm" variant="ghost" aria-label="查看代码改动" onClick={showChanges}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="查看代码改动"
+                  onClick={() => {
+                    setDiffRequest((n) => n + 1)
+                    showChanges()
+                  }}
+                >
                   <GitBranch />
                   代码改动
                 </Button>
@@ -670,7 +680,7 @@ export default function App() {
                     <ShieldCheck />
                     <div>
                       <strong>Codex</strong>
-                      <span>计划与审查时连接本机 CLI</span>
+                      <span>沿用本机配置、Skills 与 MCP；新会话保存到 Codex</span>
                     </div>
                     <Badge variant="outline">按需</Badge>
                   </div>
@@ -768,11 +778,8 @@ export default function App() {
           </Alert>
         )}
         {!context ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-12 font-sans"
-            data-upstream="jean/WelcomeProjectGrid"
-          >
-            <h1 className="text-4xl font-bold text-foreground">新的开发任务</h1>
+          <div className="new-task-surface" data-upstream="jean/WelcomeProjectGrid">
+            <h1 className="new-task-title">开始一项开发任务</h1>
             <form onSubmit={prepare} className="w-full max-w-4xl">
               <FieldGroup>
                 <p className="supporting">
@@ -879,7 +886,7 @@ export default function App() {
         ) : (
           <ResizablePanelGroup direction="horizontal" className="task-panels">
             <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
-              <div className="timeline-pane">
+              <div className="timeline-pane conversation-pane">
                 <TaskTimeline
                   key={context.task_id}
                   context={context}
@@ -923,34 +930,19 @@ export default function App() {
             {changesOpen && (
               <>
                 <ResizableHandle />
-                <ResizablePanel id="changes" order={2} defaultSize={38} minSize={25}>
-                  <div className="work-pane" aria-label="代码改动面板">
-                    <div className="pane-title">
-                      <span>
-                        <GitBranch />
-                        工作区改动
-                      </span>
-                      <div>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label="刷新改动"
-                          onClick={showChanges}
-                        >
-                          <RefreshCw />
-                        </Button>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          aria-label="收起代码改动"
-                          onClick={() => setChangesOpen(false)}
-                        >
-                          <PanelRightClose />
-                        </Button>
-                      </div>
-                    </div>
-                    {difference}
-                  </div>
+                <ResizablePanel id="changes" order={2} defaultSize={38} minSize={28}>
+                  <WorkspaceInspector
+                    key={context.task_id}
+                    context={context}
+                    plan={planJob}
+                    review={job}
+                    execution={execution}
+                    difference={difference}
+                    showDiff={diffRequest}
+                    onDiff={() => protect(refreshTask)}
+                    onClose={() => setChangesOpen(false)}
+                    refreshKey={`${execution?.status}:${execution?.phase}:${context.task.status}`}
+                  />
                 </ResizablePanel>
               </>
             )}

@@ -22,7 +22,7 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Operating Context
 
-本机项目、独立Git工作目录、持久任务、检查与代码审查。可从空文件夹直接开始；普通保存目录已有文件时自动新建项目子文件夹，保留原文件，无新/已有项目模式选择。已有Git项目仍使用其提交基线。新建任务草稿在本机恢复。当前23个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
+本机项目、独立Git工作目录、持久任务、检查与代码审查。可从空文件夹直接开始；普通保存目录已有文件时自动新建项目子文件夹，保留原文件，无新/已有项目模式选择。已有Git项目仍使用其提交基线。新建任务草稿在本机恢复。当前24个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
 
 ## Capabilities and Constraints
 
@@ -42,3 +42,12 @@ Rondo为产品名；agent-review-loop保留为包、仓库目录及MCP连接名�
 ## Evidence on Hand
 
 真实SQLite/MCP/CLI、Git任务目录、一次真实Codex合成审查和一次真实Codex计划生成；WorkBuddy 原生 DeepSeek 执行、MCP 提交、固定检查与 Codex 自动审查已在隔离任务通过。0.12.0 的真实返修实验以明确预埋缺陷为起点，经真实 Codex 发现问题、WorkBuddy 返修和自动复查通过；首次审查自动交回的调度另有离线断言。界面无既有视觉资产，不伪造活跃任务、模型用量或成功记录。
+
+
+## 0.14.0 会话工作台与原生环境
+
+用户授权整体替换旧布局。当前采用244px任务栏、主区工具栏、T3会话列与常驻可调整的文件/改动/会话面板；完整WorkBuddy提交展开，工作区文件可阅读，有index.html时可打开浏览器运行。所有列表与报告来自保存的任务及真实文件；导航打开既有原生会话，不重发提示词。
+
+Codex App Server从实际任务工作区启动，继承本机账号、模型、推理强度、MCP、Skills与执行/审批配置，不再覆盖baseInstructions或关闭MCP。新会话持久保存并命名。规划/审查通过任务指令要求不修改项目，且结束后核对Git tree；这不是文件系统只读沙箱。原生command/file审批与用户问题可在Rondo答复；其他客户端动态工具、权限扩展与MCP elicitation尚未实现，遇到会停止并说明，不伪造答复。Codex桌面专属连接器不等同于CLI环境。旧版本临时会话无法追补保存。
+
+真实原生接入验收发现153个启用Skills与4项启用MCP配置，使用gpt-6.1-sol/high，读取ponytail并运行Get-Location；Codex原生读回同一持久会话及命令记录。此验收不代表4项MCP全部在线，也不代表桌面专属连接器接入。WorkBuddy会话get接口确认用户任务#3会话与工作区存在；其原生状态terminated表示该回合已结束，不表示当前仍在运行。

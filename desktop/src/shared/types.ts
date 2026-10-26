@@ -44,6 +44,33 @@ export interface ReviewStatus {
   job_id: string
   status: string
   error_code?: string
+  error_message?: string
+  thread_id?: string
+  persistent?: boolean
+  environment?: string
+  model?: string | null
+  effort?: string | null
+  skills_count?: number
+  mcp_servers?: string[]
+  events?: { id: string; kind: string; status: string; text: string; output: string }[]
+  pending?: {
+    id: string
+    method: string
+    params: {
+      command?: string
+      reason?: string
+      questions?: {
+        id: string
+        question: string
+        options?: { label: string; description: string }[]
+      }[]
+    }
+  }
+}
+export interface WorkspaceFiles {
+  files: { path: string; size: number }[]
+  truncated: boolean
+  preview?: string
 }
 export interface ExecutionStatus extends ReviewStatus {
   mode?: 'implementation' | 'repair' | null
@@ -107,6 +134,16 @@ export interface DesktopAPI {
   executionStatus(id: string): Promise<ExecutionStatus>
   cancelExecution(id: string): Promise<ExecutionStatus>
   openWorkspace(id: number): Promise<void>
+  workspaceFiles(id: number): Promise<WorkspaceFiles>
+  readFile(id: number, path: string): Promise<{ text: string; truncated: boolean }>
+  openArtifact(id: number, path: string): Promise<void>
+  openSession(id: number, agent: 'codex-plan' | 'codex-review' | 'workbuddy'): Promise<void>
+  answerRequest(
+    job: string,
+    request: string,
+    answer: string | Record<string, string>,
+    kind: 'plan' | 'review'
+  ): Promise<void>
   copyWorkspace(id: number): Promise<void>
   openGuide(): Promise<void>
 }

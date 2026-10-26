@@ -15,9 +15,12 @@ class FakeRpc:
     enabled_mcp = False
     close_error = False
     calls = []
+    requests = []
+    argv = []
 
     def __init__(self, *args, **kwargs):
         self.events = []
+        type(self).argv = args[0]
 
     def __enter__(self):
         return self
@@ -31,8 +34,13 @@ class FakeRpc:
 
     def request(self, method, params, **kwargs):
         type(self).calls.append(method)
+        type(self).requests.append((method, params))
         if method == 'config/read':
             return {'config': {'mcp_servers': {'fixture': {'enabled': self.enabled_mcp}}}}
+        if method == 'skills/list':
+            return {'data': [{'skills': [{'name': 'fixture', 'enabled': True}]}]}
+        if method == 'thread/name/set':
+            return {}
         if method == 'account/read':
             return {'requiresOpenaiAuth': True, 'account': {'type': 'chatgpt'}}
         if method == 'thread/start':
@@ -97,14 +105,32 @@ class CodexReviewTests(unittest.TestCase):
         self.assertEqual((self.root / 'run/response.txt').read_text(), 'not JSON')
         self.save.assert_not_called()
 
-    def test_enabled_mcp_blocks_generation(self):
+    def test_native_configuration_skills_and_persistent_session_are_inherited(self):
         FakeRpc.enabled_mcp = True
-        self.assertEqual(self.run_review()['turns_started'], 0)
-        self.assertNotIn('turn/start', FakeRpc.calls)
+        FakeRpc.requests = []
+        result = self.run_review()
+        self.assertEqual(result['turns_started'], 1)
+        self.assertEqual(result['mcp_servers'], ['fixture'])
+        self.assertEqual(result['skills_count'], 1)
+        self.assertNotIn('-c', FakeRpc.argv)
+        start = next(params for method, params in FakeRpc.requests if method == 'thread/start')
+        self.assertEqual(start, {'cwd': str(self.package), 'ephemeral': False})
+        turn = next(params for method, params in FakeRpc.requests if method == 'turn/start')
+        self.assertNotIn('effort', turn)
+        self.assertTrue(result['persistent'])
 
     def test_cleanup_failure_is_never_a_success(self):
         FakeRpc.close_error = True
         self.assertEqual(self.run_review()['status'], 'failed')
+
+    def test_large_source_uses_fixed_package_and_bounded_previews(self):
+        (self.package / 'after/main.py').write_text('print(1)\n' * 20000, encoding='utf-8')
+        result = self.run_review()
+        self.assertEqual(result['status'], 'review_saved')
+        request = (self.root / 'run/request.txt').read_text(encoding='utf-8')
+        self.assertLess(len(request.encode()), 64 * 1024)
+        self.assertIn('fixed_package', request)
+        self.assertIn('"truncated":true', request)
 
     def test_cancel_before_start_does_not_generate(self):
         result = run_codex_review(self.package, self.root / 'run', Path(sys.executable), cancel_check=lambda: True)

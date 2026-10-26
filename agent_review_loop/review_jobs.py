@@ -11,6 +11,7 @@ import time
 from uuid import uuid4
 
 from .codex_review import run_codex_review
+from .native_session import read_state
 from .checks import run_checks, validate_config
 from .reviews import review_status
 from .snapshots import SnapshotError, bind_check_evidence, canonical, create_review_package, digest
@@ -77,12 +78,47 @@ class ReviewJobs:
             'job_id': row['id'], 'status': row['state'], 'cancel_requested': bool(row['cancel_requested']),
         }
         if row['result_json']:
-            checks = json.loads(row['result_json']).get('checks')
+            saved = json.loads(row['result_json'])
+            checks = saved.get('checks')
             if checks is not None:
                 result['checks'] = checks
                 if checks['status'] != 'not_run':
                     result['check_evidence_path'] = str(Path(row['directory']) / 'package/checks')
+            result.update({key: saved[key] for key in ('thread_id', 'model', 'effort', 'persistent', 'environment',
+                                                      'mcp_servers', 'skills_count') if key in saved})
+            if isinstance(saved.get('error'), str):
+                result['error_message'] = saved['error'][:2000]
+        native = read_state(Path(row['directory']) / 'runtime')
+        result.update({key: native[key] for key in ('thread_id', 'model', 'effort', 'persistent', 'environment',
+                                                   'mcp_servers', 'skills_count', 'events', 'pending') if key in native})
         return result
+
+    def answer(self, job_id, request_id, answer):
+        if not isinstance(request_id, str) or not re.fullmatch('[a-f0-9]{32}', request_id):
+            raise StoreError('INVALID_ARGUMENT', 'Invalid native request ID')
+        with self.store._connection(write=True) as db:
+            row = self._reconcile(db, self._row(db, job_id))
+            directory = Path(row['directory']) / 'runtime'
+            pending = read_state(directory).get('pending', {})
+            if row['state'] not in ACTIVE or pending.get('id') != request_id:
+                raise StoreError('REQUEST_EXPIRED', '请求已结束，请刷新会话')
+            if pending['method'] == 'item/tool/requestUserInput':
+                questions = pending['params'].get('questions', [])
+                valid = (isinstance(answer, dict) and set(answer) == {q['id'] for q in questions}
+                         and all(isinstance(v, str) and 0 < len(v) <= 4000 for v in answer.values()))
+            else:
+                valid = answer in ('accept', 'decline')
+            if not valid:
+                raise StoreError('INVALID_ARGUMENT', 'Invalid native response')
+            try:
+                temporary = directory / f'answer-{request_id}-{uuid4().hex}.tmp'
+                temporary.write_bytes(canonical(answer))
+                os.link(temporary, directory / f'answer-{request_id}.json')
+            except FileExistsError:
+                raise StoreError('ALREADY_ANSWERED', '该请求已经答复')
+            finally:
+                temporary.unlink(missing_ok=True)
+        return {'answered': True}
 
     def _reconcile(self, db, row, table=None):
         table = table or self.table

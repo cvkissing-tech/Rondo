@@ -55,7 +55,7 @@ export default function PlanPanel({
           {!job ? (
             <>
               <p className="supporting">
-                Codex 根据当前需求和有限代码上下文，拆出可以交给执行 Agent 的步骤。
+                Codex 使用本机配置、原有 Skills 与项目源码，拆出交给 WorkBuddy 的实施步骤。
               </p>
               <p className="supporting">
                 生成一次计划会消耗本机 Codex 账号额度；每项任务最多两次，失败或取消也计入。
@@ -89,7 +89,7 @@ export default function PlanPanel({
                 <Alert variant="destructive">
                   <AlertTitle>计划未生成</AlertTitle>
                   <AlertDescription>
-                    {job.error_code}。检查 Codex 登录、额度与项目目录后，可显式发起新一轮。
+                    {job.error_message || job.error_code}。检查原生会话后，可显式发起新一轮。
                   </AlertDescription>
                 </Alert>
               )}

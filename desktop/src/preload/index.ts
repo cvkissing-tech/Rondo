@@ -23,6 +23,12 @@ const api: DesktopAPI = {
   executionStatus: (id) => invoke('execution-status', id),
   cancelExecution: (id) => invoke('cancel-execution', id),
   openWorkspace: (id) => invoke('open-workspace', id),
+  workspaceFiles: (id) => invoke('workspace-files', id),
+  readFile: (id, path) => invoke('read-file', id, path),
+  openArtifact: (id, path) => invoke('open-artifact', id, path),
+  openSession: (id, agent) => invoke('open-session', id, agent),
+  answerRequest: (job, request, answer, kind) =>
+    invoke('answer-request', job, request, answer, kind),
   copyWorkspace: (id) => invoke('copy-workspace', id),
   openGuide: () => invoke('open-guide')
 }

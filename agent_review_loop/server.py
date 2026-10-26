@@ -52,7 +52,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Rondo", version="0.13.0", log_level="WARNING", lifespan=lifespan,
+        "Rondo", version="0.14.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -135,6 +135,13 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     def get_plan_status(job_id: JobId) -> dict[str, Any]:
         """Read the planning job state; poll without starting another generation."""
         return _invoke(plans.status, job_id)
+
+    @server.tool(structured_output=True)
+    def answer_native_request(job_id: JobId, request_id: str, answer: str | dict[str, str], kind: str) -> dict[str, Any]:
+        """Reply to a pending Codex request after the user chooses in Rondo; never auto-approve. kind: plan or review."""
+        if kind not in ('plan', 'review'):
+            raise ValueError('Expected plan or review')
+        return _invoke((plans if kind == 'plan' else reviews).answer, job_id, request_id, answer)
 
     @server.tool(structured_output=True)
     async def read_plan(job_id: JobId) -> dict[str, Any]:

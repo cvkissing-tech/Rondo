@@ -81,12 +81,10 @@ try {
   assert.notEqual(context.workspace, repo)
   assert.equal(await readFile(join(context.workspace, 'sample.py'), 'utf8'), 'print(1)\n')
   await page.getByText('工作区就绪，等待规划', { exact: true }).waitFor()
-  assert.equal(
-    await page
-      .getByRole('button', { name: '需求与验收', exact: true })
-      .getAttribute('aria-expanded'),
-    'false'
-  )
+  await page
+    .locator('[data-upstream="t3code/UserTimelineRow"]')
+    .getByText('将 sample.py 的输出改为 2，新增 README 说明。', { exact: true })
+    .waitFor()
   assert.equal(
     await page
       .getByRole('button', { name: '独立工作区已创建', exact: true })
@@ -225,7 +223,7 @@ try {
     )
   )
   await page
-    .locator('.current-stage')
+    .locator('.session-dock')
     .getByText('执行任务已领取', { exact: true })
     .waitFor({ timeout: 15000 })
   assert.equal(
@@ -242,7 +240,7 @@ try {
     { cwd: root, input: JSON.stringify(claim), encoding: 'utf8' }
   )
   await page
-    .locator('.current-stage')
+    .locator('.session-dock')
     .getByText('执行结果已提交', { exact: true })
     .waitFor({ timeout: 15000 })
   await page
@@ -251,9 +249,25 @@ try {
     })
     .waitFor()
   assert.match(
-    await page.getByLabel('Agent 分工').innerText(),
-    /执行\s+WorkBuddy\s+·\s+本机原生会话/
+    await page.locator('.session-title').innerText(),
+    /Codex 规划与审查 \/ WorkBuddy 执行/
   )
+  await page.getByRole('tab', { name: '文件', exact: true }).click()
+  await page.getByRole('button', { name: '刷新文件', exact: true }).click()
+  await page.getByRole('button', { name: /sample.py/ }).click()
+  await page.locator('.source-view').getByText('print(2)', { exact: true }).waitFor()
+  const escape = await page.evaluate(
+    async (outside) => {
+      try {
+        await window.workbench.readFile(1, outside)
+        return 'allowed'
+      } catch {
+        return 'blocked'
+      }
+    },
+    join(root, 'README.md')
+  )
+  assert.equal(escape, 'blocked')
   await capture(app, page, {
     animations: 'disabled',
     path: join(evidence, '12-submitted-record-1360.png')
@@ -282,7 +296,7 @@ try {
           'dark theme persists after restart',
           'no renderer exceptions',
           'task stage and agent assignments',
-          'requirements and paths collapsed by default',
+          'requirement message, collapsed workspace, files and source viewer',
           'external claim and submit reflected by metadata polling without a model call'
         ],
         modelCalls: realPlan ? 1 : 0,

@@ -18,19 +18,27 @@ export function WorkbenchShell({
 }) {
   const { open, toggleSidebar, state } = useSidebar()
   return (
-    <div className="relative flex h-full w-full overflow-hidden" data-upstream="jean/MainWindow">
-      <header
-        className="absolute inset-x-0 top-0 z-50 flex h-8 items-center gap-2 px-2"
-        aria-label="工作台工具栏"
+    <div className="rondo-workbench" data-upstream="jean/MainWindow">
+      <aside
+        data-slot="sidebar"
+        data-state={state}
+        aria-label="任务侧栏"
+        hidden={!open}
+        className="project-sidebar"
       >
-        {toolbar}
-      </header>
-      <div className="h-full shrink-0 bg-sidebar pt-8 dark:bg-[#0b0b0b]">
-        <nav
-          className="flex h-full w-18 shrink-0 flex-col items-center gap-1.5 border-r border-border/40 pt-2 pb-2"
-          aria-label="工作台导航"
-          data-upstream="jean/SidebarTabRail"
-        >
+        <div className="sidebar-brand">
+          <Code className="size-5" />
+          <strong>Rondo</strong>
+          <span>本地工作台</span>
+        </div>
+        {sidebar}
+        <button type="button" className="sidebar-guide" onClick={onGuide}>
+          <BookOpen className="size-4" />
+          接入说明
+        </button>
+      </aside>
+      <main className="app-main">
+        <header className="workspace-toolbar" aria-label="工作台工具栏">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -38,39 +46,17 @@ export function WorkbenchShell({
                 onClick={toggleSidebar}
                 aria-label="切换侧栏"
                 aria-expanded={open}
-                className="flex size-12 shrink-0 items-center justify-center rounded-md text-primary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="sidebar-toggle"
               >
-                <Code className="size-6" />
+                <Code className="size-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">工作区 · Ctrl B</TooltipContent>
+            <TooltipContent>切换侧栏 · Ctrl B</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onGuide}
-                aria-label="接入说明"
-                className="mt-auto flex size-12 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <BookOpen className="size-6" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">接入说明</TooltipContent>
-          </Tooltip>
-          <span className="pb-1 text-[0.625rem] leading-none text-muted-foreground">Rondo</span>
-        </nav>
-      </div>
-      <aside
-        data-slot="sidebar"
-        data-state={state}
-        aria-label="任务侧栏"
-        hidden={!open}
-        className="h-full w-60 shrink-0 overflow-hidden border-r border-border/40 bg-sidebar pt-8 dark:bg-[#0b0b0b]"
-      >
-        {sidebar}
-      </aside>
-      <main className="app-main flex min-w-0 flex-1 flex-col overflow-hidden pt-8">{children}</main>
+          {toolbar}
+        </header>
+        {children}
+      </main>
     </div>
   )
 }

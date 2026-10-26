@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T12:18:49Z",
+  "generatedAt": "2026-10-26T17:07:42Z",
   "title": "Design System: Rondo",
   "extensions": {
     "colorMeta": {
@@ -75,25 +75,25 @@
     "typographyMeta": {
       "headline": {
         "displayName": "新任务标题",
-        "purpose": "操作界面的标题，不承担营销展示角色。"
+        "purpose": "25px 的操作标题，不承担营销展示角色。"
       },
       "code": {
         "displayName": "代码与路径",
         "purpose": "只用于实际代码、提交和文件路径。"
       },
-      "timeline-title": {
-        "displayName": "任务记录标题",
-        "purpose": "工作记录顶部的紧凑任务标题，单行省略。"
+      "session-title": {
+        "displayName": "会话标题",
+        "purpose": "68px 会话标题区中的15px紧凑任务标题。"
       }
     },
-    "shadows": [],
-    "motion": [
+    "shadows": [
       {
-        "name": "sidebar-width",
-        "value": "width 200ms linear",
-        "purpose": "上游侧栏展开与收起。"
+        "name": "composer-surface",
+        "value": "0 0 0 1px #0000000a, 0 2px 8px 0 #0000000a, 0 4px 80px 8px #00000006",
+        "purpose": "恢复的 Codex 输入容器已有表面阴影，来源 composer.css 的 --elevation-composer，不扩展为通用卡片阴影。"
       }
     ],
+    "motion": [],
     "breakpoints": [
       {
         "name": "compact-desktop",
@@ -105,23 +105,53 @@
       }
     ],
     "sourceReuse": {
-      "version": "0.10.0",
-      "direction": "Reuse product modules; no original visual world",
+      "version": "0.14.0",
+      "direction": "User-authorized code-led source reuse; no seed or comp claim",
       "jeanCommit": "cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3",
       "vibeCommit": "d5cbb5380fa0b32e98ef9b8d987f63decce4be3a",
       "codexArtifact": "26.1021.3705.0",
-      "layout": "Jean: 72px rail, 240px task sidebar, 32px toolbar; continuous T3 work records with optional 62/38 diff",
+      "layout": "244px task sidebar (210px compact); 44px main toolbar; 68px chat header; independently scrolling conversation with fixed action dock; default-open resizable file/diff/session inspector",
       "composer": "Codex shipped CSS, React state adapter",
-      "plan": "Vibe ChatEntryContainer and ChatTodoList inside work records; border/background/muted theme mapping",
+      "plan": "Vibe ChatEntryContainer and ChatTodoList inside the conversation; border/background/muted theme mapping",
       "componentSources": {
         "navigation": "desktop/src/renderer/src/vendor/jean/components/workbench/",
         "task-composer": "desktop/src/renderer/src/vendor/codex/ComposerLayout.tsx",
         "execution-plan": "desktop/src/renderer/src/vendor/vibe-kanban/ChatEntryContainer.tsx",
-        "task-work-records": "desktop/src/renderer/src/vendor/t3code/WorkLog.tsx"
+        "task-work-records": "desktop/src/renderer/src/vendor/t3code/ChatWorkspace.tsx",
+        "workspace-inspector": "desktop/src/renderer/src/WorkspaceInspector.tsx",
+        "system-divider": "desktop/src/renderer/src/vendor/t3code/TimelineSystemDivider.tsx"
       },
-      "timeline": "T3 Code WorkLog Block/List/Button/Row/Details; latest result details and saved job metadata",
-      "t3Commit": "3de45c6254345f968fbdc64db7b149bf4f429855",
-      "recordModel": "Read-only projection of saved task/job metadata, not complete event sourcing; older jobs are summaries."
+      "timeline": "T3 ChatView composition, UserTimelineRow container and TimelineSystemDivider adapted to Rondo task/jobs",
+      "t3Commit": "210b2e7c6a8be11441b7afc94742ce3c76860111",
+      "recordModel": "Full saved WorkBuddy report initially expanded; native events and bounded historical metadata are not complete event sourcing or full native chat history.",
+      "workspaceSources": [
+        {
+          "path": "apps/web/src/components/ChatView.tsx",
+          "sha256": "a41a00a6c2edf75c9de62237a4798a8c91b6ac21e818bf19de4299c060682b56"
+        },
+        {
+          "path": "apps/web/src/components/chat/TimelineUserMessageRow.tsx",
+          "sha256": "d15c7e431ecd8827d3c93cbc0aa6bc921d3972ca5dacde4f46b3f41e520e2f54"
+        },
+        {
+          "path": "apps/web/src/components/chat/TimelineSystemDivider.tsx",
+          "sha256": "74b2f128e3bc329c494c1b338a55466d5de5325984d0493401ef1e63eea0425e"
+        },
+        {
+          "path": "apps/web/src/components/RightPanelTabs.tsx",
+          "sha256": "4e77b45e32cfd78218b8618a5992e66b5673d343c143894f53a36c267fd9732f"
+        },
+        {
+          "path": "apps/web/src/components/preview/PreviewPanelShell.tsx",
+          "sha256": "2fd9f56d4a104f438577de072d88797a7178f25be844f8bd1297e992c7496253"
+        }
+      ],
+      "workspaceAdaptations": [
+        "ChatView parent composition extracted to React slots; existing Rondo jobs replace T3 state/transport",
+        "UserTimelineRow message container extracted; attachments and guest accounts omitted because Rondo does not provide them",
+        "TimelineSystemDivider copied; import aliases and Base UI Tooltip render prop adapted to installed Radix asChild",
+        "Right panel tab pattern adapted to existing react-resizable-panels; no upstream browser/terminal services copied"
+      ]
     }
   },
   "components": [
@@ -153,9 +183,9 @@
       "name": "任务导航",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "紧凑条目显示真实任务标题与状态。",
-      "html": "<nav class=\"ds-nav\" aria-label=\"任务\"><button class=\"ds-selected\" aria-current=\"page\">当前任务<span>#1 · 待执行</span></button><button>另一项任务<span>#2 · 已提交</span></button></nav>",
-      "css": ".ds-nav{padding:8px;background:var(--sidebar,#f7f7f7);color:var(--foreground,oklch(.145 0 0));font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-nav button{font:500 12px 'Segoe UI','Microsoft YaHei UI',sans-serif;display:block;width:100%;min-height:52px;text-align:left;padding:9px 10px;border:0;border-radius:calc(var(--radius,.5rem) - 2px);color:inherit;background:transparent;cursor:pointer}.ds-nav button:hover,.ds-nav .ds-selected{background:var(--sidebar-accent,oklch(.97 0 0))}.ds-nav button:active{background:var(--accent,oklch(.97 0 0))}.ds-nav span{display:block;font-size:10px;font-weight:400;color:var(--muted-foreground,#666);margin-top:4px}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
+      "description": "244px任务侧栏中的紧凑真实任务列表；当前选中状态和次级状态文字。没有独立图标轨。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"任务导航结构示例\"><button class=\"ds-selected\" aria-current=\"page\">当前任务<span>待执行 · #1</span></button><button>另一项任务<span>已提交 · #2</span></button></nav>",
+      "css": ".ds-nav{width:244px;padding:8px 0;background:var(--sidebar,#f7f7f7);color:var(--foreground,oklch(.145 0 0));font-family:\"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-nav button{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:6px 8px;border:0;font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;color:var(--muted-foreground,#666);background:transparent;cursor:pointer}.ds-nav .ds-selected{color:var(--foreground,oklch(.145 0 0));background:color-mix(in oklab,var(--primary,oklch(.205 0 0)) 10%,transparent)}.ds-nav button:hover{background:var(--accent,oklch(.97 0 0));color:var(--foreground,oklch(.145 0 0))}.ds-nav button span{margin-left:auto;font-size:10px}.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}"
     },
     {
       "name": "任务编号标记",
@@ -169,9 +199,9 @@
       "name": "需求输入容器",
       "kind": "custom",
       "refersTo": "task-composer",
-      "description": "需求与验收共享一个工作容器。",
+      "description": "沿用恢复的 Codex ComposerLayout 层级与28px大圆角，需求与验收共享输入容器。",
       "html": "<div class=\"ds-composer\"><label for=\"ds-prompt\">需求</label><textarea id=\"ds-prompt\" placeholder=\"描述当前行为与期望结果…\"></textarea><label for=\"ds-acceptance\">验收条件</label><textarea id=\"ds-acceptance\" class=\"ds-acceptance\" placeholder=\"写下可检查的结果。\"></textarea></div>",
-      "css": ".ds-composer{background:var(--card,oklch(1 0 0));color:var(--foreground,oklch(.145 0 0));border:1px solid var(--border,oklch(.922 0 0));border-radius:10px;overflow:hidden;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-composer label{display:block;font-size:11px;font-weight:500;color:var(--muted-foreground,#666);padding:15px 17px 0}.ds-composer textarea{display:block;width:100%;min-height:130px;padding:12px 17px;font:14px/1.8 'Segoe UI','Microsoft YaHei UI',sans-serif;color:inherit;background:transparent;border:0;resize:vertical}.ds-composer textarea::placeholder{color:var(--muted-foreground,#666)}.ds-composer textarea:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}.ds-composer .ds-acceptance{min-height:54px;font-size:12px;border-top:1px solid var(--border,oklch(.922 0 0))}"
+      "css": ".ds-composer{background:var(--card,oklch(1 0 0));color:var(--foreground,oklch(.145 0 0));border:1px solid var(--border,oklch(.922 0 0));border-radius:28px;overflow:hidden;font-family:'Segoe UI','Microsoft YaHei UI',sans-serif}.ds-composer label{display:block;font-size:11px;font-weight:500;color:var(--muted-foreground,#666);padding:15px 17px 0}.ds-composer textarea{display:block;width:100%;min-height:130px;padding:12px 17px;font:14px/1.8 'Segoe UI','Microsoft YaHei UI',sans-serif;color:inherit;background:transparent;border:0;resize:vertical}.ds-composer textarea::placeholder{color:var(--muted-foreground,#666)}.ds-composer textarea:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}.ds-composer .ds-acceptance{min-height:54px;font-size:12px;border-top:1px solid var(--border,oklch(.922 0 0))}"
     },
     {
       "name": "执行计划步骤",
@@ -181,20 +211,27 @@
       "css": ".ds-plan{color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;overflow-wrap:anywhere}.ds-plan-entry{border:1px solid var(--border,oklch(.922 0 0));border-radius:.1875rem;background:var(--background,oklch(1 0 0))}.ds-plan-entry>summary{padding:.5rem 1rem;background:var(--muted,oklch(.97 0 0));border-radius:.1875rem}.ds-plan summary{cursor:pointer;color:var(--muted-foreground,#666)}.ds-plan summary:hover{color:var(--foreground,oklch(.145 0 0))}.ds-plan summary:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-plan-content{padding:1rem}.ds-plan-content p{font-size:12px;line-height:1.9}.ds-plan-todos ul{list-style:none;padding:.5rem 0 0 1.5rem;margin:0}.ds-plan-todos li{display:flex;align-items:flex-start;gap:8px;line-height:1.5}.ds-plan-todos svg{height:16px;width:16px;flex-shrink:0;color:var(--muted-foreground,#666);margin-top:2px}.ds-plan code{font:10px Consolas,\"Courier New\",monospace;padding:4px 6px;border-radius:4px;background:var(--muted,oklch(.97 0 0))}.ds-plan-assumptions{font-size:12px;margin-top:18px}.ds-plan-note{font-size:11px;line-height:1.9;color:var(--muted-foreground,#666)}"
     },
     {
-      "name": "任务工作记录",
+      "name": "会话与底部动作区",
       "kind": "custom",
-      "description": "T3 WorkLog 的返修与次数边界结构示例，沿用原有 CSS：来源审查、原生会话、模型与停止原因归于同一记录；成功摘要默认收起，失败或交接停止时展开。首次审查需要修改时至多一次返修并复查；代码过期、取消、派发不明确、无改动、范围外改动或次数用尽即停止。计划、执行/返修与审查分别显示 n/2，失败和取消计入；两次审查用完原生禁用新审查。此预览不代表真实任务或完整聊天历史；刷新与重启恢复不重放付费调用，自动交接依赖服务持续运行。真实预埋缺陷验收覆盖真实审查问题、原生 DeepSeek 返修和自动 approved/current 复查；首次审查自动交回另由离线测试覆盖。",
-      "html": "<section class=\"ds-records\" aria-label=\"返修与次数边界结构示例\"><h1>返修后的任务 · 结构示例</h1><div class=\"ds-roles\">规划 <strong>Codex</strong> · 按需连接　执行 <strong>WorkBuddy</strong> · 本机原生会话　审查 <strong>Codex</strong> · 按需连接</div><div class=\"ds-stage\"><div><strong>返修后仍有问题，需要处理</strong><p>本任务的一次返修已用完，查看剩余问题后决定下一步。</p></div><button type=\"button\">查看剩余问题</button></div><div class=\"ds-record-list\"><details><summary>需求与验收</summary><p>需求全文与可检查的验收条件。</p></details><p class=\"ds-preview\">结构示例，不代表真实任务或验收结果。</p><details><summary>独立工作区已创建</summary><p>基础提交与工作区路径按需查看。</p></details><details><summary>Codex · 执行计划 <span>已返回</span></summary><p>展示已保存的最新计划。</p></details><details><summary>返修结果已提交</summary><p>成功摘要默认收起；展开后显示完整摘要、原生会话和实际模型。</p><p>返修依据审查 <code>source-review-id</code> · 本任务最多返修一次。</p></details><details open><summary>Codex · 代码审查 <span>要求修改</span></summary><p>返修后仍需处理的问题来自当前审查。</p><button type=\"button\" disabled>审查次数已用完（2/2）</button></details><details class=\"ds-history\"><summary>已保存作业记录 · 计划 1/2 · 执行/返修 2/2 · 审查 2/2</summary><p>失败、取消也计入；本区域只读取记录，不发起模型调用。</p></details></div></section>",
-      "css": " .ds-records{font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;background:var(--background,oklch(1 0 0));color:var(--foreground,oklch(.145 0 0))}.ds-records h1{font-size:15px;font-weight:600;margin:0;padding:16px 22px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-roles{font-size:11px;color:var(--muted-foreground,#666);padding:0 22px 14px}.ds-roles strong{font-weight:500;color:var(--foreground,oklch(.145 0 0))}.ds-stage{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;background:var(--muted,oklch(.97 0 0));border-block:1px solid var(--border,oklch(.922 0 0))}.ds-stage strong{font-size:13px;font-weight:600}.ds-stage p{max-width:65ch;margin:4px 0 0;font-size:11px;line-height:1.7;color:var(--muted-foreground,#666)}.ds-stage button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;padding:7px 12px;border:1px solid transparent;border-radius:calc(var(--radius,.5rem) - 2px);background:var(--primary,oklch(.205 0 0));color:var(--primary-foreground,oklch(.985 0 0));cursor:pointer}.ds-stage button:hover{opacity:.9}.ds-stage button:active{opacity:.8}.ds-record-list{max-width:850px;margin-inline:auto;padding:20px 22px}.ds-record-list details{padding-bottom:8px}.ds-record-list summary,.ds-record-row{font-size:12px;line-height:1.6;color:var(--muted-foreground,#666);padding:2px;border-radius:calc(var(--radius,.5rem) - 2px)}.ds-record-list summary{cursor:pointer}.ds-record-list summary:hover{color:var(--foreground,oklch(.145 0 0))}.ds-record-list summary span{float:right;font-size:10px}.ds-record-list p{margin:2px 0 8px 28px;font-size:12px;line-height:1.8;overflow-wrap:anywhere}.ds-record-list .ds-preview{color:var(--muted-foreground,#666);max-width:70ch;line-height:1.7}.ds-history{margin-top:16px;padding-top:14px;border-top:1px solid var(--border,oklch(.922 0 0))}.ds-records summary:focus-visible,.ds-stage button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
+      "description": "T3 ChatView / UserTimelineRow 结构示例；报告初始展开，消息独立滚动，底部动作不随消息滚走。示例不代表真实任务状态。",
+      "html": "<section class=\"ds-chat\" aria-label=\"会话结构示例\"><header><strong>任务标题 · 结构示例</strong><span>Codex 规划与审查 / WorkBuddy 执行</span></header><div class=\"ds-messages\"><div class=\"ds-user\">用户需求全文<details><summary>验收条件</summary><p>可验证的预期结果。</p></details></div><p class=\"ds-divider\">规划 → 执行 → 审查</p><details class=\"ds-agent\" open><summary>执行结果已提交 · 结构示例</summary><p>完整 WorkBuddy 报告初始展开。报告正文保留换行，初始视图不截断正文。</p></details><p class=\"ds-note\">结构示例，不代表实际执行或审查通过。</p></div><footer><span>当前阶段由真实任务推导</span><div><p>下一步说明与模型额度行为。</p><button type=\"button\">下一步动作</button></div></footer></section>",
+      "css": ".ds-chat{display:flex;flex-direction:column;height:420px;min-height:0;max-width:680px;background:var(--background,#fff);color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-chat>header{display:flex;flex-direction:column;justify-content:center;height:68px;flex-shrink:0;padding:0 24px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-chat>header strong{font-size:15px;font-weight:600}.ds-chat>header span{font-size:11px;color:var(--muted-foreground,#666);margin-top:4px}.ds-messages{flex:1;min-height:0;overflow:auto;padding:28px 26px 32px}.ds-user{max-width:88%;margin-left:auto;padding:12px;background:var(--muted,oklch(.97 0 0));border-radius:1rem;line-height:1.8;overflow-wrap:anywhere}.ds-user details{margin-top:10px;padding-top:7px;border-top:1px solid var(--border,oklch(.922 0 0));font-size:12px}.ds-divider{font-size:10px;text-align:center;color:var(--muted-foreground,#666);padding:8px 0}.ds-agent{margin:16px 0 28px}.ds-agent summary{font-size:12px;font-weight:600;cursor:pointer;min-height:34px}.ds-agent p{padding-left:24px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}.ds-note{font-size:11px;color:var(--muted-foreground,#666)}.ds-chat>footer{flex-shrink:0;padding:14px 24px 18px;background:var(--background,#fff);border-top:1px solid var(--border,oklch(.922 0 0))}.ds-chat>footer>span{font-size:11px;color:var(--muted-foreground,#666)}.ds-chat>footer>div{display:flex;align-items:center;gap:14px;margin-top:9px}.ds-chat footer p{flex:1;font-size:12px;line-height:1.75;margin:0;color:var(--muted-foreground,#666)}.ds-chat footer button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;padding:7px 12px;border:1px solid transparent;border-radius:calc(var(--radius,.5rem) - 2px);background:var(--primary,oklch(.205 0 0));color:var(--primary-foreground,oklch(.985 0 0));cursor:pointer}.ds-chat summary:hover{color:var(--muted-foreground,#666)}.ds-chat footer button:hover{opacity:.9}.ds-chat footer button:active{opacity:.8}.ds-chat summary:focus-visible,.ds-chat button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
+    },
+    {
+      "name": "工作区检查面板",
+      "kind": "custom",
+      "description": "T3右侧面板模式的只读结构示例；文件/改动/会话来自任务，界面默认打开并可调整或收起。此片段不模拟原生跳转。",
+      "html": "<aside class=\"ds-inspector\" aria-label=\"工作区面板结构示例\"><div class=\"ds-tabs\" role=\"tablist\" aria-label=\"工作区\"><button role=\"tab\" aria-selected=\"true\">文件</button><button role=\"tab\" aria-selected=\"false\">改动</button><button role=\"tab\" aria-selected=\"false\">会话</button></div><div class=\"ds-files\" role=\"tabpanel\" aria-label=\"文件结构示例\"><button aria-current=\"true\">README.md<span>文件大小</span></button></div><div class=\"ds-source\"><strong>README.md · 结构示例</strong><pre>源码内容来自任务工作区。\n此片段不表示已生成或验收。</pre></div></aside>",
+      "css": ".ds-inspector{display:flex;flex-direction:column;height:340px;min-width:0;width:320px;max-width:100%;background:var(--background,#fff);color:var(--foreground,oklch(.145 0 0));font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border-left:1px solid var(--border,oklch(.922 0 0))}.ds-tabs{display:flex;align-items:center;height:42px;flex-shrink:0;padding:0 10px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-tabs button{height:100%;padding:0 10px;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border:0;background:transparent;color:var(--muted-foreground,#666);cursor:pointer}.ds-tabs button[aria-selected=true]{color:var(--foreground,oklch(.145 0 0));border-bottom:2px solid var(--foreground,oklch(.145 0 0))}.ds-files{padding:8px;overflow:auto;max-height:36%;min-height:90px}.ds-files button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border:0;border-radius:4px;background:var(--muted,oklch(.97 0 0));color:inherit;text-align:left;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;cursor:pointer}.ds-files span{margin-left:auto;font-size:10px;color:var(--muted-foreground,#666)}.ds-source{display:flex;flex-direction:column;flex:1;min-height:0;border-top:1px solid var(--border,oklch(.922 0 0))}.ds-source strong{font-size:11px;font-weight:400;padding:6px 12px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-source pre{flex:1;min-height:0;overflow:auto;white-space:pre;margin:0;padding:16px;font:12px/1.7 Consolas,\"Courier New\",monospace}.ds-inspector button:hover{background:var(--accent,oklch(.97 0 0))}.ds-inspector button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}"
     }
   ],
   "narrative": {
-    "northStar": "可操作的开发工作台",
-    "overview": "本体系直接复用 Jean 的 React 控件与语义主题，来源为 `coollabsio/jean` 提交 `cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3`。来源、文件身份和适配说明保存在 `desktop/src/renderer/src/vendor/jean/NOTICE.md`。它取代用户已否定的旧墨绿表单体系。\n\n设计重心是项目、需求与实际代码改动。浅深主题采用同一组语义角色；系统字体承载中文操作与阅读，成熟控件提供导航、焦点、提示和分栏行为。任务主区复用 T3 Code WorkLog，将需求、工作区、规划、执行与审查组织成连续工作记录；顶部直接显示分工、当前阶段和一个下一步主动作。",
+    "northStar": "可操作的 Agent 会话工作台",
+    "overview": "Rondo 直接复用成熟 Agent 产品的可用源码结构，以任务侧栏、会话列和产物面板组织工作。Jean 的中性浅深主题与 Windows 字体保持不变；本轮更换空间结构，不新增品牌配色、装饰图片或自行编造的视觉世界。\n\n主工作区采用 T3 Code 的 ChatView 组合、用户消息容器、TimelineSystemDivider 与右侧面板模式；Rondo 的持久任务、规划、执行与审查替代上游状态及传输。精确来源与必要适配见 `vendor/t3code/workspace-provenance.json`，不把抽出的组合容器称作完整移植 T3 运行时。需求与真实 Agent 返回连续可读，当前动作固定在会话底部，文件、改动和已保存原生会话默认在右侧可达。",
     "keyCharacteristics": [
-      "中性工作面与紧凑导航。",
-      "需求、代码改动和审查保持同一任务上下文。",
-      "真实源码组件复用，需求全文、路径与记录详情按需打开。"
+      "中性浅深工作面与紧凑任务导航。",
+      "可滚动消息流、固定动作区与独立产物面板。",
+      "复用实际组件，显示真实任务、完整提交及可解释状态。"
     ],
     "rules": [
       {
@@ -204,15 +241,15 @@
       }
     ],
     "dos": [
-      "**Do** 优先使用已移植控件的现有变体、语义颜色与交互。",
-      "**Do** 让需求、代码改动和审查处于同一任务上下文。",
-      "**Do** 为状态、空内容和不可用操作展示真实依据。",
-      "**Do** 区分计划生成的额度消耗、只读刷新、真实 tokens 与尚未执行的验收方式。"
+      "**Do** 优先复用已移植组件、语义主题与现有交互。",
+      "**Do** 将完整需求、Agent 返回、产物与当前动作留在同一任务上下文。",
+      "**Do** 保留消息、源码、差异和列表各自的滚动边界及键盘焦点。",
+      "**Do** 区分真实状态、已保存记录、只读刷新与消耗额度的动作。"
     ],
     "donts": [
-      "**Don't** 恢复用户已否定的墨绿静态角色说明栏。",
-      "**Don't** 为填满界面虚构任务、消息、执行进度或连接成功。",
-      "**Don't** 把本轮桌面最小宽度验证扩大为移动端支持声明。"
+      "**Don't** 恢复旧图标轨、墨绿静态角色栏或默认收起完整 WorkBuddy 报告的旧布局。",
+      "**Don't** 为填满页面虚构任务、报告、进度、会话或连接成功。",
+      "**Don't** 将源码结构复用说成完整移植上游运行时，或将窗口截图扩大为原生会话与审批验收。"
     ]
   }
 }

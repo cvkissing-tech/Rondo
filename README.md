@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.13.0，支持直接从保存位置创建项目。** 在 Rondo 提需求、准备独立工作区并生成 Codex 计划，点击“执行并审查”后，在 WorkBuddy 专用桌面会话中完成修改、通过 MCP 提交，再由 Rondo 接续检查及 Codex 审查。界面继续复用 Jean、Vibe Kanban、T3 Code、REA 恢复的 Codex 输入样式及 Pierre Diffs。首次审查要求修改时，自动在同一任务和工作区返修一次，再检查、复查；复查仍有问题时停止。
+当前版本：**0.14.0，会话工作台与 Codex 本机环境接入。** 在 Rondo 提需求、准备独立工作区并生成 Codex 计划，点击“执行并审查”后，在 WorkBuddy 专用桌面会话中完成修改、通过 MCP 提交，再由 Rondo 接续检查及 Codex 审查。界面以 T3 Code 会话工作台结构为主，组合 Jean 导航与主题、Vibe Kanban 计划、Codex 输入容器及 Pierre Diffs；右侧直接查看文件、源码、改动和原生会话，有 index.html 时可运行预览。首次审查要求修改时，自动在同一任务和工作区返修一次，再检查、复查；复查仍有问题时停止。
 
 本机已通过真实任务验证“计划 → 原生执行 → MCP 提交 → 固定检查 → Codex 审查”。本地通道不需要第三方 Open API 应用；适配 WorkBuddy 5.9.2 的原生 RPC，后续版本需要核对兼容性。接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
 
@@ -108,11 +108,11 @@ CLI 提供 `workspace`、`package`、`record-review`、`review-status`；各命�
 
 ### 真实 Codex 审查（显式调用会消耗额度）
 
-`examples.codex_preflight` 只检查官方服务握手、账号模式、模型元数据和退出，不生成模型内容。`review-codex --package <绝对路径> --output <新目录绝对路径>` 才会发起一次真实审查。默认使用现有 Codex 配置的模型，记录服务返回的实际模型和用量；无自动重试、等待期限180秒、初始内联文本上限64 KiB，二进制暂不支持。默认测试/CI 不调用模型。
+`examples.codex_preflight` 只检查官方服务握手、账号模式、模型元数据和退出，不生成模型内容。`review-codex --package <绝对路径> --output <新目录绝对路径>` 才会发起一次真实审查。默认使用现有 Codex 配置的模型，记录服务返回的实际模型和用量；无自动重试、活动回合等待期限180秒；初始请求不超过64 KiB，仅含任务、改动文件清单与有界预览，完整代码从固定快照用工具读取。默认测试/CI 不调用模型。
 
-当前审查路径使用官方 thread/start + turn/start/outputSchema，新建独立 ephemeral 会话。Windows 受控启动先挂起、加入 Job、再恢复；关闭时终止同组进程并等待退出。真实审查本轮未调用工具，服务返回只读且网络关闭，本次进程禁用继承的 MCP，不修改原配置；这不是已经验证的完整个人环境继承。
+当前使用官方 thread/start + turn/start/outputSchema，新会话持久保存并命名。App Server 在任务工作区启动，继承本机账号、模型、推理强度、Skills、MCP 与权限配置；不再强制 read-only/low、替换 baseInstructions 或禁用 MCP。规划与审查要求不改项目，结束后核对 Git tree；这不是只读权限沙箱。Windows Job 管理启动和退出。命令/文件审批与用户问题可在 Rondo 答复；其他动态客户端交互暂不支持，会停止并保留原因。桌面应用专属连接器由原客户端提供，旧 ephemeral 会话无法补回。
 
-真实合成审查耗时13.021秒，准确指出第2行的加减法错误；服务报告总用量26303 token，其中输入26057，费用未知。小样例仍有明显额外上下文开销，来源尚未定位；64 KiB 限制不等于完整模型上下文或费用上限。详见第5课，不据一次简单样例宣称一般审查质量。
+早期0.5阶段的真实合成审查耗时13.021秒，准确指出第2行的加减法错误；服务报告总用量26303 token，其中输入26057，费用未知。小样例仍有明显额外上下文开销，来源尚未定位；64 KiB 限制不等于完整模型上下文或费用上限。详见第5课，不据一次简单样例宣称一般审查质量。
 
 WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state，不需要 Client Secret，不代表已经授权。后续令牌交换和只读在线状态已实现；用户目前尚未创建第三方应用，应用申请条件、所需权限和审核尚待确认。WorkBuddy 保持候选适配，不将获批作为核心开发的前置条件；不会提取桌面端私有凭据，0.11.0 的本机原生通道单独实现任务派发，与本节 Open API 授权路线无关。
 
@@ -224,3 +224,5 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 0.11.0 原生执行：[第14课：从 Rondo 指挥 WorkBuddy 并自动交给 Codex 审查](docs/learning/14-workbuddy-native-execution.md)。
 
 0.12.0 返修：[第15课：把审查问题自动交回执行者](docs/learning/15-bounded-repair.md)。新增 `start_task_repair`，工具共23个；普通刷新不发起模型调用。
+
+0.14.0 的代码导读、真实原生环境证据与界面复用记录见[第17课：会话工作台与原生环境](docs/learning/17-native-session-workspace.md)。

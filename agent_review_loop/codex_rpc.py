@@ -18,13 +18,14 @@ class ReviewCancelled(RpcError):
 
 
 class CodexRpc:
-    def __init__(self, argv, cwd, stderr_path, *, env=None, cancel_check=None):
+    def __init__(self, argv, cwd, stderr_path, *, env=None, cancel_check=None, on_request=None):
         self.process = ProcessTree(argv, cwd, stderr_path, env=env)
         self._messages = queue.Queue(maxsize=256)
         self._notifications = deque()
         self._counter = 0
         self._closed = False
         self._cancel_check = cancel_check
+        self._on_request = on_request
         self._reader_error = None
         self._writer_error = None
         self._writes = queue.Queue(maxsize=16)
@@ -93,6 +94,10 @@ class CodexRpc:
             if value is None:
                 raise RpcError('App Server disconnected before a result')
             if 'method' in value and 'id' in value:
+                if self._on_request:
+                    result = self._on_request(value)
+                    self.send({'id': value['id'], 'result': result})
+                    continue
                 # This transport cannot grant approvals or execute client-side tools.
                 self.send({'id': value['id'], 'error': {'code': -32601, 'message': 'Interactive requests are unsupported by this bounded client'}})
                 raise RpcError('App Server needs an interactive capability; execution stopped')
@@ -128,7 +133,7 @@ class CodexRpc:
         return value
 
     def initialize(self):
-        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.10.0'},
+        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.14.0'},
                                               'capabilities': {'experimentalApi': False}})
         self.send({'method': 'initialized', 'params': {}})
         return result

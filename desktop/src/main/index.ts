@@ -1,8 +1,15 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
-import { join, resolve } from 'node:path'
+import { join, resolve, relative, isAbsolute, extname } from 'node:path'
+import { readdir, realpath, readFile, stat } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
-import type { Context, StartInput } from '../shared/types'
+import type {
+  Context,
+  StartInput,
+  WorkspaceFiles,
+  ExecutionStatus,
+  ReviewStatus
+} from '../shared/types'
 app.setName('Rondo')
 const root = process.env.ARL_PROJECT_ROOT ?? resolve(app.getAppPath(), '..')
 const backend = new Backend(
@@ -11,6 +18,16 @@ const backend = new Backend(
 )
 let window: BrowserWindow
 let quitting = false
+async function workspaceFile(id: number, name: string): Promise<string> {
+  if (typeof name !== 'string' || !name || name.includes('\0')) throw Error('无效的文件路径')
+  const context = await backend.call<Context>('get_task_context', { task_id: id })
+  const root = await realpath(context.workspace)
+  const file = await realpath(resolve(root, name))
+  const child = relative(root, file)
+  if (!child || child.startsWith('..') || isAbsolute(child) || !(await stat(file)).isFile())
+    throw Error('只能打开任务工作区内的文件')
+  return file
+}
 function handlers(): void {
   const actions: Record<string, (...args: never[]) => unknown> = {
     status: () => backend.status(),
@@ -37,6 +54,88 @@ function handlers(): void {
     'start-repair': (id: string) => backend.call('start_task_repair', { source_review_job_id: id }),
     'execution-status': (id: string) => backend.call('get_execution_status', { job_id: id }),
     'cancel-execution': (id: string) => backend.call('cancel_execution', { job_id: id }),
+    'answer-request': (
+      job: string,
+      request: string,
+      answer: string | Record<string, string>,
+      kind: string
+    ) => backend.call('answer_native_request', { job_id: job, request_id: request, answer, kind }),
+    'workspace-files': async (id: number): Promise<WorkspaceFiles> => {
+      const context = await backend.call<Context>('get_task_context', { task_id: id })
+      const result: WorkspaceFiles = { files: [], truncated: false }
+      const ignored = new Set([
+        '.git',
+        'node_modules',
+        '.venv',
+        '__pycache__',
+        '.next',
+        '.agent-review-loop'
+      ])
+      let scanned = 0
+      async function walk(directory: string, depth = 0): Promise<void> {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          if (++scanned > 1200 || result.files.length >= 300) {
+            result.truncated = true
+            return
+          }
+          if (ignored.has(entry.name) || entry.isSymbolicLink()) continue
+          const path = join(directory, entry.name)
+          if (entry.isDirectory()) {
+            if (depth < 6) await walk(path, depth + 1)
+            else result.truncated = true
+          } else if (entry.isFile())
+            result.files.push({
+              path: relative(context.workspace, path).replaceAll('\\', '/'),
+              size: (await stat(path)).size
+            })
+        }
+      }
+      await walk(context.workspace)
+      result.files.sort((a, b) => a.path.localeCompare(b.path))
+      result.preview = result.files.find((file) => file.path === 'index.html')?.path
+      return result
+    },
+    'read-file': async (id: number, name: string) => {
+      const file = await workspaceFile(id, name)
+      if ((await stat(file)).size > 512 * 1024) throw Error('文件超过 512 KB，请在工作区打开')
+      const bytes = await readFile(file)
+      if (bytes.includes(0)) throw Error('二进制文件请在工作区打开')
+      return { text: bytes.toString('utf8'), truncated: false }
+    },
+    'open-artifact': async (id: number, name: string) => {
+      const file = await workspaceFile(id, name)
+      if (
+        !['.html', '.htm', '.md', '.txt', '.pdf', '.png', '.jpg', '.svg'].includes(
+          extname(file).toLowerCase()
+        )
+      )
+        throw Error('请使用文件查看器阅读源码；运行程序请在工作区操作')
+      const error = await shell.openPath(file)
+      if (error) throw Error(error)
+    },
+    'open-session': async (id: number, agent: string) => {
+      const context = await backend.call<Context>('get_task_context', { task_id: id })
+      if (agent === 'workbuddy') {
+        if (!context.latest_execution_job_id) throw Error('还没有 WorkBuddy 执行会话')
+        const execution = await backend.call<ExecutionStatus>('get_execution_status', {
+          job_id: context.latest_execution_job_id
+        })
+        if (!execution.session_id || !/^[a-f0-9-]{36}$/.test(execution.session_id))
+          throw Error('原生会话 ID 不可用')
+        await shell.openExternal(`workbuddy://chat/${execution.session_id}`)
+      } else if (agent === 'codex-plan' || agent === 'codex-review') {
+        const job =
+          agent === 'codex-plan' ? context.latest_plan_job_id : context.latest_review_job_id
+        if (!job) throw Error('还没有 Codex 会话')
+        const status = await backend.call<ReviewStatus>(
+          agent === 'codex-plan' ? 'get_plan_status' : 'get_review_status',
+          { job_id: job }
+        )
+        if (!status.persistent || !status.thread_id || !/^[a-f0-9-]{36}$/.test(status.thread_id))
+          throw Error('这是旧版本的临时会话，没有可恢复的原生记录；新发起的计划和审查会保存会话')
+        await shell.openExternal(`codex://threads/${status.thread_id}`)
+      } else throw Error('无效的 Agent')
+    },
     'open-workspace': async (id: number) => {
       const context = await backend.call<Context>('get_task_context', { task_id: id })
       const error = await shell.openPath(context.workspace)

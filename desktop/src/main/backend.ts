@@ -38,12 +38,15 @@ export class Backend {
       command: python,
       args,
       cwd: this.root,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([, value]) => value !== undefined)
+      ) as Record<string, string>,
       stderr: 'pipe'
     })
     transport.stderr?.on('data', () => {
       /* Drain diagnostics; stdout belongs to MCP. */
     })
-    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.13.0' })
+    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.14.0' })
     client.onclose = () => {
       if (this.client === client) this.client = undefined
     }

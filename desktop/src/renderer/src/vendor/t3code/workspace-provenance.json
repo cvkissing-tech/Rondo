@@ -1,0 +1,32 @@
+{
+  "repository": "https://github.com/pingdotgg/t3code",
+  "commit": "210b2e7c6a8be11441b7afc94742ce3c76860111",
+  "sources": [
+    {
+      "path": "apps/web/src/components/ChatView.tsx",
+      "sha256": "a41a00a6c2edf75c9de62237a4798a8c91b6ac21e818bf19de4299c060682b56"
+    },
+    {
+      "path": "apps/web/src/components/chat/TimelineUserMessageRow.tsx",
+      "sha256": "d15c7e431ecd8827d3c93cbc0aa6bc921d3972ca5dacde4f46b3f41e520e2f54"
+    },
+    {
+      "path": "apps/web/src/components/chat/TimelineSystemDivider.tsx",
+      "sha256": "74b2f128e3bc329c494c1b338a55466d5de5325984d0493401ef1e63eea0425e"
+    },
+    {
+      "path": "apps/web/src/components/RightPanelTabs.tsx",
+      "sha256": "4e77b45e32cfd78218b8618a5992e66b5673d343c143894f53a36c267fd9732f"
+    },
+    {
+      "path": "apps/web/src/components/preview/PreviewPanelShell.tsx",
+      "sha256": "2fd9f56d4a104f438577de072d88797a7178f25be844f8bd1297e992c7496253"
+    }
+  ],
+  "adaptations": [
+    "ChatView parent composition extracted to React slots; existing Rondo jobs replace T3 state/transport",
+    "UserTimelineRow message container extracted; attachments and guest accounts omitted because Rondo does not provide them",
+    "TimelineSystemDivider copied; import aliases and Base UI Tooltip render prop adapted to installed Radix asChild",
+    "Right panel tab pattern adapted to existing react-resizable-panels; no upstream browser/terminal services copied"
+  ]
+}

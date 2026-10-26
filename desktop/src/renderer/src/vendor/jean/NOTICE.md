@@ -49,3 +49,5 @@ those of the source product. This is a selective port, not an import of Jean's b
 
 Local adapters: components/workbench/WorkbenchShell.tsx and TaskSidebar.tsx;
 App.tsx retains the WelcomeProjectGrid content container layout for task creation.
+
+0.14.0: Rondo replaces the prior SidebarTabRail composition with a single project sidebar and main-only toolbar, combining the adapted Jean navigation/theme with T3 conversation composition. TaskSidebar gains shared arrow/Home/End keyboard tab activation. The original source identity remains attribution, not a claim of unchanged upstream layout.

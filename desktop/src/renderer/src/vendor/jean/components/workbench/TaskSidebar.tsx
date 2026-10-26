@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, Search, RefreshCw, GitBranch } from 'lucide-react'
 import { Input } from '@jean/components/ui/input'
-import { cn } from '@jean/lib/utils'
+import { cn, handleTabKeys } from '@jean/lib/utils'
 
 export function TaskSidebar({
   tasks,
@@ -43,6 +43,7 @@ export function TaskSidebar({
         className="mt-2 flex h-12 shrink-0 items-center gap-1 px-3"
         role="tablist"
         aria-label="侧栏任务范围"
+        onKeyDown={handleTabKeys}
       >
         {[
           ['tasks', '任务'],
