@@ -76,6 +76,23 @@ class TaskLaunchTests(unittest.TestCase):
         self.assertEqual(migrated.get_task(task['task_id'])['title'], 'keep')
         self.assertEqual(TaskLauncher(migrated, self.root / 'tasks').start(*self.args)['task']['title'], '实际任务')
 
+    def test_context_recovers_bounded_job_records_without_exposing_job_payloads(self):
+        task = self.launcher.start(*self.args)
+        now = self.store.clock()
+        with self.store._connection(write=True) as db:
+            for table, identity, state, offset in (('plan_jobs', '1' * 32, 'cancelled', 1),
+                                                   ('review_jobs', '2' * 32, 'failed', 2)):
+                db.execute(f'''INSERT INTO {table}
+                    (id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                    (identity, task['task_id'], identity, 'fixture', state, str(self.repo),
+                     'HEAD', str(self.root / identity), 'fixture', now + offset, now + offset))
+        records = TaskLauncher(TaskStore(self.store.path)).context(task['task_id'])['activity']
+        self.assertEqual([record['kind'] for record in records], ['workspace', 'plan', 'review'])
+        self.assertEqual([record['status'] for record in records], ['succeeded', 'cancelled', 'failed'])
+        self.assertEqual(set(records[1]), {'id', 'kind', 'status', 'created_at', 'updated_at', 'error_code'})
+        self.assertFalse(self.launcher.context(task['task_id'])['activity_truncated'])
+
 
 if __name__ == '__main__':
     unittest.main()

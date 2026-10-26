@@ -208,98 +208,11 @@ textarea {
   font-size: 10px;
   margin-top: 14px;
 }
-.task-toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  min-height: 61px;
-  padding: 12px 21px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.task-toolbar > div:first-child {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  min-width: 0;
-}
-.task-toolbar h1 {
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0;
-}
-.task-toolbar [data-slot='toggle-group-item'] {
-  font-size: 12px;
-}
-.single-document {
-  flex: 1;
-  overflow: auto;
-}
-.single-document .task-document {
-  max-width: 820px;
-  margin: auto;
-  padding: 36px;
-}
-.task-document {
-  padding: 26px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-.document-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--muted-foreground);
-  margin-bottom: 18px;
-}
-.task-document h2 {
-  font-size: 19px;
-  line-height: 1.5;
-  font-weight: 600;
-  margin: 0 0 28px;
-}
-.task-document section {
-  margin: 0 0 26px;
-}
-.task-document h3 {
-  font-size: 11px;
-  color: var(--muted-foreground);
-  font-weight: 500;
-  margin: 0 0 9px;
-}
 .preserve {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.9;
   margin: 0;
-}
-.workspace-event {
-  display: flex;
-  gap: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 22px;
-}
-.workspace-event > svg {
-  width: 16px;
-  height: 16px;
-  color: var(--success);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.workspace-event strong {
-  font-size: 12px;
-  font-weight: 500;
-}
-.workspace-event p {
-  font-size: 11px;
-  line-height: 1.8;
-  color: var(--muted-foreground);
-  margin: 7px 0;
 }
 .workspace-code {
   display: block;
@@ -339,18 +252,12 @@ textarea {
   min-height: 0 !important;
   height: auto !important;
 }
-.context-pane,
 .work-pane {
   height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-}
-.context-pane .task-document {
-  overflow: auto;
-  flex: 1;
-  padding: 24px;
 }
 .pane-title {
   display: flex;
@@ -555,4 +462,141 @@ textarea {
   .plan-body {
     padding: 22px 18px;
   }
+}
+
+/* Task timeline composition: T3 WorkLog + incumbent Jean layout/theme. */
+.timeline-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.task-timeline {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.flow-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 22px 10px;
+}
+.flow-heading > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.flow-heading h1 {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+.agent-assignment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 0 22px 14px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.agent-assignment strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.current-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 22px;
+  border-block: 1px solid var(--border);
+  background: var(--muted);
+}
+.current-stage strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.current-stage p {
+  margin: 4px 0 0;
+  max-width: 65ch;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+}
+.task-records {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px;
+}
+.task-records > * {
+  width: 100%;
+  max-width: 850px;
+  margin-inline: auto;
+}
+.task-records .plan-body,
+.task-records .review-body {
+  padding: 8px 0;
+  overflow: visible;
+}
+.task-records .plan-summary {
+  margin: 12px 0;
+}
+.record-status {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+.request-preview {
+  margin: 2px 0 8px 30px;
+  max-width: 70ch;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.record-prose {
+  margin-left: 28px;
+  padding: 8px 0;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.record-prose h2 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 16px 0 6px;
+}
+.job-history {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 14px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.job-history summary {
+  cursor: pointer;
+}
+.history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.history-row time {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
 }

@@ -4,6 +4,8 @@ export interface Task {
   status: string
   instructions: string
   acceptance: string
+  owner?: string | null
+  result?: { summary: string } | null
 }
 export interface Context {
   repository: string
@@ -13,6 +15,15 @@ export interface Context {
   task: Task
   latest_review_job_id: string | null
   latest_plan_job_id: string | null
+  activity: {
+    id: string
+    kind: 'workspace' | 'plan' | 'review'
+    status: string
+    created_at: number
+    updated_at: number
+    error_code?: string | null
+  }[]
+  activity_truncated: boolean
 }
 export interface PlanResult {
   usage?: { total?: { totalTokens?: number; inputTokens?: number; outputTokens?: number } } | null

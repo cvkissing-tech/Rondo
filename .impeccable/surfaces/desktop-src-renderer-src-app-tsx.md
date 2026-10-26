@@ -11,15 +11,15 @@ Mode: Operate。Windows Electron，1360×900主窗口，最小960×680。用户�
 
 ## Direction contract
 
-THESIS: 直接移植 Jean 的产品布局、Vibe Kanban 计划组件和 REA 恢复的 Codex 输入容器，让工作区、任务、需求和差异占据屏幕；撤掉常驻角色说明栏。
+THESIS: 以同一任务的需求、规划、执行提交、审查记录表达开发过程；当前阶段、Agent 分工和下一步动作可直接读懂。直接复用成熟产品模块，不另创视觉世界。
 
-OWN-WORLD: 上游 Jean 的中性浅/深色语义主题、紧凑侧栏、Radix 控件与分栏；以 Windows 系统 UI 字体阅读中文，等宽只用于路径和代码。使用真实 sidebar/input-group/resizable 源码，避免另造同类控件。
+OWN-WORLD: 保留 Jean 72px导航轨、240px任务栏、32px顶栏与浅深主题；主区移植 T3 Code WorkLog，计划保留 Vibe 组件结构并映射现有中性表面。Windows系统字体与Lucide图标沿用。
 
-STORY: 从侧栏打开任务；新任务在居中的输入组合里写需求与验收。项目选择与任务设置是紧凑控件。准备完成后进入详情；需要查看代码或审查时打开可调整大小的工作区域，状态说明按需展开。
+STORY: 打开任务先读阶段与角色，需求和路径默认折叠；展开需要的计划、执行提交和审查记录，按需打开侧面差异。刷新和恢复读取已有结果；显式生成才使用额度。WorkBuddy未接入时不渲染虚构执行。
 
-FIRST VIEWPORT: Jean 的 72px 导航轨 + 240px 可收起任务栏 + 32px 顶栏，真实搜索/状态/已提交筛选/分页。新任务采用 Jean WelcomeProjectGrid 的内容布局，需求容器使用 Codex ComposerLayout 已发布 CSS；项目和验收仍为真实字段。计划直接使用 Vibe 产品组件，详情继续使用可调整分栏。
+FIRST VIEWPORT: 任务标题、规划/执行/审查分工、当前阶段和一个主动作；下方为T3工作记录。需求摘要可见、全文和目录收起。差异关闭时记录占主区，打开后62/38可调整分栏；960px仍可操作。MCP数量位于连接详情，已保存作业概要按需展开。
 
-FORM: code-led，按用户“直接复用”要求固定使用 Jean cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3、Vibe Kanban d5cbb5380fa0b32e98ef9b8d987f63decce4be3a、REA 恢复的 Codex 26.1021.3705.0；来源记录在各 vendor 目录。优先移植产品模块，不再随机创作视觉世界。seed: none (pinned upstream product)。沿用用户已授权的产品功能和代码复用范围。
+FORM: code-led，用户明确固定成熟产品复用，无随机seed或新风格：Jean cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3、T3 Code 3de45c6254345f968fbdc64db7b149bf4f429855、Vibe Kanban d5cbb5380fa0b32e98ef9b8d987f63decce4be3a、REA恢复的Codex26.1021.3705.0输入容器。产品级来源及适配见各vendor NOTICE。
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 

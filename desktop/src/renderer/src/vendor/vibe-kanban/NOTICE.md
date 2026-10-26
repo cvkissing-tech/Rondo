@@ -25,3 +25,8 @@ Integration contrast adjustment: light text-low 39% -> 38%; dark text-low 56% ->
 66.6667% (Jean #aaa). The original dark text measured 3.79:1 against the composed
 plan-header background; the mapped value measured 5.27:1. Geometry and structure
 remain those of the upstream components.
+
+0.10.0 integration: brand/10, brand/20 and border-brand now map to Jean's
+background, muted and border semantic tokens. The contrast numbers above describe
+the earlier orange integration; they are not measurements of the current neutral
+surface. Original component structure and interaction remain in use.

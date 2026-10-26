@@ -26,11 +26,11 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Capabilities and Constraints
 
-已有TaskLauncher、PlanJobs、ReviewJobs、版本绑定检查和Codex原生审查。显式计划生成、读取、取消与恢复已接入，代码变化时标记过期。WorkBuddy需要正式执行接入及授权，当前无第三方应用。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
+已有TaskLauncher、PlanJobs、ReviewJobs、版本绑定检查和Codex原生审查。显式计划生成、读取、取消与恢复已接入，代码变化时标记过期。任务主区显示当前阶段、角色分工与连续记录；元数据轮询反映实际领取和提交，历史作业展示有界概要，代码差异按需打开。WorkBuddy需要正式执行接入及授权，当前无第三方应用。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
 
 ## Brand Commitments
 
-Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称完整自动开发已实现。用户明确否定0.8.0墨绿表单界面，授权直接复用开源产品组件；当前界面直接移植Jean产品布局、Vibe Kanban计划组件与REA恢复的Codex输入容器，保留来源和适配记录。
+Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称完整自动开发已实现。用户明确否定0.8.0墨绿表单界面，授权直接复用开源产品组件；当前界面直接移植Jean产品布局、T3 Code工作记录、Vibe Kanban计划组件与REA恢复的Codex输入容器，保留来源和适配记录。
 
 ## Product Principles
 

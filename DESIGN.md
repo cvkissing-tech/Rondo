@@ -1,6 +1,6 @@
 ---
 name: Agent Review Loop
-description: 直接移植 Jean 产品布局、Vibe Kanban 计划组件与 REA 恢复的 Codex 输入容器
+description: 复用 Jean 工作台、T3 工作记录、Vibe Kanban 计划组件与 REA 恢复的 Codex 输入容器
 colors:
   background: "oklch(1 0 0)"
   foreground: "oklch(0.145 0 0)"
@@ -37,6 +37,10 @@ typography:
   toolbar-title:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
     fontSize: "14px"
+    fontWeight: 600
+  timeline-title:
+    fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
+    fontSize: "15px"
     fontWeight: 600
   body:
     fontFamily: "Segoe UI, Microsoft YaHei UI, sans-serif"
@@ -95,12 +99,12 @@ components:
 
 本体系直接复用 Jean 的 React 控件与语义主题，来源为 `coollabsio/jean` 提交 `cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3`。来源、文件身份和适配说明保存在 `desktop/src/renderer/src/vendor/jean/NOTICE.md`。它取代用户已否定的旧墨绿表单体系。
 
-设计重心是项目、需求与实际代码改动。浅深主题采用同一组语义角色；系统字体承载中文操作与阅读，成熟控件提供导航、焦点、提示和分栏行为。页面不再用常驻角色介绍填满一侧。
+设计重心是项目、需求与实际代码改动。浅深主题采用同一组语义角色；系统字体承载中文操作与阅读，成熟控件提供导航、焦点、提示和分栏行为。任务主区复用 T3 Code WorkLog，将需求、工作区、规划、执行与审查组织成连续工作记录；顶部直接显示分工、当前阶段和一个下一步主动作。
 
 **Key Characteristics:**
 - 中性工作面与紧凑导航。
 - 需求、代码改动和审查保持同一任务上下文。
-- 真实源码组件复用，状态说明按需打开。
+- 真实源码组件复用，需求全文、路径与记录详情按需打开。
 
 ## Colors
 
@@ -116,6 +120,8 @@ components:
 
 错误与计划过期提示使用 Alert 的 `destructive` 语义；深色对应 `dark-destructive`，来自应用 `.dark` 中已实现的覆盖，保证近黑工作面上的错误文字可读。它不替代主动作色或中性色层级。
 
+Vibe 计划组件的品牌边界、正文背景和标题/动作栏背景分别映射到现有 `border`、`background` 和 `muted`。保留源组件结构，不将上游橙色计划大色面带入当前工作记录；此映射仅作用于 `.vibe-plan-surface`。
+
 **The Semantic Theme Rule.** 页面及复用控件使用语义变量；切换主题时共同变化，不在单个控件中另造浅深配色。
 
 ## Typography
@@ -126,12 +132,12 @@ components:
 
 ## Layout
 
-- 外壳占满窗口，页面整体不产生滚动；任务正文、差异和审查区域分别拥有滚动。
-- 侧栏由上游 Sidebar 组件提供，展开宽度 240px，图标收起宽度使用上游 `3rem`；Ctrl+B 或工具栏按钮切换。
-- 顶部工作台工具栏 49px；任务视图工具栏最小高度 61px，分栏标题行 39px。
-- 新任务标题和表单最大宽度 690px；可选任务名位于任务设置中。
-- 单文档区域最大宽度 820px。执行计划、代码与审查视图使用上游 ResizablePanelGroup，初始上下文/工作面比例 40/60，最小比例 25/40。
-- 1100px 以下工具栏允许换行，文档及审查区域收紧内边距。当前交付的桌面最小窗口宽度是 960px；不将导入组件自带的移动端分支当作已交付手机版。
+- 外壳占满窗口，页面整体不产生滚动；连续工作记录与可选代码差异面板分别滚动。计划与审查详情随工作记录滚动。
+- Jean 外壳使用 72px 导航轨、可收起的 240px 任务栏与 32px 顶栏；Ctrl+B 或工具栏按钮切换任务栏。
+- 任务标题、Agent 分工和当前阶段位于记录滚动区上方。当前阶段说明与一个下一步主动作在窄桌面可换行；说明最大宽度 65ch。
+- 工作记录横向内边距 22px、纵向内边距 20px，内容最大宽度 850px；需求全文、验收与工作区路径初始收起，需求保留简短预览。
+- 代码差异按需从工具栏打开并可关闭。打开时使用 Jean ResizablePanelGroup，初始记录/差异比例 62/38，最小比例 42/25；关闭时记录使用可用宽度。
+- 1100px 以下工具栏允许换行。当前交付的桌面最小窗口宽度是 960px；不将导入组件自带的移动端分支当作已交付手机版。
 
 ## Elevation & Depth
 
@@ -159,11 +165,19 @@ components:
 
 ### Split work area
 
-按需打开任务上下文旁的执行计划、代码改动或审查面板。分隔条支持拖动与方向键；代码视图保持 Pierre Diffs 并跟随浅深主题。没有改动或结果时使用真实 Empty 状态。
+工作记录为任务主区，不再以需求、计划、代码、审查四个平行页签组织任务。规划与审查在同一记录内展开；代码改动作为可选侧面板，使用 Layout 中的比例。分隔条支持拖动与方向键；代码视图保持 Pierre Diffs 并跟随浅深主题。没有改动或结果时使用真实 Empty 状态。
+
+### Task work records
+
+复用 `pingdotgg/t3code` 提交 `3de45c6254345f968fbdc64db7b149bf4f429855` 的 WorkLog Block/List/Button/Row/Details，来源与适配保存在 `vendor/t3code/NOTICE.md`。紧凑图标行承载需求、工作区、规划、执行与审查，详情缩进展开；交互行保留键盘焦点及 `aria-expanded`。
+
+标题下持续显示 Codex 规划、WorkBuddy 执行与 Codex 审查的分工和接入状态。当前阶段由真实任务与作业状态推导，使用可播报状态区和一个下一步主动作；消耗额度的动作在按钮中明示。需求与工作区初始收起；最新计划/审查按已有作业展开，用户仍可折叠。
+
+执行行区分尚未接入、实际领取者与真实提交摘要；文件变化不代表执行完成。底部原生 details 展示已保存作业元数据及计数，只读恢复不调用模型；较早记录为概要，不把此投影称为完整事件溯源或完整对话历史。
 
 ### Execution plan
 
-执行计划沿用可调整分栏，正文独立滚动；内容直接使用 Vibe Kanban 的 ChatEntryContainer(plan) 与 ChatTodoList，保留源组件的 header/content/actions 结构、计划色与整体折叠交互。详情槽显示原有说明、文件与验收列表，所有步骤在未执行时保持未完成。Vibe 主题值仅在 .vibe-plan-surface 内生效；假设使用原生 details。
+执行计划在工作记录内展开，随记录滚动；内容直接使用 Vibe Kanban 的 ChatEntryContainer(plan) 与 ChatTodoList，保留源组件的 header/content/actions 结构与整体、步骤折叠交互。边界与表面采用现有中性主题映射，标题折叠按钮与动作控件保持并列，不嵌套交互。详情槽显示原有说明、文件与验收列表，所有步骤在未执行时保持未完成；假设使用原生 details。
 
 生成前明确说明使用 Codex 账号额度、每任务最多两次，失败或取消也计入。生成中展示真实状态与停止操作，不自动重试；刷新及恢复只读取已保存状态，重新生成须通过明确标注“消耗额度”的动作发起。代码新鲜度不是 current 时展示 destructive Alert；错误沿用同一 Alert。仅在返回真实用量时显示 tokens，费用未返回时如实说明。
 

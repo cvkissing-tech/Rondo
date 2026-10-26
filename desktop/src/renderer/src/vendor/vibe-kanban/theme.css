@@ -49,16 +49,16 @@
   color: hsl(var(--vibe-text-normal));
 }
 .vibe-plan-surface .border-brand {
-  border-color: hsl(var(--vibe-brand));
+  border-color: var(--border);
 }
 .vibe-plan-surface .border-error {
   border-color: hsl(var(--vibe-error));
 }
 .vibe-plan-surface .bg-brand\/10 {
-  background-color: hsl(var(--vibe-brand) / 0.1);
+  background-color: var(--background);
 }
 .vibe-plan-surface .bg-brand\/20 {
-  background-color: hsl(var(--vibe-brand) / 0.2);
+  background-color: var(--muted);
 }
 .vibe-plan-surface .bg-error\/10 {
   background-color: hsl(var(--vibe-error) / 0.1);

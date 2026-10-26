@@ -47,8 +47,14 @@ async function launch() {
   page.on('console', (message) => {
     if (message.type() === 'error') console.error('CONSOLE', message.text())
   })
-  await page.getByText('MCP · 18 个工具可用', { exact: true }).waitFor({ timeout: 30000 })
+  await page.getByText('本地任务服务已连接', { exact: true }).waitFor({ timeout: 30000 })
   return page
+}
+async function openRecord(page, kind) {
+  const button = page.getByRole('button', {
+    name: kind === 'plan' ? /^Codex · 执行计划/ : /^Codex · 代码审查/
+  })
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click()
 }
 try {
   let page = await launch()
@@ -72,11 +78,24 @@ try {
   const context = await page.evaluate(() => window.workbench.context(1))
   assert.notEqual(context.workspace, repo)
   assert.equal(await readFile(join(context.workspace, 'sample.py'), 'utf8'), 'print(1)\n')
+  await page.getByText('工作区就绪，等待规划', { exact: true }).waitFor()
+  assert.equal(
+    await page
+      .getByRole('button', { name: '需求与验收', exact: true })
+      .getAttribute('aria-expanded'),
+    'false'
+  )
+  assert.equal(
+    await page
+      .getByRole('button', { name: '独立工作区已创建', exact: true })
+      .getAttribute('aria-expanded'),
+    'false'
+  )
   await page.screenshot({ animations: 'disabled', path: join(evidence, '02-task-1360.png') })
   await page.getByRole('tab', { name: '已提交', exact: true }).click()
   await page.getByText('还没有已提交的任务。', { exact: true }).waitFor()
   await page.getByRole('tab', { name: '任务', exact: true }).click()
-  await page.getByLabel('执行计划', { exact: true }).click()
+  await openRecord(page, 'plan')
   await page.getByRole('button', { name: '生成 Codex 计划', exact: true }).waitFor()
   if (realPlan) {
     console.log('Starting ONE real Codex planning turn. Evidence: ' + evidence)
@@ -133,7 +152,7 @@ try {
       path: join(evidence, '09-plan-stale-1360.png')
     })
   }
-  await page.getByLabel('代码改动', { exact: true }).click()
+  await page.getByRole('button', { name: '查看代码改动', exact: true }).click()
   await page.locator('diffs-container').first().waitFor({ timeout: 10000 })
   await page.screenshot({ animations: 'disabled', path: join(evidence, '03-changes-1360.png') })
   const patch = await page.evaluate(() => window.workbench.changes(1))
@@ -141,7 +160,7 @@ try {
   assert.match(patch.patch, /README.md/)
   assert.equal(await readFile(join(repo, 'sample.py'), 'utf8'), 'print(1)\n')
   const handle = page.locator('[data-slot="resizable-handle"]')
-  const panel = page.locator('.context-pane')
+  const panel = page.locator('.timeline-pane')
   const widthBefore = (await panel.boundingBox()).width
   await handle.focus()
   await handle.press('ArrowRight')
@@ -153,7 +172,7 @@ try {
   await page.keyboard.press('Control+b')
   await page.locator('[data-slot="sidebar"][data-state="collapsed"]').waitFor({ state: 'attached' })
   await page.getByRole('button', { name: '切换侧栏', exact: true }).click()
-  await page.getByLabel('审查结果', { exact: true }).click()
+  await openRecord(page, 'review')
   await page.getByRole('button', { name: '发起 Codex 审查', exact: true }).waitFor()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
   await page.screenshot({ animations: 'disabled', path: join(evidence, '04-review-960.png') })
@@ -167,7 +186,7 @@ try {
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
-  await page.getByLabel('代码改动', { exact: true }).click()
+  await page.getByRole('button', { name: '查看代码改动', exact: true }).click()
   await page.locator('diffs-container').first().waitFor()
   await page.screenshot({
     animations: 'disabled',
@@ -179,7 +198,7 @@ try {
   await page.getByRole('heading', { name: '桌面端真实链路验收', exact: true, level: 1 }).waitFor()
   assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), true)
   if (realPlan) {
-    await page.getByLabel('执行计划', { exact: true }).click()
+    await openRecord(page, 'plan')
     await page.getByText('计划已生成', { exact: true }).waitFor()
     const restored = await page.evaluate(
       (id) => window.workbench.readPlan(id),
@@ -188,6 +207,49 @@ try {
     assert.equal(restored.plan_id, completedPlan.plan_id)
     assert.equal(restored.freshness, 'stale')
   }
+  const python = join(root, '.venv/Scripts/python.exe')
+  const claim = JSON.parse(
+    execFileSync(
+      python,
+      [
+        '-c',
+        "import json,sys; from agent_review_loop.store import TaskStore; s=TaskStore(sys.argv[1]); t=s.get_task(1); print(json.dumps(s.claim_task(1,'desktop-smoke-executor',t['version'])))",
+        env.ARL_DATABASE
+      ],
+      { cwd: root, encoding: 'utf8' }
+    )
+  )
+  await page
+    .locator('.current-stage')
+    .getByText('执行任务已领取', { exact: true })
+    .waitFor({ timeout: 15000 })
+  assert.equal(
+    execFileSync(python, [join(context.workspace, 'sample.py')], { encoding: 'utf8' }).trim(),
+    '2'
+  )
+  execFileSync(
+    python,
+    [
+      '-c',
+      "import json,sys; from agent_review_loop.store import TaskStore; c=json.load(sys.stdin); TaskStore(sys.argv[1]).submit_result(1,c['attempt_id'],c['claim_token'],c['version'],'Desktop smoke executor ran sample.py: output 2. WorkBuddy was not invoked.','smoke-submit')",
+      env.ARL_DATABASE
+    ],
+    { cwd: root, input: JSON.stringify(claim), encoding: 'utf8' }
+  )
+  await page
+    .locator('.current-stage')
+    .getByText('执行结果已提交', { exact: true })
+    .waitFor({ timeout: 15000 })
+  await page
+    .getByText('Desktop smoke executor ran sample.py: output 2. WorkBuddy was not invoked.', {
+      exact: true
+    })
+    .waitFor()
+  assert.match(await page.getByLabel('Agent 分工').innerText(), /执行\s+WorkBuddy\s+·\s+未接入/)
+  await page.screenshot({
+    animations: 'disabled',
+    path: join(evidence, '12-submitted-record-1360.png')
+  })
   assert.equal(errors.length, 0, errors.join('\n'))
   await writeFile(
     join(evidence, 'result.json'),
@@ -210,7 +272,10 @@ try {
           'resizable panels keyboard drag',
           'agent connection popover',
           'dark theme persists after restart',
-          'no renderer exceptions'
+          'no renderer exceptions',
+          'task stage and agent assignments',
+          'requirements and paths collapsed by default',
+          'external claim and submit reflected by metadata polling without a model call'
         ],
         modelCalls: realPlan ? 1 : 0,
         realPlanSavedAndResumed: realPlan

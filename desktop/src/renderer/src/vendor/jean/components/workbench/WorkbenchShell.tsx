@@ -58,7 +58,7 @@ export function WorkbenchShell({
             </TooltipTrigger>
             <TooltipContent side="right">接入说明</TooltipContent>
           </Tooltip>
-          <span className="pb-1 text-[0.625rem] leading-none text-muted-foreground">v0.9.1</span>
+          <span className="pb-1 text-[0.625rem] leading-none text-muted-foreground">v0.10.0</span>
         </nav>
       </div>
       <aside

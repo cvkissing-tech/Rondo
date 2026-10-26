@@ -1,6 +1,7 @@
 """One task entry point; reuse native Git worktrees and the existing task store."""
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from .snapshots import _git, canonical, current_tree, digest, prepare_workspace, repository_root
@@ -50,6 +51,11 @@ class TaskLauncher:
             launch = db.execute('SELECT context_json FROM task_launches WHERE task_id=?', (task_id,)).fetchone()
             review = db.execute('SELECT id FROM review_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
             plan = db.execute('SELECT id FROM plan_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
+            created = db.execute('SELECT created_at FROM tasks WHERE id=?', (task_id,)).fetchone()[0]
+            records = db.execute('''SELECT id, 'plan' AS kind, state AS status, created_at, updated_at, error_code
+                FROM plan_jobs WHERE task_id=? UNION ALL
+                SELECT id, 'review' AS kind, state AS status, created_at, updated_at, error_code
+                FROM review_jobs WHERE task_id=? ORDER BY created_at DESC, id DESC LIMIT 11''', (task_id, task_id)).fetchall()
         if launch is None:
             raise StoreError('TASK_NOT_PREPARED', 'This task has no managed workspace; use start_task for new tasks')
         context = json.loads(launch['context_json'])
@@ -57,6 +63,11 @@ class TaskLauncher:
             raise StoreError('WORKSPACE_MISSING', 'The task workspace is missing; it will not be recreated over existing work')
         return {**context, 'task': task, 'latest_review_job_id': review['id'] if review else None,
                 'latest_plan_job_id': plan['id'] if plan else None,
+                'activity': [{'id': 'workspace', 'kind': 'workspace', 'status': 'succeeded',
+                              'created_at': datetime.fromisoformat(created).timestamp(),
+                              'updated_at': datetime.fromisoformat(created).timestamp()},
+                             *[dict(row) for row in reversed(records[:10])]],
+                'activity_truncated': len(records) > 10,
                 'next_action': 'Implement the task in workspace only. Read project instructions, run relevant checks, then stop editing and call start_task_review.',
                 'review': {'tool': 'start_task_review', 'arguments': {'task_id': task_id},
                            'request_id_rule': 'Choose a stable review request_id; this does not start a model call.'}}

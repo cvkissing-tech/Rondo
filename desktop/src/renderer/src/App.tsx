@@ -23,12 +23,10 @@ import { Separator } from '@jean/components/ui/separator'
 import { SidebarProvider } from '@jean/components/ui/sidebar'
 import { WorkbenchShell } from '@jean/components/workbench/WorkbenchShell'
 import { TaskSidebar } from '@jean/components/workbench/TaskSidebar'
-import { ToggleGroup, ToggleGroupItem } from '@jean/components/ui/toggle-group'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@jean/components/ui/tooltip'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
-  Check,
   ChevronRight,
   Code2,
   Copy,
@@ -42,12 +40,13 @@ import {
   ShieldCheck,
   Square,
   Sun,
-  Unplug,
   X
 } from 'lucide-react'
 import type { Context, PlanResult, Review, ReviewStatus, Task } from '../../shared/types'
 import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
+import { TaskTimeline } from './TaskTimeline'
+import type { TaskAction } from './taskFlow'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -85,7 +84,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [next, setNext] = useState<number | null>(null)
   const [context, setContext] = useState<Context>()
-  const [tab, setTab] = useState('task')
+  const [changesOpen, setChangesOpen] = useState(false)
   const [error, setError] = useState(
     api ? '' : '请通过桌面应用打开工作台，浏览器预览无法调用本地服务。'
   )
@@ -133,7 +132,7 @@ export default function App() {
     setReview(undefined)
     setPlanJob(undefined)
     setPlanResult(undefined)
-    setTab('task')
+    setChangesOpen(false)
     try {
       const selected = await api.context(id)
       if (seq !== generation.current) return
@@ -210,6 +209,47 @@ export default function App() {
       clearTimeout(timer)
     }
   }, [planJobId])
+  const selectedTaskId = context?.task_id
+  useEffect(() => {
+    if (!api || !selectedTaskId) return
+    let active = true,
+      inFlight = false
+    // Metadata only: no Git snapshot, model call, or automatic job start.
+    const timer = setInterval(async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const updated = await api.context(selectedTaskId)
+        if (!active) return
+        setContext(updated)
+        setTasks((previous) =>
+          previous.map((task) =>
+            task.task_id === selectedTaskId ? { ...task, status: updated.task.status } : task
+          )
+        )
+        if (updated.latest_plan_job_id && updated.latest_plan_job_id !== planJobId) {
+          const state = await api.planStatus(updated.latest_plan_job_id)
+          if (!active) return
+          setPlanResult(undefined)
+          setPlanJob(state)
+        }
+        if (updated.latest_review_job_id && updated.latest_review_job_id !== jobId) {
+          const state = await api.reviewStatus(updated.latest_review_job_id)
+          if (!active) return
+          setReview(undefined)
+          setJob(state)
+        }
+      } catch (error) {
+        if (active) setError(errorText(error))
+      } finally {
+        inFlight = false
+      }
+    }, 5000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [selectedTaskId, planJobId, jobId])
   async function refreshPlan() {
     if (!api || !planJob) return
     const seq = generation.current
@@ -260,13 +300,16 @@ export default function App() {
     setBusy(false)
   }
   async function showChanges() {
-    setTab('changes')
+    setChangesOpen(true)
     setChanges(undefined)
     if (!api || !context) return
     const seq = generation.current
     await protect(async () => {
       const result = await api.changes(context.task_id)
-      if (seq === generation.current) setChanges(result)
+      if (seq === generation.current) {
+        setChanges(result)
+        await refreshTask()
+      }
     })
   }
   async function startReview() {
@@ -289,6 +332,38 @@ export default function App() {
     })
     setBusy(false)
   }
+  async function refreshTask() {
+    if (!api || !context) return
+    const seq = generation.current,
+      updated = await api.context(context.task_id)
+    if (seq !== generation.current) return
+    setContext(updated)
+    if (updated.latest_plan_job_id) {
+      const state = await api.planStatus(updated.latest_plan_job_id)
+      if (seq !== generation.current) return
+      setPlanJob(state)
+      if (state.status === 'succeeded') {
+        const result = await api.readPlan(state.job_id)
+        if (seq === generation.current) setPlanResult(result)
+      }
+    }
+    if (updated.latest_review_job_id) {
+      const state = await api.reviewStatus(updated.latest_review_job_id)
+      if (seq !== generation.current) return
+      setJob(state)
+      if (state.status === 'succeeded') {
+        const result = await api.readReview(state.job_id)
+        if (seq === generation.current) setReview(result)
+      }
+    }
+  }
+  function taskAction(action: TaskAction) {
+    if (action === 'plan') startPlan()
+    else if (action === 'review') startReview()
+    else if (action === 'refresh') protect(refreshTask)
+    else if (action === 'changes') showChanges()
+    else if (action === 'guide') protect(async () => api?.openGuide())
+  }
   function newTask() {
     ++generation.current
     setContext(undefined)
@@ -304,67 +379,28 @@ export default function App() {
   const workspaceName =
     context?.repository?.replace(/\\/g, '/').split('/').pop() ||
     repo.replace(/\\/g, '/').split('/').pop()
-  const taskDescription = context && (
-    <div className="task-document">
-      <div className="document-heading">
-        <Badge variant="outline">#{context.task_id}</Badge>
-        <span>{states[context.task.status] ?? context.task.status}</span>
-      </div>
-      <h2>{context.task.title}</h2>
-      <section>
-        <h3>需求</h3>
-        <p className="preserve">{context.task.instructions}</p>
-      </section>
-      <section>
-        <h3>验收条件</h3>
-        <p className="preserve">{context.task.acceptance}</p>
-      </section>
-      <div className="workspace-event">
-        <Check />
-        <div>
-          <strong>独立工作区已创建</strong>
-          <p>
-            基于提交 <code>{context.base_commit.slice(0, 10)}</code>，修改将与原目录隔离。
-          </p>
-          <code className="workspace-code">{context.workspace}</code>
-          <div className="document-actions">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => protect(async () => api?.openWorkspace(context.task_id))}
-            >
-              <FolderOpen />
-              打开目录
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() =>
-                protect(async () => {
-                  await api?.copyWorkspace(context.task_id)
-                  setNotice('工作区路径已复制')
-                })
-              }
-            >
-              <Copy />
-              复制路径
-            </Button>
-          </div>
-        </div>
-      </div>
-      <div className="next-step">
-        <Unplug />
-        <p>可以先生成执行计划。WorkBuddy 自动执行尚未接入；修改代码后可查看差异并发起审查。</p>
-      </div>
+  const workspaceActions = context && (
+    <div className="document-actions">
       <Button
-        variant="outline"
         size="sm"
-        onClick={() => {
-          setTab('plan')
-          if (planJob) protect(refreshPlan)
-        }}
+        variant="outline"
+        onClick={() => protect(async () => api?.openWorkspace(context.task_id))}
       >
-        查看执行计划
+        <FolderOpen />
+        打开目录
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() =>
+          protect(async () => {
+            await api?.copyWorkspace(context.task_id)
+            setNotice('工作区路径已复制')
+          })
+        }
+      >
+        <Copy />
+        复制路径
       </Button>
     </div>
   )
@@ -512,9 +548,7 @@ export default function App() {
             onRefresh={() => protect(() => refresh())}
             onLoadMore={next !== null ? () => protect(() => refresh(next)) : undefined}
             busy={busy}
-            connection={
-              connection?.connected ? `MCP · ${connection.tools} 个工具可用` : '本地服务未连接'
-            }
+            connection={connection?.connected ? '本地任务服务已连接' : '本地服务未连接'}
           />
         }
         toolbar={
@@ -525,6 +559,12 @@ export default function App() {
               <strong>{context ? context.task.title : '新建任务'}</strong>
             </div>
             <div className="toolbar-actions">
+              {context && (
+                <Button size="sm" variant="ghost" aria-label="查看代码改动" onClick={showChanges}>
+                  <GitBranch />
+                  代码改动
+                </Button>
+              )}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button size="sm" variant="ghost">
@@ -534,6 +574,7 @@ export default function App() {
                 </PopoverTrigger>
                 <PopoverContent align="end">
                   <h2 className="popover-title">Agent 连接</h2>
+                  <p className="supporting">MCP · {connection?.tools ?? 0} 个工具可用</p>
                   <div className="connection-row">
                     <ShieldCheck />
                     <div>
@@ -721,117 +762,76 @@ export default function App() {
             </form>
           </div>
         ) : (
-          <>
-            <div className="task-toolbar">
-              <div>
-                <Badge variant="outline">#{context.task_id}</Badge>
-                <h1>{context.task.title}</h1>
+          <ResizablePanelGroup direction="horizontal" className="task-panels">
+            <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
+              <div className="timeline-pane">
+                <TaskTimeline
+                  key={context.task_id}
+                  context={context}
+                  planJob={planJob}
+                  plan={planResult}
+                  reviewJob={job}
+                  review={review}
+                  patch={changes?.patch}
+                  busy={busy}
+                  workspaceActions={workspaceActions}
+                  onRefresh={() => protect(refreshTask)}
+                  onAction={taskAction}
+                  planContent={
+                    <PlanPanel
+                      job={planJob}
+                      result={planResult}
+                      busy={busy || Boolean(job && !terminal.has(job.status))}
+                      onStart={startPlan}
+                      onRefresh={() => protect(refreshPlan)}
+                      onCancel={() =>
+                        protect(async () => {
+                          const seq = generation.current
+                          const status = await api!.cancelPlan(planJob!.job_id)
+                          if (seq === generation.current) setPlanJob(status)
+                        })
+                      }
+                    />
+                  }
+                  reviewContent={reviewPanel}
+                />
               </div>
-              <ToggleGroup
-                type="single"
-                size="sm"
-                value={tab}
-                aria-label="任务视图"
-                onValueChange={(value) => {
-                  if (value === 'changes') showChanges()
-                  else if (value === 'plan') {
-                    setTab('plan')
-                    if (planJob) protect(refreshPlan)
-                  } else if (value) setTab(value)
-                }}
-              >
-                <ToggleGroupItem value="task" aria-label="任务说明">
-                  任务说明
-                </ToggleGroupItem>
-                <ToggleGroupItem value="plan" aria-label="执行计划">
-                  执行计划
-                </ToggleGroupItem>
-                <ToggleGroupItem value="changes" aria-label="代码改动">
-                  代码改动
-                </ToggleGroupItem>
-                <ToggleGroupItem value="review" aria-label="审查结果">
-                  审查结果
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-            {tab === 'task' ? (
-              <div className="single-document">{taskDescription}</div>
-            ) : (
-              <ResizablePanelGroup direction="horizontal" className="task-panels">
-                <ResizablePanel defaultSize={40} minSize={25}>
-                  <div className="context-pane">
-                    <div className="pane-title">
-                      <span>
-                        <FileCode2 />
-                        任务上下文
-                      </span>
-                    </div>
-                    {taskDescription}
-                  </div>
-                </ResizablePanel>
+            </ResizablePanel>
+            {changesOpen && (
+              <>
                 <ResizableHandle />
-                <ResizablePanel defaultSize={60} minSize={40}>
-                  <div className="work-pane">
+                <ResizablePanel id="changes" order={2} defaultSize={38} minSize={25}>
+                  <div className="work-pane" aria-label="代码改动面板">
                     <div className="pane-title">
                       <span>
-                        {tab === 'changes' ? (
-                          <>
-                            <GitBranch />
-                            工作区改动
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck />
-                            {tab === 'plan' ? '执行计划' : '审查结果'}
-                          </>
-                        )}
+                        <GitBranch />
+                        工作区改动
                       </span>
                       <div>
-                        {tab === 'changes' && (
-                          <Button
-                            size="icon-sm"
-                            variant="ghost"
-                            aria-label="刷新改动"
-                            onClick={showChanges}
-                          >
-                            <RefreshCw />
-                          </Button>
-                        )}
                         <Button
                           size="icon-sm"
                           variant="ghost"
-                          aria-label="收起右侧面板"
-                          onClick={() => setTab('task')}
+                          aria-label="刷新改动"
+                          onClick={showChanges}
+                        >
+                          <RefreshCw />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="收起代码改动"
+                          onClick={() => setChangesOpen(false)}
                         >
                           <PanelRightClose />
                         </Button>
                       </div>
                     </div>
-                    {tab === 'changes' ? (
-                      difference
-                    ) : tab === 'plan' ? (
-                      <PlanPanel
-                        job={planJob}
-                        result={planResult}
-                        busy={busy || Boolean(job && !terminal.has(job.status))}
-                        onStart={startPlan}
-                        onRefresh={() => protect(refreshPlan)}
-                        onCancel={() =>
-                          protect(async () => {
-                            const seq = generation.current
-                            const status = await api!.cancelPlan(planJob!.job_id)
-                            if (seq === generation.current) setPlanJob(status)
-                          })
-                        }
-                      />
-                    ) : (
-                      reviewPanel
-                    )}
+                    {difference}
                   </div>
                 </ResizablePanel>
-              </ResizablePanelGroup>
+              </>
             )}
-          </>
+          </ResizablePanelGroup>
         )}
       </WorkbenchShell>
     </SidebarProvider>

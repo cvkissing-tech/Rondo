@@ -31,7 +31,7 @@ const app = await _electron.launch({
 })
 try {
   const page = await app.firstWindow()
-  await page.getByText('MCP · 18 个工具可用', { exact: true }).waitFor()
+  await page.getByText('本地任务服务已连接', { exact: true }).waitFor()
   await page.getByRole('heading', { name: '桌面端真实链路验收', level: 1, exact: true }).waitFor()
   const task = await page.evaluate(() => window.workbench.context(1))
   const workspace = await realpath(task.workspace)
@@ -43,7 +43,8 @@ try {
   await unlink(join(workspace, 'README.md'))
   if (await page.getByRole('button', { name: '切换浅色', exact: true }).count())
     await page.getByRole('button', { name: '切换浅色', exact: true }).click()
-  await page.getByLabel('执行计划', { exact: true }).click()
+  const planRecord = page.getByRole('button', { name: /^Codex · 执行计划/ })
+  if ((await planRecord.getAttribute('aria-expanded')) !== 'true') await planRecord.click()
   await page.getByText(saved.plan.summary, { exact: true }).waitFor()
   const stepsToggle = page.getByRole('button', { name: '计划步骤', exact: true })
   await stepsToggle.focus()
@@ -58,14 +59,14 @@ try {
   assert.equal(fresh.plan_id, saved.plan_id)
   assert.equal(fresh.freshness, 'current')
   await page.screenshot({ animations: 'disabled', path: join(capture, '07-plan-1360.png') })
-  await page.locator('.plan-body').evaluate((element) => {
+  await page.locator('.task-records').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await page.screenshot({
     animations: 'disabled',
     path: join(capture, '10-plan-details-1360.png')
   })
-  await page.locator('.plan-body').evaluate((element) => {
+  await page.locator('.task-records').evaluate((element) => {
     element.scrollTop = 0
   })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
