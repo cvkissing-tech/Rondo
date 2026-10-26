@@ -52,6 +52,9 @@ async function launch() {
 }
 try {
   let page = await launch()
+  assert.equal(await page.locator('[data-upstream="jean/MainWindow"]').count(), 1)
+  const composer = page.locator('[data-upstream="codex/ComposerLayout"]')
+  assert.equal(await composer.evaluate((element) => getComputedStyle(element).borderRadius), '28px')
   await page.screenshot({ animations: 'disabled', path: join(evidence, '01-new-task-1360.png') })
   await page.getByLabel('项目目录', { exact: true }).fill(repo)
   await page.locator('summary').filter({ hasText: '任务设置' }).click()
@@ -70,6 +73,9 @@ try {
   assert.notEqual(context.workspace, repo)
   assert.equal(await readFile(join(context.workspace, 'sample.py'), 'utf8'), 'print(1)\n')
   await page.screenshot({ animations: 'disabled', path: join(evidence, '02-task-1360.png') })
+  await page.getByRole('tab', { name: '已提交', exact: true }).click()
+  await page.getByText('还没有已提交的任务。', { exact: true }).waitFor()
+  await page.getByRole('tab', { name: '任务', exact: true }).click()
   await page.getByLabel('执行计划', { exact: true }).click()
   await page.getByRole('button', { name: '生成 Codex 计划', exact: true }).waitFor()
   if (realPlan) {
@@ -145,7 +151,7 @@ try {
   await page.getByText('没有匹配的任务。', { exact: true }).waitFor()
   await page.getByLabel('筛选已加载任务').fill('')
   await page.keyboard.press('Control+b')
-  await page.locator('[data-slot="sidebar"][data-state="collapsed"]').waitFor()
+  await page.locator('[data-slot="sidebar"][data-state="collapsed"]').waitFor({ state: 'attached' })
   await page.getByRole('button', { name: '切换侧栏', exact: true }).click()
   await page.getByLabel('审查结果', { exact: true }).click()
   await page.getByRole('button', { name: '发起 Codex 审查', exact: true }).waitFor()
@@ -190,6 +196,8 @@ try {
         passed: true,
         checks: [
           'real MCP discovery',
+          'Jean product shell and submitted filter',
+          'recovered Codex composer CSS is active',
           'create task via UI',
           'isolated Git worktree',
           'tracked and untracked diff',

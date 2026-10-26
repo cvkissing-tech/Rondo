@@ -1,0 +1,72 @@
+/* Extracted from BloopAI/vibe-kanban d5cbb5380fa0b32e98ef9b8d987f63decce4be3a
+   tailwind.new.config.js and app/styles/new/index.css. See NOTICE.md.
+   Only Vibe utility names used by the copied components are defined here. */
+.vibe-plan-surface {
+  --vibe-text-normal: 0 0% 20%;
+  --vibe-text-low: 0 0% 38%;
+  --vibe-brand: 25 82% 54%;
+  --vibe-error: 0 59% 57%;
+}
+.dark .vibe-plan-surface {
+  --vibe-text-normal: 0 0% 77%;
+  /* Match Jean's #aaa: the original 56% falls below 4.5:1 on the plan header. */
+  --vibe-text-low: 0 0% 66.6667%;
+}
+.vibe-plan-surface [data-vibe-ui='entry'],
+.vibe-plan-surface [data-vibe-ui='entry'] > .rounded-sm {
+  border-radius: 0.1875rem;
+}
+.vibe-plan-surface [data-vibe-ui='entry'] > .rounded-md {
+  border-radius: 0.21875rem;
+}
+.vibe-plan-surface .gap-base {
+  gap: 0.5rem;
+}
+.vibe-plan-surface .px-double {
+  padding-inline: 1rem;
+}
+.vibe-plan-surface .py-base {
+  padding-block: 0.5rem;
+}
+.vibe-plan-surface .p-double {
+  padding: 1rem;
+}
+.vibe-plan-surface .pt-base {
+  padding-top: 0.5rem;
+}
+.vibe-plan-surface .size-icon-xs {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+.vibe-plan-surface .size-icon-base {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.vibe-plan-surface .text-low {
+  color: hsl(var(--vibe-text-low));
+}
+.vibe-plan-surface .text-normal {
+  color: hsl(var(--vibe-text-normal));
+}
+.vibe-plan-surface .border-brand {
+  border-color: hsl(var(--vibe-brand));
+}
+.vibe-plan-surface .border-error {
+  border-color: hsl(var(--vibe-error));
+}
+.vibe-plan-surface .bg-brand\/10 {
+  background-color: hsl(var(--vibe-brand) / 0.1);
+}
+.vibe-plan-surface .bg-brand\/20 {
+  background-color: hsl(var(--vibe-brand) / 0.2);
+}
+.vibe-plan-surface .bg-error\/10 {
+  background-color: hsl(var(--vibe-error) / 0.1);
+}
+.vibe-plan-surface .bg-error\/20 {
+  background-color: hsl(var(--vibe-error) / 0.2);
+}
+.vibe-plan-surface button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

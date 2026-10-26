@@ -48,7 +48,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Agent Review Loop", version="0.9.0", log_level="WARNING", lifespan=lifespan,
+        "Agent Review Loop", version="0.9.1", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "

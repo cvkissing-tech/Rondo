@@ -99,7 +99,22 @@
         "name": "minimum-window",
         "value": "960px"
       }
-    ]
+    ],
+    "sourceReuse": {
+      "version": "0.9.1",
+      "direction": "Reuse product modules; no original visual world",
+      "jeanCommit": "cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3",
+      "vibeCommit": "d5cbb5380fa0b32e98ef9b8d987f63decce4be3a",
+      "codexArtifact": "26.1021.3705.0",
+      "layout": "Jean: 72px rail, 240px task sidebar, 32px toolbar",
+      "composer": "Codex shipped CSS, React state adapter",
+      "plan": "Vibe ChatEntryContainer and ChatTodoList",
+      "componentSources": {
+        "navigation": "desktop/src/renderer/src/vendor/jean/components/workbench/",
+        "task-composer": "desktop/src/renderer/src/vendor/codex/ComposerLayout.tsx",
+        "execution-plan": "desktop/src/renderer/src/vendor/vibe-kanban/ChatEntryContainer.tsx"
+      }
+    }
   },
   "components": [
     {

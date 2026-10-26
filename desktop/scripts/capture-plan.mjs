@@ -1,6 +1,6 @@
 // Revisit an existing smoke plan; this script never starts a model generation.
 import assert from 'node:assert/strict'
-import { readFile, realpath, writeFile, unlink } from 'node:fs/promises'
+import { readFile, realpath, writeFile, unlink, mkdir } from 'node:fs/promises'
 import { resolve, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron } from 'playwright'
@@ -8,6 +8,12 @@ const desktop = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const root = resolve(desktop, '..')
 const evidence = await realpath(resolve(process.argv[2] ?? ''))
 assert.ok(relative(join(root, '.agent-review-loop'), evidence).startsWith('desktop-smoke-'))
+const capture = process.argv[3] ? resolve(evidence, process.argv[3]) : evidence
+assert.ok(
+  capture === evidence ||
+    (relative(evidence, capture) && !relative(evidence, capture).startsWith('..'))
+)
+await mkdir(capture, { recursive: true })
 const saved = JSON.parse(await readFile(join(evidence, 'real-plan.json'), 'utf8'))
 const env = {
   ...process.env,
@@ -39,42 +45,64 @@ try {
     await page.getByRole('button', { name: '切换浅色', exact: true }).click()
   await page.getByLabel('执行计划', { exact: true }).click()
   await page.getByText(saved.plan.summary, { exact: true }).waitFor()
+  const stepsToggle = page.getByRole('button', { name: '计划步骤', exact: true })
+  await stepsToggle.focus()
+  await stepsToggle.press('Space')
+  await page.getByText(saved.plan.steps[0].details, { exact: true }).waitFor({ state: 'hidden' })
+  await stepsToggle.press('Enter')
+  await page.getByText(saved.plan.steps[0].details, { exact: true }).waitFor()
+  assert.equal(await page.locator('[data-vibe-ui="entry"]').count(), 1)
   await page.getByRole('button', { name: '刷新计划状态', exact: true }).click()
   await page.getByText('代码已变化，计划已过期', { exact: true }).waitFor({ state: 'hidden' })
   const fresh = await page.evaluate((id) => window.workbench.readPlan(id), saved.job_id)
   assert.equal(fresh.plan_id, saved.plan_id)
   assert.equal(fresh.freshness, 'current')
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '07-plan-1360.png') })
+  await page.screenshot({ animations: 'disabled', path: join(capture, '07-plan-1360.png') })
   await page.locator('.plan-body').evaluate((element) => {
     element.scrollTop = element.scrollHeight
   })
   await page.screenshot({
     animations: 'disabled',
-    path: join(evidence, '10-plan-details-1360.png')
+    path: join(capture, '10-plan-details-1360.png')
   })
   await page.locator('.plan-body').evaluate((element) => {
     element.scrollTop = 0
   })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '08-plan-960.png') })
+  await page.screenshot({ animations: 'disabled', path: join(capture, '08-plan-960.png') })
   await writeFile(join(workspace, 'sample.py'), 'print(2)\n')
   await writeFile(join(workspace, 'README.md'), '# Desktop smoke\n')
   await page.getByRole('button', { name: '刷新计划状态', exact: true }).click()
   await page.getByText('代码已变化，计划已过期', { exact: true }).waitFor()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '09-plan-stale-1360.png') })
+  await page.screenshot({ animations: 'disabled', path: join(capture, '09-plan-stale-1360.png') })
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '11-plan-dark-960.png') })
+  await page.screenshot({ animations: 'disabled', path: join(capture, '11-plan-dark-960.png') })
+  const textColors = await page
+    .locator('.vibe-plan-surface .text-low')
+    .first()
+    .evaluate((element) => {
+      const backgrounds = []
+      for (let node = element; node; node = node.parentElement)
+        backgrounds.push(getComputedStyle(node).backgroundColor)
+      return { color: getComputedStyle(element).color, backgrounds }
+    })
+  await writeFile(join(capture, 'dark-plan-colors.json'), JSON.stringify(textColors, null, 2))
   await writeFile(
-    join(evidence, 'plan-capture.json'),
+    join(capture, 'plan-capture.json'),
     JSON.stringify(
-      { savedPlanReused: saved.plan_id, modelCalls: 0, freshAndStaleVerified: true },
+      {
+        savedPlanReused: saved.plan_id,
+        modelCalls: 0,
+        freshAndStaleVerified: true,
+        vibeKeyboardDisclosure: true
+      },
       null,
       2
     )
   )
-  console.log(JSON.stringify({ passed: true, evidence, modelCalls: 0 }))
+  console.log(JSON.stringify({ passed: true, evidence: capture, modelCalls: 0 }))
 } finally {
   await app.close()
 }

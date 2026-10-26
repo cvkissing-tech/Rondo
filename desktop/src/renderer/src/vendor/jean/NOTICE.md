@@ -32,3 +32,20 @@ Each source file keeps its origin header. Original file identities:
 - src/hooks/use-mobile.ts: 73a539b51eeebd46abd84cfb6194704553ca9844
 - src/App.css: c983367c4782964ff743170b67f15038cffcd73f
 - LICENSE.md: ee20ed536e9c50a32c01d9ef99799a4f9005adb6
+
+## Product-level layout adaptation in 0.9.1
+
+The following product JSX and utility-class layouts are adapted, rather than
+replacing only primitives. Private Tauri/store/network dependencies become props
+and the existing SidebarProvider. Unsupported product entries are omitted.
+Task labels and callbacks use the actual MCP task state; the visual rules remain
+those of the source product. This is a selective port, not an import of Jean's backend.
+
+- MainWindow.tsx: 6ed9bcdc919480bbba3730fdb5ef4da4dfefb59f
+- SidebarTabRail.tsx: 0f993c7ce4c285e278c4fbd6b19a6f54e771604f
+- ProjectsSidebar.tsx: d86b4e1fe53b8671249232ffad77bdb421864ee2
+- ProjectTreeItem.tsx: 06eda12d98d53c693d38b244051c835a9aebdb3a
+- WelcomeProjectGrid.tsx: b8ff451cc8a7a35b7202ad1a81d3d8228111e27a
+
+Local adapters: components/workbench/WorkbenchShell.tsx and TaskSidebar.tsx;
+App.tsx retains the WelcomeProjectGrid content container layout for task creation.

@@ -15,28 +15,14 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupInput,
-  InputGroupTextarea
+  InputGroupInput
 } from '@jean/components/ui/input-group'
 import { Popover, PopoverContent, PopoverTrigger } from '@jean/components/ui/popover'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@jean/components/ui/resizable'
 import { Separator } from '@jean/components/ui/separator'
-import {
-  Sidebar,
-  SidebarProvider,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarTrigger,
-  SidebarInset,
-  SidebarInput
-} from '@jean/components/ui/sidebar'
+import { SidebarProvider } from '@jean/components/ui/sidebar'
+import { WorkbenchShell } from '@jean/components/workbench/WorkbenchShell'
+import { TaskSidebar } from '@jean/components/workbench/TaskSidebar'
 import { ToggleGroup, ToggleGroupItem } from '@jean/components/ui/toggle-group'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@jean/components/ui/tooltip'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
@@ -47,25 +33,21 @@ import {
   Code2,
   Copy,
   FileCode2,
-  FolderGit2,
   FolderOpen,
   GitBranch,
-  Layers3,
   Moon,
   MoreHorizontal,
   PanelRightClose,
-  Plus,
   RefreshCw,
-  Search,
   ShieldCheck,
   Square,
   Sun,
   Unplug,
-  Workflow,
   X
 } from 'lucide-react'
 import type { Context, PlanResult, Review, ReviewStatus, Task } from '../../shared/types'
 import PlanPanel from './PlanPanel'
+import { ComposerLayout } from './vendor/codex/ComposerLayout'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -319,9 +301,6 @@ export default function App() {
     setBusy(false)
     localStorage.removeItem('arl.task')
   }
-  const visibleTasks = [...tasks]
-    .reverse()
-    .filter((task) => task.title.toLowerCase().includes(search.toLowerCase()))
   const workspaceName =
     context?.repository?.replace(/\\/g, '/').split('/').pop() ||
     repo.replace(/\\/g, '/').split('/').pop()
@@ -520,187 +499,88 @@ export default function App() {
       className="app-shell"
       style={{ '--sidebar-width': '240px' } as React.CSSProperties}
     >
-      <Sidebar collapsible="icon" className="app-navigation">
-        <SidebarHeader>
-          <div className="app-identity">
-            <Layers3 />
-            <span className="group-data-[collapsible=icon]:hidden">Agent Review Loop</span>
-          </div>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton disabled={busy} onClick={newTask} tooltip="新建任务">
-                <Plus />
-                <span>新建任务</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>工作区</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => {
-                      if (context) protect(async () => api?.openWorkspace(context.task_id))
-                      else document.getElementById('repo')?.focus()
-                    }}
-                    tooltip={workspaceName || '选择项目'}
+      <WorkbenchShell
+        onGuide={() => protect(async () => api?.openGuide())}
+        sidebar={
+          <TaskSidebar
+            tasks={[...tasks].reverse()}
+            selected={context?.task_id}
+            search={search}
+            onSearch={setSearch}
+            onSelect={selectTask}
+            onNew={newTask}
+            onRefresh={() => protect(() => refresh())}
+            onLoadMore={next !== null ? () => protect(() => refresh(next)) : undefined}
+            busy={busy}
+            connection={
+              connection?.connected ? `MCP · ${connection.tools} 个工具可用` : '本地服务未连接'
+            }
+          />
+        }
+        toolbar={
+          <>
+            <div className="breadcrumb">
+              <span>{workspaceName || '工作台'}</span>
+              <ChevronRight />
+              <strong>{context ? context.task.title : '新建任务'}</strong>
+            </div>
+            <div className="toolbar-actions">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button size="sm" variant="ghost">
+                    <span className="status-dot" />
+                    Agent 连接
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end">
+                  <h2 className="popover-title">Agent 连接</h2>
+                  <div className="connection-row">
+                    <ShieldCheck />
+                    <div>
+                      <strong>Codex</strong>
+                      <span>计划与审查时连接本机 CLI</span>
+                    </div>
+                    <Badge variant="outline">按需</Badge>
+                  </div>
+                  <div className="connection-row">
+                    <Code2 />
+                    <div>
+                      <strong>WorkBuddy</strong>
+                      <span>自动执行接口尚未接通</span>
+                    </div>
+                    <Badge variant="outline">未接入</Badge>
+                  </div>
+                  <Separator />
+                  <p className="supporting">
+                    可在任务内显式生成 Codex
+                    执行计划。创建任务只准备本地工作区，不会自动派发或调用模型。
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => protect(async () => api?.openGuide())}
                   >
-                    <FolderGit2 />
-                    <span>{workspaceName || '选择项目'}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup className="task-navigation">
-            <div className="task-section-heading">
-              <SidebarGroupLabel>任务</SidebarGroupLabel>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="刷新任务"
-                onClick={() => protect(() => refresh())}
-              >
-                <RefreshCw />
-              </Button>
+                    查看接入说明
+                  </Button>
+                </PopoverContent>
+              </Popover>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={dark ? '切换浅色' : '切换深色'}
+                    onClick={() => setDark(!dark)}
+                  >
+                    {dark ? <Sun /> : <Moon />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{dark ? '浅色主题' : '深色主题'}</TooltipContent>
+              </Tooltip>
             </div>
-            <div className="nav-search group-data-[collapsible=icon]:hidden">
-              <Search />
-              <SidebarInput
-                aria-label="筛选已加载任务"
-                placeholder="筛选任务…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleTasks.map((task) => (
-                  <SidebarMenuItem key={task.task_id}>
-                    <SidebarMenuButton
-                      className="task-nav"
-                      size="lg"
-                      disabled={busy}
-                      isActive={context?.task_id === task.task_id}
-                      onClick={() => selectTask(task.task_id)}
-                      tooltip={task.title}
-                    >
-                      <FileCode2 />
-                      <div className="task-nav-text">
-                        <span>{task.title}</span>
-                        <small>
-                          #{task.task_id} <span>{states[task.status] ?? task.status}</span>
-                        </small>
-                      </div>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-              {!tasks.length && (
-                <p className="sidebar-empty group-data-[collapsible=icon]:hidden">
-                  还没有任务。
-                  <br />
-                  从一个具体的需求开始。
-                </p>
-              )}
-              {!!tasks.length && !visibleTasks.length && (
-                <p className="sidebar-empty">没有匹配的任务。</p>
-              )}
-              {next !== null && (
-                <Button size="sm" variant="ghost" onClick={() => protect(() => refresh(next))}>
-                  加载更多
-                </Button>
-              )}
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => protect(async () => api?.openGuide())}
-                tooltip="Agent 接入说明"
-              >
-                <Workflow />
-                <span>接入说明</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <div className="local-status group-data-[collapsible=icon]:hidden">
-            <span className={`status-dot ${connection?.connected ? 'online' : ''}`} />
-            <span>
-              {connection?.connected ? `MCP · ${connection.tools} 个工具可用` : '本地服务未连接'}
-            </span>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset className="app-main">
-        <header className="workbench-toolbar">
-          <SidebarTrigger aria-label="切换侧栏" />
-          <Separator orientation="vertical" />
-          <div className="breadcrumb">
-            <span>{workspaceName || '工作台'}</span>
-            <ChevronRight />
-            <strong>{context ? context.task.title : '新建任务'}</strong>
-          </div>
-          <div className="toolbar-actions">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button size="sm" variant="ghost">
-                  <span className="status-dot" />
-                  Agent 连接
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end">
-                <h2 className="popover-title">Agent 连接</h2>
-                <div className="connection-row">
-                  <ShieldCheck />
-                  <div>
-                    <strong>Codex</strong>
-                    <span>审查时连接本机 CLI</span>
-                  </div>
-                  <Badge variant="outline">按需</Badge>
-                </div>
-                <div className="connection-row">
-                  <Code2 />
-                  <div>
-                    <strong>WorkBuddy</strong>
-                    <span>自动执行接口尚未接通</span>
-                  </div>
-                  <Badge variant="outline">未接入</Badge>
-                </div>
-                <Separator />
-                <p className="supporting">
-                  可在任务内显式生成 Codex
-                  执行计划。创建任务只准备本地工作区，不会自动派发或调用模型。
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => protect(async () => api?.openGuide())}
-                >
-                  查看接入说明
-                </Button>
-              </PopoverContent>
-            </Popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={dark ? '切换浅色' : '切换深色'}
-                  onClick={() => setDark(!dark)}
-                >
-                  {dark ? <Sun /> : <Moon />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{dark ? '浅色主题' : '深色主题'}</TooltipContent>
-            </Tooltip>
-          </div>
-        </header>
+          </>
+        }
+      >
         {(error || connection?.error) && (
           <Alert variant="destructive" className="app-alert">
             <AlertTitle>操作未完成</AlertTitle>
@@ -735,15 +615,12 @@ export default function App() {
           </Alert>
         )}
         {!context ? (
-          <div className="new-task-canvas">
-            <div className="new-task-heading">
-              <div className="project-mark">
-                <FolderGit2 />
-              </div>
-              <h1>新的开发任务</h1>
-              <p>选择项目，写下这次要完成的工作。</p>
-            </div>
-            <form onSubmit={prepare} className="new-task-form">
+          <div
+            className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-12 font-sans"
+            data-upstream="jean/WelcomeProjectGrid"
+          >
+            <h1 className="text-4xl font-bold text-foreground">新的开发任务</h1>
+            <form onSubmit={prepare} className="w-full max-w-4xl">
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="repo" className="sr-only">
@@ -773,48 +650,53 @@ export default function App() {
                     </InputGroupAddon>
                   </InputGroup>
                 </Field>
-                <div className="task-composer">
-                  <Field>
-                    <FieldLabel htmlFor="instructions" className="composer-label">
-                      需求
-                    </FieldLabel>
-                    <InputGroup className="prompt-group">
-                      <InputGroupTextarea
-                        id="instructions"
-                        rows={6}
-                        maxLength={8000}
-                        required
-                        value={instructions}
-                        onChange={(event) => setInstructions(event.target.value)}
-                        placeholder="你想实现什么？描述当前行为与期望结果…"
-                        aria-label="你想实现什么？"
-                      />
-                    </InputGroup>
-                  </Field>
-                  <Separator />
-                  <Field className="acceptance-field">
-                    <FieldLabel htmlFor="acceptance">验收条件</FieldLabel>
-                    <Textarea
-                      id="acceptance"
-                      rows={2}
-                      maxLength={4000}
-                      required
-                      value={acceptance}
-                      onChange={(event) => setAcceptance(event.target.value)}
-                      placeholder="怎样才算完成？写下可检查的结果。"
-                      aria-label="怎样算完成？"
-                    />
-                  </Field>
-                  <div className="composer-footer">
-                    <span>
-                      <GitBranch />从 HEAD 创建独立工作区
+                <ComposerLayout
+                  dark={dark}
+                  leading={
+                    <span className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
+                      <GitBranch className="size-3.5" />
+                      独立工作区 · HEAD
                     </span>
-                    <Button type="submit" disabled={busy || !connection?.connected}>
+                  }
+                  trailing={
+                    <Button
+                      type="submit"
+                      className="rounded-full"
+                      disabled={busy || !connection?.connected}
+                    >
                       {busy ? '正在准备…' : '准备任务'}
                       <ArrowUp />
                     </Button>
-                  </div>
-                </div>
+                  }
+                >
+                  <label htmlFor="instructions" className="sr-only">
+                    需求
+                  </label>
+                  <Textarea
+                    id="instructions"
+                    rows={5}
+                    maxLength={8000}
+                    required
+                    value={instructions}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    placeholder="你想实现什么？描述当前行为与期望结果…"
+                    aria-label="你想实现什么？"
+                    className="min-h-28 w-full resize-none border-0 bg-transparent py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground"
+                  />
+                </ComposerLayout>
+                <Field>
+                  <FieldLabel htmlFor="acceptance">验收条件</FieldLabel>
+                  <Textarea
+                    id="acceptance"
+                    rows={2}
+                    maxLength={4000}
+                    required
+                    value={acceptance}
+                    onChange={(event) => setAcceptance(event.target.value)}
+                    placeholder="怎样才算完成？写下可检查的结果。"
+                    aria-label="怎样算完成？"
+                  />
+                </Field>
                 <details className="task-settings">
                   <summary>
                     <MoreHorizontal />
@@ -951,7 +833,7 @@ export default function App() {
             )}
           </>
         )}
-      </SidebarInset>
+      </WorkbenchShell>
     </SidebarProvider>
   )
 }

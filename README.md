@@ -4,7 +4,7 @@
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.9.0，桌面工作台支持真实 Codex 执行计划的生成、保存、取消与恢复。** 在自己的窗口填写需求、创建独立工作区、恢复任务、查看代码差异，并显式发起/查询/取消 Codex 审查。复用 Git 原生 worktree、现有 SQLite/MCP 后端、官方 Electron-vite React 模板、Jean 的 React 界面组件/主题及 Pierre Diffs。代码变化后会提示计划过期；完整 WorkBuddy 自动开发与修复闭环尚未接通。
+当前版本：**0.9.1，直接移植多个产品的界面模块。** 在自己的窗口填写需求、创建独立工作区、生成/恢复执行计划、查看代码差异，并显式发起/查询/取消 Codex 审查。复用 Git 原生 worktree、现有 SQLite/MCP 后端、官方 Electron-vite React 模板、Jean 产品布局、Vibe Kanban 计划组件、REA 恢复的 Codex 输入 CSS 及 Pierre Diffs。代码变化后会提示计划过期；完整 WorkBuddy 自动开发与修复闭环尚未接通。
 
 产品入口是自己的桌面工作台；Codex 负责规划/审查，WorkBuddy 负责执行。当前已可准备任务、显式生成 Codex 执行计划及审查，WorkBuddy 自动执行尚未接入。兼容的另一条入口是让 WorkBuddy 作为 MCP 客户端主动领取任务和请求审查，这不需要第三方应用；**MCP 连接不等于工作台已能启动并指挥 WorkBuddy。** 接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
 
@@ -214,3 +214,5 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 - 每次审查记录耗时、退出原因及平台可报告的用量；未报告的费用与剩余额度记为未知，不从字符数或调用次数伪造。
 - 一次上层执行可能包含多次模型请求；调用上限不等于 token 或费用上限。接入阶段另设进程超时，并验证平台可用的轮数或用量约束。
 - 达到上限、没有进展或出现限额错误时保存现有结果并停止；关键问题未解决时标为未完成，不静默换模型继续消费。
+
+0.9.1 UI 复用记录：[第12课：产品界面移植与 REA](docs/learning/12-product-ui-reuse.md)。Jean 产品布局、Vibe Kanban 计划组件与 Codex 发布包输入 CSS 的来源及适配边界分别记录在各 vendor 目录。

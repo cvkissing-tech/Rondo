@@ -1,6 +1,6 @@
 ---
 name: Agent Review Loop
-description: 基于 Jean 实际组件与中性浅深主题的本地开发工作台
+description: 直接移植 Jean 产品布局、Vibe Kanban 计划组件与 REA 恢复的 Codex 输入容器
 colors:
   background: "oklch(1 0 0)"
   foreground: "oklch(0.145 0 0)"
@@ -56,7 +56,7 @@ typography:
 rounded:
   base: "0.5rem"
   control: "calc(0.5rem - 2px)"
-  composer: "10px"
+  composer: "28px"
 spacing:
   field-padding: "4px 12px"
   prompt-padding: "12px 17px"
@@ -141,7 +141,7 @@ components:
 
 ## Shapes
 
-基础圆角沿用语义 `radius`，控件使用 `radius-md` 对它的计算。需求输入组合单独使用已实现的 10px 容器圆角；边界为细实线。展开/收起时品牌文字裁切并省略，长任务名、面包屑保持单行省略，正文与路径允许换行。
+基础圆角沿用语义 `radius`，控件使用 `radius-md` 对它的计算。需求输入组合使用 Codex 发布包中 large 变体的 28px 容器圆角；边界为细实线。展开/收起时品牌文字裁切并省略，长任务名、面包屑保持单行省略，正文与路径允许换行。
 
 ## Components
 
@@ -151,11 +151,11 @@ components:
 
 ### Inputs / Fields
 
-使用上游 Field、InputGroup、Input 和 Textarea 组合。需求与验收在同一输入容器中；项目目录位于其上方。需求文本最小高度 130px，验收文本最小高度 54px。焦点仍须可见，label 与实际输入关联。
+项目目录和验收条件继续使用 Jean Field/InputGroup/Textarea。需求输入采用 REA 恢复的 Codex ComposerLayout CSS 与 React 适配，保留 Root/Body/Attachments/Input/Footer 层级、comfortable 密度与 large 圆角。原生 textarea 接现有表单状态；label 保持关联。
 
 ### Navigation
 
-Sidebar 显示持久化任务、当前项目与真实筛选结果。任务条目按选中状态使用上游语义背景；标题和状态有不同密度。筛选仅作用于已加载任务。底部保留接入说明和本地服务状态。
+直接移植 Jean MainWindow / SidebarTabRail / ProjectsSidebar / ProjectTreeItem 的产品布局：72px 导航轨、可收起的 240px 任务栏、32px 顶栏；Ctrl B 收起与恢复。真实任务列表支持搜索、已提交筛选、状态、分页；底部保留接入说明与本地 MCP 状态。
 
 ### Split work area
 
@@ -163,7 +163,7 @@ Sidebar 显示持久化任务、当前项目与真实筛选结果。任务条目
 
 ### Execution plan
 
-执行计划沿用同一可调整分栏与语义主题，正文独立滚动，常规内边距 26px，1100px 以下为 22px 18px。使用原生有序列表表达步骤顺序；每步以 14px、600 字重标题开始，说明为 12px，细边界区分步骤。文件使用可折行的等宽 code 标签与 muted 背景，验收方式为 11px 次级文字列表。假设与待确认项使用默认展开、可用键盘操作的原生 details，而非额外常驻说明栏。
+执行计划沿用可调整分栏，正文独立滚动；内容直接使用 Vibe Kanban 的 ChatEntryContainer(plan) 与 ChatTodoList，保留源组件的 header/content/actions 结构、计划色与整体折叠交互。详情槽显示原有说明、文件与验收列表，所有步骤在未执行时保持未完成。Vibe 主题值仅在 .vibe-plan-surface 内生效；假设使用原生 details。
 
 生成前明确说明使用 Codex 账号额度、每任务最多两次，失败或取消也计入。生成中展示真实状态与停止操作，不自动重试；刷新及恢复只读取已保存状态，重新生成须通过明确标注“消耗额度”的动作发起。代码新鲜度不是 current 时展示 destructive Alert；错误沿用同一 Alert。仅在返回真实用量时显示 tokens，费用未返回时如实说明。
 
