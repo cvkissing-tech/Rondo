@@ -15,6 +15,7 @@ from .snapshots import SnapshotError
 from .review_jobs import ReviewJobs
 from .task_launch import TaskLauncher
 from .planning import PlanJobs
+from .execution import ExecutionJobs, workbuddy_connection
 
 
 TaskId = Annotated[int, Field(strict=True, ge=1, le=2**63 - 1)]
@@ -33,10 +34,12 @@ def _invoke(operation, *args):
         raise ToolError(json.dumps({"code": error.code, "message": str(error)}, ensure_ascii=False)) from error
 
 
-def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: TaskLauncher | None = None, plans: PlanJobs | None = None) -> MCPServer:
+def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: TaskLauncher | None = None, plans: PlanJobs | None = None,
+                  executions: ExecutionJobs | None = None) -> MCPServer:
     reviews = reviews or ReviewJobs(store)
     tasks = tasks or TaskLauncher(store)
     plans = plans or PlanJobs(store, reviews.root, executable=reviews.executable)
+    executions = executions or ExecutionJobs(store, tasks, plans, reviews)
 
     @asynccontextmanager
     async def lifespan(server):
@@ -44,11 +47,12 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
             yield
         finally:
             with anyio.CancelScope(shield=True):
+                await anyio.to_thread.run_sync(executions.close)
                 await anyio.to_thread.run_sync(plans.close)
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Agent Review Loop", version="0.10.0", log_level="WARNING", lifespan=lifespan,
+        "Rondo", version="0.11.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -88,6 +92,29 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     async def get_task_changes(task_id: TaskId) -> dict[str, Any]:
         """Read bounded Git changes, including untracked files, in this task's saved workspace. No model call."""
         return await asyncio.to_thread(_invoke, tasks.changes, task_id)
+
+    @server.tool(structured_output=True)
+    async def workbuddy_status(launch: bool = False) -> dict[str, Any]:
+        """Check native WorkBuddy transport/models without a model call; optionally launch the installed desktop if closed."""
+        return await asyncio.to_thread(workbuddy_connection, reviews.root, launch)
+
+    @server.tool(structured_output=True)
+    async def start_task_execution(
+        task_id: TaskId,
+        request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+    ) -> dict[str, Any]:
+        """Dispatch ONE native WorkBuddy execution of the saved current plan. Consumes WorkBuddy quota and automatically starts ONE Codex review after a verified submission. Never replay unknown dispatches."""
+        return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id)
+
+    @server.tool(structured_output=True)
+    def get_execution_status(job_id: JobId) -> dict[str, Any]:
+        """Read saved native session/phase/review link. Reading does not send another prompt."""
+        return _invoke(executions.status, job_id)
+
+    @server.tool(structured_output=True)
+    def cancel_execution(job_id: JobId) -> dict[str, Any]:
+        """Request cancellation of this job's dedicated WorkBuddy session; poll for confirmed terminal state."""
+        return _invoke(executions.cancel, job_id)
 
     @server.tool(structured_output=True)
     async def start_task_plan(

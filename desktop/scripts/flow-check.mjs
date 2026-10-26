@@ -7,7 +7,7 @@ const review = { freshness: 'current', verdict: 'pass', checks: { status: 'faile
 assert.equal(taskFlow(context).action, 'plan')
 assert.equal(taskFlow(context, state('running')).action, 'plan-record')
 assert.equal(taskFlow(context, state('succeeded')).action, 'refresh')
-assert.equal(taskFlow(context, state('succeeded'), plan).label, '计划就绪，等待执行接入')
+assert.equal(taskFlow(context, state('succeeded'), plan).action, 'execute')
 assert.equal(taskFlow(context, state('succeeded'), { freshness: 'stale' }).action, 'changes')
 assert.equal(
   taskFlow({ task: { status: 'claimed', owner: 'external executor' } }).label,
@@ -33,4 +33,18 @@ assert.equal(
     .action,
   'changes'
 )
-console.log('Task flow: 13 state assertions passed; no model calls.')
+assert.equal(
+  taskFlow(context, undefined, undefined, undefined, undefined, undefined, {
+    ...state('running'),
+    phase: 'waiting_input'
+  }).label,
+  'WorkBuddy 等待你处理权限或输入'
+)
+assert.equal(
+  taskFlow(context, undefined, undefined, undefined, undefined, undefined, {
+    ...state('failed'),
+    phase: 'dispatch_unknown'
+  }).label,
+  '执行状态需要核对'
+)
+console.log('Task flow: 15 state assertions passed; no model calls.')

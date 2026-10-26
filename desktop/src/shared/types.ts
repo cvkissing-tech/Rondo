@@ -15,9 +15,10 @@ export interface Context {
   task: Task
   latest_review_job_id: string | null
   latest_plan_job_id: string | null
+  latest_execution_job_id?: string | null
   activity: {
     id: string
-    kind: 'workspace' | 'plan' | 'review'
+    kind: 'workspace' | 'plan' | 'review' | 'execution'
     status: string
     created_at: number
     updated_at: number
@@ -43,6 +44,20 @@ export interface ReviewStatus {
   job_id: string
   status: string
   error_code?: string
+}
+export interface ExecutionStatus extends ReviewStatus {
+  model?: string | null
+  session_id?: string | null
+  phase?: string | null
+  summary?: string | null
+  review_job_id?: string | null
+  review_error?: string | null
+}
+export interface WorkBuddyConnection {
+  connected: boolean
+  error?: string
+  code?: string
+  models?: { id: string; name: string }[]
 }
 export interface Review {
   summary: string
@@ -81,6 +96,10 @@ export interface DesktopAPI {
   planStatus(id: string): Promise<ReviewStatus>
   readPlan(id: string): Promise<PlanResult>
   cancelPlan(id: string): Promise<ReviewStatus>
+  workbuddyStatus(launch?: boolean): Promise<WorkBuddyConnection>
+  startExecution(id: number, request: string): Promise<ExecutionStatus>
+  executionStatus(id: string): Promise<ExecutionStatus>
+  cancelExecution(id: string): Promise<ExecutionStatus>
   openWorkspace(id: number): Promise<void>
   copyWorkspace(id: number): Promise<void>
   openGuide(): Promise<void>

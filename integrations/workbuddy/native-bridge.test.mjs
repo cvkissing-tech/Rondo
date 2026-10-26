@@ -1,0 +1,77 @@
+// Fixture transport adapted from upstream test/native-desktop-trigger.test.ts at
+// fbaaa2ef6d6cb59f48b953a1f27058202a81553f. No WorkBuddy or model is invoked.
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import vm from 'node:vm'
+import { RENDERER_BRIDGE } from './native-bridge.mjs'
+
+class Port {
+  start() {}
+  close() { this.closed = true }
+  postMessage(data) { queueMicrotask(() => { if (!this.closed && !this.peer.closed) this.peer.onmessage?.({ data }) }) }
+}
+class Channel {
+  constructor() { this.port1 = new Port(); this.port2 = new Port(); this.port1.peer = this.port2; this.port2.peer = this.port1 }
+}
+async function fixture() {
+  const requests = [], ports = [], sid = '11111111-1111-4111-8111-111111111111'
+  const state = { cwd: 'C:/fixture', sessionId: sid, status: 'completed', model: 'fast' }
+  let active = [], emitReceipt = true, clock = 0
+  class Clock extends Date { static now() { return clock } }
+  const window = { postMessage(message, target, transfer) {
+    assert.equal(message.type, 'workbuddy:open-local-daemon-transport-port')
+    const port = transfer[0]; ports.push(port)
+    port.onmessage = event => {
+      const request = event.data.json; requests.push(request)
+      let result
+      switch (request.channel) {
+        case 'workspace:initialize': result = { success: true }; break
+        case 'session:create': Object.assign(state, request.args[0]); result = state; break
+        case 'session:rename': result = {}; break
+        case 'daemon:getActiveSessions': result = active; break
+        case 'session:get': result = state; break
+        case 'config:getProductConfiguration': result = { models: [{ id: 'fast' }, { id: 'deep' }], availableModels: ['fast','deep'] }; break
+        case 'session:updateConfig': Object.assign(state, request.args[1]); result = {}; break
+        case 'session:cancel': result = {}; break
+        case 'session:sendMessage': {
+          if (emitReceipt) port.postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid,
+            result: { sessionId: sid, update: { sessionUpdate: 'user_message_chunk' }, _meta: request.args[2] } } })
+          result = { stopReason: 'end_turn' }; break
+        }
+        default: throw Error('Unexpected channel: ' + request.channel)
+      }
+      port.postMessage({ kind: 'message', json: { id: request.id, type: 'response', result } })
+    }
+    port.postMessage({ kind: 'open' })
+  } }
+  const context = vm.createContext({ window, MessageChannel: Channel, Date: Clock,
+    setTimeout: (fn, delay) => setTimeout(() => { if (delay === 100) clock += 100; fn() }, delay === 100 ? 0 : delay), clearTimeout })
+  await vm.runInContext(RENDERER_BRIDGE, context)
+  return { bridge: vm.runInContext('globalThis.__rondoNativeBridgeV1', context), requests, state, sid,
+    busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false } }
+}
+test('native workspace/session creation preserves identity and does not prompt', async () => {
+  const f = await fixture()
+  const created = await f.bridge.createWorker('C:/fixture', f.sid, 'Rondo')
+  assert.equal(created.sessionId, f.sid)
+  assert.deepEqual(f.requests.map(r=>r.channel), ['workspace:initialize','session:create','session:rename'])
+})
+test('one receipt prevents duplicate prompts; model changes stay on the dedicated session', async () => {
+  const f = await fixture(), wake = 'wake-run-22222222-2222-4222-8222-222222222222'
+  assert.equal((await f.bridge.wakeIdle(f.sid, wake, 'fixture', 'deep')).accepted, true)
+  assert.equal(f.state.model, 'deep')
+  assert.equal((await f.bridge.wakeIdle(f.sid, wake, 'fixture')).accepted, true)
+  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length, 1)
+})
+test('busy native sessions and pending permissions are not dispatched', async () => {
+  const f = await fixture(); f.busy()
+  assert.equal((await f.bridge.wakeIdle(f.sid,'wake-run-22222222-2222-4222-8222-222222222222','x')).accepted,false)
+  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,0)
+  const g=await fixture();g.state.pendingPermissions=[{}]
+  assert.equal((await g.bridge.inspect(g.sid)).state,'waiting_input')
+})
+test('uncertain submission is an error and never triggers a second send', async () => {
+  const f=await fixture();f.noReceipt()
+  await assert.rejects(f.bridge.wakeIdle(f.sid,'wake-run-22222222-2222-4222-8222-222222222222','x'),/uncertain/)
+  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,1)
+})

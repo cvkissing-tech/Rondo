@@ -70,6 +70,7 @@ class TaskLaunchTests(unittest.TestCase):
         with closing(sqlite3.connect(self.store.path)) as db:
             db.execute('DROP TABLE task_launches')
             db.execute('DROP TABLE plan_jobs')
+            db.execute('DROP TABLE execution_jobs')
             db.execute('PRAGMA user_version=2')
             db.commit()
         migrated = TaskStore(self.store.path)

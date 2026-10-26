@@ -164,7 +164,7 @@ export default function PlanPanel({
           )}
           <div className="next-step">
             <Unplug />
-            <p>WorkBuddy 自动执行未接入。生成计划不会修改代码或自动运行其中的命令。</p>
+            <p>计划就绪后，可在任务主动作中交给 WorkBuddy 执行。生成计划本身不会修改代码。</p>
           </div>
         </div>
       </ChatEntryContainer>

@@ -42,7 +42,15 @@ import {
   Sun,
   X
 } from 'lucide-react'
-import type { Context, PlanResult, Review, ReviewStatus, Task } from '../../shared/types'
+import type {
+  Context,
+  ExecutionStatus,
+  PlanResult,
+  Review,
+  ReviewStatus,
+  Task,
+  WorkBuddyConnection
+} from '../../shared/types'
 import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
@@ -98,11 +106,15 @@ export default function App() {
   const [review, setReview] = useState<Review>()
   const [planJob, setPlanJob] = useState<ReviewStatus>()
   const [planResult, setPlanResult] = useState<PlanResult>()
+  const [execution, setExecution] = useState<ExecutionStatus>()
+  const [workbuddy, setWorkbuddy] = useState<WorkBuddyConnection>()
+  const [connectingBuddy, setConnectingBuddy] = useState(false)
   const [notice, setNotice] = useState('')
   const generation = useRef(0)
   const startRequest = useRef({ fingerprint: '', id: '' })
   const reviewRequest = useRef({ task: 0, id: '' })
   const planRequest = useRef({ task: 0, id: '' })
+  const executionRequest = useRef({ task: 0, id: '' })
   const pendingPlanRequest = useRef(false)
   const protect = useCallback(async (operation: () => Promise<unknown>) => {
     setError('')
@@ -133,11 +145,16 @@ export default function App() {
     setPlanJob(undefined)
     setPlanResult(undefined)
     setChangesOpen(false)
+    setExecution(undefined)
     try {
       const selected = await api.context(id)
       if (seq !== generation.current) return
       setContext(selected)
       localStorage.setItem('arl.task', String(id))
+      if (selected.latest_execution_job_id) {
+        const status = await api.executionStatus(selected.latest_execution_job_id)
+        if (seq === generation.current) setExecution(status)
+      }
       if (selected.latest_review_job_id) {
         const status = await api.reviewStatus(selected.latest_review_job_id)
         if (seq === generation.current) setJob(status)
@@ -222,6 +239,11 @@ export default function App() {
         const updated = await api.context(selectedTaskId)
         if (!active) return
         setContext(updated)
+        if (updated.latest_execution_job_id) {
+          const state = await api.executionStatus(updated.latest_execution_job_id)
+          if (!active) return
+          setExecution(state)
+        }
         setTasks((previous) =>
           previous.map((task) =>
             task.task_id === selectedTaskId ? { ...task, status: updated.task.status } : task
@@ -338,6 +360,11 @@ export default function App() {
       updated = await api.context(context.task_id)
     if (seq !== generation.current) return
     setContext(updated)
+    if (updated.latest_execution_job_id) {
+      const state = await api.executionStatus(updated.latest_execution_job_id)
+      if (seq !== generation.current) return
+      setExecution(state)
+    }
     if (updated.latest_plan_job_id) {
       const state = await api.planStatus(updated.latest_plan_job_id)
       if (seq !== generation.current) return
@@ -360,9 +387,33 @@ export default function App() {
   function taskAction(action: TaskAction) {
     if (action === 'plan') startPlan()
     else if (action === 'review') startReview()
+    else if (action === 'execute') startExecution()
     else if (action === 'refresh') protect(refreshTask)
     else if (action === 'changes') showChanges()
     else if (action === 'guide') protect(async () => api?.openGuide())
+  }
+  async function connectWorkbuddy(launch = false) {
+    if (!api) return
+    setConnectingBuddy(true)
+    await protect(async () => setWorkbuddy(await api.workbuddyStatus(launch)))
+    setConnectingBuddy(false)
+  }
+  async function startExecution() {
+    if (!api || !context) return
+    const id = context.task_id,
+      seq = generation.current
+    setBusy(true)
+    await protect(async () => {
+      const status = await api.workbuddyStatus()
+      setWorkbuddy(status)
+      if (!status.connected)
+        throw Error('WorkBuddy 本地通道未连接。打开“Agent 连接”检查或启动 WorkBuddy。')
+      if (executionRequest.current.task !== id)
+        executionRequest.current = { task: id, id: crypto.randomUUID() }
+      const started = await api.startExecution(id, executionRequest.current.id)
+      if (seq === generation.current) setExecution(started)
+    })
+    if (seq === generation.current) setBusy(false)
   }
   function newTask() {
     ++generation.current
@@ -375,6 +426,7 @@ export default function App() {
     setError('')
     setBusy(false)
     localStorage.removeItem('arl.task')
+    setExecution(undefined)
   }
   const workspaceName =
     context?.repository?.replace(/\\/g, '/').split('/').pop() ||
@@ -587,9 +639,30 @@ export default function App() {
                     <Code2 />
                     <div>
                       <strong>WorkBuddy</strong>
-                      <span>自动执行接口尚未接通</span>
+                      <span>
+                        {workbuddy?.connected ? '本机原生通道可用' : '点击检查本机执行通道'}
+                      </span>
                     </div>
-                    <Badge variant="outline">未接入</Badge>
+                    <Badge variant="outline">{workbuddy?.connected ? '已连接' : '待检查'}</Badge>
+                  </div>
+                  {workbuddy?.error && <p className="supporting">{workbuddy.error}</p>}
+                  <div className="document-actions">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={connectingBuddy}
+                      onClick={() => connectWorkbuddy()}
+                    >
+                      {connectingBuddy ? '连接中…' : '检查连接'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={connectingBuddy}
+                      onClick={() => connectWorkbuddy(true)}
+                    >
+                      启动并连接
+                    </Button>
                   </div>
                   <Separator />
                   <p className="supporting">
@@ -757,7 +830,7 @@ export default function App() {
               </FieldGroup>
               <div className="form-footnote">
                 <span>准备任务不消耗模型额度。</span>
-                <span>WorkBuddy 自动执行未接入</span>
+                <span>计划就绪后，可交给 WorkBuddy 执行</span>
               </div>
             </form>
           </div>
@@ -770,6 +843,14 @@ export default function App() {
                   context={context}
                   planJob={planJob}
                   plan={planResult}
+                  execution={execution}
+                  workbuddyConnected={workbuddy?.connected}
+                  onCancelExecution={() =>
+                    protect(async () => {
+                      if (api && execution)
+                        setExecution(await api.cancelExecution(execution.job_id))
+                    })
+                  }
                   reviewJob={job}
                   review={review}
                   patch={changes?.patch}

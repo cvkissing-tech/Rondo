@@ -11,14 +11,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@jean/components/ui/button'
 import { Badge } from '@jean/components/ui/badge'
-import {
-  WorkLogBlock,
-  WorkLogList,
-  WorkLogButton,
-  WorkLogRow,
-  WorkLogDetails
-} from './vendor/t3code/WorkLog'
-import type { Context, PlanResult, Review, ReviewStatus } from '../../shared/types'
+import { WorkLogBlock, WorkLogList, WorkLogButton, WorkLogDetails } from './vendor/t3code/WorkLog'
+import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from '../../shared/types'
 import { taskFlow, terminal, type TaskAction } from './taskFlow'
 
 const labels: Record<string, string> = {
@@ -30,6 +24,18 @@ const labels: Record<string, string> = {
   cancelled: '已取消',
   interrupted: '已中断'
 }
+const phases: Record<string, string> = {
+  preparing: '准备中',
+  session_created: '已创建会话',
+  dispatched: '已派发',
+  running: '执行中',
+  waiting_input: '等待权限或输入',
+  submitted: '结果已提交',
+  turn_ended: '执行回合结束',
+  cancelled: '已停止',
+  failed: '执行失败',
+  dispatch_unknown: '需要核对原生会话'
+}
 function stateLabel(job?: ReviewStatus) {
   return job ? (labels[job.status] ?? job.status) : '尚未发起'
 }
@@ -38,6 +44,9 @@ export function TaskTimeline({
   context,
   planJob,
   plan,
+  execution,
+  workbuddyConnected,
+  onCancelExecution,
   reviewJob,
   review,
   patch,
@@ -51,6 +60,9 @@ export function TaskTimeline({
   context: Context
   planJob?: ReviewStatus
   plan?: PlanResult
+  execution?: ExecutionStatus
+  workbuddyConnected?: boolean
+  onCancelExecution: () => void
   reviewJob?: ReviewStatus
   review?: Review
   patch?: string
@@ -64,9 +76,16 @@ export function TaskTimeline({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const planRef = useRef<HTMLDivElement>(null),
     reviewRef = useRef<HTMLDivElement>(null)
-  const flow = taskFlow(context, planJob, plan, reviewJob, review, patch)
+  const flow = taskFlow(context, planJob, plan, reviewJob, review, patch, execution)
   const planOpen = expanded.plan ?? Boolean(planJob && !reviewJob)
   const reviewOpen = expanded.review ?? Boolean(reviewJob)
+  const executionOpen = expanded.execution ?? Boolean(execution && execution.status !== 'succeeded')
+  const executionSummary =
+    execution?.summary ||
+    context.task.result?.summary ||
+    (context.task.status === 'claimed'
+      ? '这是 MCP 任务领取记录，尚未收到执行完成提交。'
+      : '执行将使用独立的 WorkBuddy 原生会话，提交结果后自动接续检查与 Codex 审查。')
   const toggle = (key: string, current: boolean) =>
     setExpanded((previous) => ({ ...previous, [key]: !current }))
   function action(value: TaskAction) {
@@ -102,7 +121,7 @@ export function TaskTimeline({
           规划 <strong>Codex</strong> · 按需连接
         </span>
         <span>
-          执行 <strong>WorkBuddy</strong> · 未接入
+          执行 <strong>WorkBuddy</strong> · {workbuddyConnected ? '本机通道已连接' : '本机原生会话'}
         </span>
         <span>
           审查 <strong>Codex</strong> · 按需连接
@@ -181,25 +200,56 @@ export function TaskTimeline({
             </div>
           </WorkLogBlock>
           <WorkLogBlock>
-            <WorkLogRow
+            <WorkLogButton
               icon={<GitBranch className="size-4" />}
               label={
                 context.task.status === 'submitted'
                   ? '执行结果已提交'
                   : context.task.status === 'claimed'
                     ? `执行任务已领取 · ${context.task.owner || '未提供名称'}`
-                    : 'WorkBuddy · 等待执行接入'
+                    : execution
+                      ? `WorkBuddy · ${stateLabel(execution)}`
+                      : 'WorkBuddy · 等待派发'
               }
+              trailing={<ChevronDown className={`size-3.5 ${executionOpen ? 'rotate-180' : ''}`} />}
+              aria-expanded={executionOpen}
+              onClick={() => toggle('execution', executionOpen)}
             />
-            <WorkLogDetails kind="panel">
-              <div className="record-prose supporting">
-                {context.task.result?.summary ||
-                  (context.task.status === 'claimed'
-                    ? '这是 MCP 任务领取记录，尚未收到执行完成提交。'
-                    : '尚无执行结果。WorkBuddy 自动派发、检查与返修尚未接通。')}
-                {patch?.trim() && <p>已发现工作区改动；文件变化不等于执行完成。</p>}
-              </div>
-            </WorkLogDetails>
+            {executionOpen ? (
+              <WorkLogDetails kind="panel">
+                <div className="record-prose supporting">
+                  {executionSummary}
+                  {execution?.session_id && (
+                    <p>
+                      原生会话 <code>{execution.session_id}</code> ·{' '}
+                      {phases[execution.phase || ''] || '读取状态中'}
+                      {execution.model && <> · {execution.model}</>}
+                    </p>
+                  )}
+                  {execution?.review_error && (
+                    <p>
+                      执行已提交，自动审查未启动：{execution.review_error}。可使用审查入口继续。
+                    </p>
+                  )}
+                  {execution && !terminal.has(execution.status) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onCancelExecution}
+                      disabled={execution.status === 'cancelling'}
+                    >
+                      停止 WorkBuddy 执行
+                    </Button>
+                  )}
+                  {patch?.trim() && <p>已发现工作区改动；文件变化不等于执行完成。</p>}
+                </div>
+              </WorkLogDetails>
+            ) : (
+              <p className="request-preview">
+                {executionSummary.slice(0, 160)}
+                {executionSummary.length > 160 ? '…' : ''}
+              </p>
+            )}
           </WorkLogBlock>
           <WorkLogBlock>
             <div ref={reviewRef}>
@@ -230,7 +280,9 @@ export function TaskTimeline({
                   ? '工作区创建'
                   : row.kind === 'plan'
                     ? 'Codex 计划'
-                    : 'Codex 审查'}{' '}
+                    : row.kind === 'execution'
+                      ? 'WorkBuddy 执行'
+                      : 'Codex 审查'}{' '}
                 ·{' '}
                 {row.kind === 'workspace'
                   ? '已完成'

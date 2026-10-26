@@ -51,17 +51,21 @@ class TaskLauncher:
             launch = db.execute('SELECT context_json FROM task_launches WHERE task_id=?', (task_id,)).fetchone()
             review = db.execute('SELECT id FROM review_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
             plan = db.execute('SELECT id FROM plan_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
+            execution = db.execute('SELECT id FROM execution_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1', (task_id,)).fetchone()
             created = db.execute('SELECT created_at FROM tasks WHERE id=?', (task_id,)).fetchone()[0]
             records = db.execute('''SELECT id, 'plan' AS kind, state AS status, created_at, updated_at, error_code
                 FROM plan_jobs WHERE task_id=? UNION ALL
                 SELECT id, 'review' AS kind, state AS status, created_at, updated_at, error_code
-                FROM review_jobs WHERE task_id=? ORDER BY created_at DESC, id DESC LIMIT 11''', (task_id, task_id)).fetchall()
+                FROM review_jobs WHERE task_id=? UNION ALL
+                SELECT id, 'execution' AS kind, state AS status, created_at, updated_at, error_code
+                FROM execution_jobs WHERE task_id=? ORDER BY created_at DESC, id DESC LIMIT 11''', (task_id, task_id, task_id)).fetchall()
         if launch is None:
             raise StoreError('TASK_NOT_PREPARED', 'This task has no managed workspace; use start_task for new tasks')
         context = json.loads(launch['context_json'])
         if not Path(context['workspace']).is_dir():
             raise StoreError('WORKSPACE_MISSING', 'The task workspace is missing; it will not be recreated over existing work')
         return {**context, 'task': task, 'latest_review_job_id': review['id'] if review else None,
+                'latest_execution_job_id': execution['id'] if execution else None,
                 'latest_plan_job_id': plan['id'] if plan else None,
                 'activity': [{'id': 'workspace', 'kind': 'workspace', 'status': 'succeeded',
                               'created_at': datetime.fromisoformat(created).timestamp(),

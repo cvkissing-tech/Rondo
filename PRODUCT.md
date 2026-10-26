@@ -1,4 +1,4 @@
-# Agent Review Loop
+# Rondo
 
 <!-- impeccable:product-schema 1 -->
 
@@ -22,15 +22,15 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Operating Context
 
-本机项目、独立Git工作目录、持久任务、检查与代码审查。当前已具备18个MCP工具及CLI；Workbench首版连接真实任务创建、恢复、查看。WorkBuddy外部派发尚未接通，不能用模拟进度显示为完成。Codex模型调用会使用额度，准备任务本身不调用模型。
+本机项目、独立Git工作目录、持久任务、检查与代码审查。当前22个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
 
 ## Capabilities and Constraints
 
-已有TaskLauncher、PlanJobs、ReviewJobs、版本绑定检查和Codex原生审查。显式计划生成、读取、取消与恢复已接入，代码变化时标记过期。任务主区显示当前阶段、角色分工与连续记录；元数据轮询反映实际领取和提交，历史作业展示有界概要，代码差异按需打开。WorkBuddy需要正式执行接入及授权，当前无第三方应用。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
+已有TaskLauncher、PlanJobs、ReviewJobs、版本绑定检查和Codex原生审查。显式计划生成、读取、取消与恢复已接入，代码变化时标记过期。任务主区显示当前阶段、角色分工与连续记录；元数据轮询反映实际领取和提交，历史作业展示有界概要，代码差异按需打开。ExecutionJobs 派发一次原生任务，只有对应执行者提交结果且回合结束才接续检查和审查；不明确的派发保存会话并停止，不自动重发。自动返修尚未实现。用户不以盈利为目的，重视有用开源产出和可解释代码，不希望反复确认与过量验证。桌面首版开发预览依赖本机Python虚拟环境；独立安装包的Python打包后续处理。
 
 ## Brand Commitments
 
-Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称完整自动开发已实现。用户明确否定0.8.0墨绿表单界面，授权直接复用开源产品组件；当前界面直接移植Jean产品布局、T3 Code工作记录、Vibe Kanban计划组件与REA恢复的Codex输入容器，保留来源和适配记录。
+Rondo为产品名；agent-review-loop保留为包、仓库目录及MCP连接名。简体中文，直接、清晰；不声称完整自动开发已实现。用户明确否定0.8.0墨绿表单界面，授权直接复用开源产品组件；当前界面直接移植Jean产品布局、T3 Code工作记录、Vibe Kanban计划组件与REA恢复的Codex输入容器，保留来源和适配记录。
 
 ## Product Principles
 
@@ -41,4 +41,4 @@ Agent Review Loop为当前项目名。简体中文，直接、清晰；不声称
 
 ## Evidence on Hand
 
-真实SQLite/MCP/CLI、Git任务目录、一次真实Codex合成审查和一次真实Codex计划生成；WorkBuddy只读调用已观察。界面无既有视觉资产，不伪造活跃任务、模型用量或成功记录。
+真实SQLite/MCP/CLI、Git任务目录、一次真实Codex合成审查和一次真实Codex计划生成；WorkBuddy 原生 DeepSeek 执行、MCP 提交、固定检查与 Codex 自动审查已在隔离任务通过。界面无既有视觉资产，不伪造活跃任务、模型用量或成功记录。

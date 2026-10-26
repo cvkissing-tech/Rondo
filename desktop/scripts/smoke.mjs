@@ -181,7 +181,7 @@ try {
     false
   )
   await page.getByRole('button', { name: 'Agent 连接', exact: true }).click()
-  await page.getByText('自动执行接口尚未接通', { exact: true }).waitFor()
+  await page.getByText('点击检查本机执行通道', { exact: true }).waitFor()
   await page.screenshot({ animations: 'disabled', path: join(evidence, '05-connections-960.png') })
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
@@ -245,7 +245,10 @@ try {
       exact: true
     })
     .waitFor()
-  assert.match(await page.getByLabel('Agent 分工').innerText(), /执行\s+WorkBuddy\s+·\s+未接入/)
+  assert.match(
+    await page.getByLabel('Agent 分工').innerText(),
+    /执行\s+WorkBuddy\s+·\s+本机原生会话/
+  )
   await page.screenshot({
     animations: 'disabled',
     path: join(evidence, '12-submitted-record-1360.png')

@@ -86,7 +86,7 @@ class ReviewJobs:
 
     def _reconcile(self, db, row, table=None):
         table = table or self.table
-        if table not in ('review_jobs', 'plan_jobs'):
+        if table not in ('review_jobs', 'plan_jobs', 'execution_jobs'):
             raise ValueError('Unknown job table')
         if row['state'] in ACTIVE:
             lock = _OwnerLock.acquire(Path(row['directory']) / 'owner.lock')
@@ -121,11 +121,11 @@ class ReviewJobs:
                     if previous['fingerprint'] != fingerprint:
                         raise StoreError('IDEMPOTENCY_CONFLICT', 'request_id already belongs to different review parameters')
                     return self._public(self._reconcile(db, previous))
-                for table in ('review_jobs', 'plan_jobs'):
+                for table in ('review_jobs', 'plan_jobs', 'execution_jobs'):
                     for row in db.execute(f"SELECT * FROM {table} WHERE state IN ('preparing','running','cancelling')").fetchall():
                         if self._reconcile(db, row, table)['state'] in ACTIVE:
                             raise StoreError(f'{self.error_prefix}_BUSY', 'One Codex job is active; read its state before starting another')
-                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
+                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= (1 if self.table == 'execution_jobs' else 2):
                     raise StoreError(f'{self.error_prefix}_BUDGET_EXHAUSTED', 'This task has used its two attempts for this operation; no automatic reset')
                 executable = self.executable or shutil.which('codex')
                 if executable is None or not Path(executable).is_file():

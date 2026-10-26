@@ -16,3 +16,4 @@ desktop/release/
 .eslintcache
 .impeccable/mocks/
 .impeccable/captures/
+.impeccable/review/

@@ -43,7 +43,7 @@ export class Backend {
     transport.stderr?.on('data', () => {
       /* Drain diagnostics; stdout belongs to MCP. */
     })
-    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.10.0' })
+    const client = new Client({ name: 'agent-review-loop-desktop', version: '0.11.0' })
     client.onclose = () => {
       if (this.client === client) this.client = undefined
     }

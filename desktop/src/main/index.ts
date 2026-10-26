@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
 import type { Context, StartInput } from '../shared/types'
-app.setName('Agent Review Loop')
+app.setName('Rondo')
 const root = process.env.ARL_PROJECT_ROOT ?? resolve(app.getAppPath(), '..')
 const backend = new Backend(
   root,
@@ -31,6 +31,11 @@ function handlers(): void {
     'plan-status': (id: string) => backend.call('get_plan_status', { job_id: id }),
     'read-plan': (id: string) => backend.call('read_plan', { job_id: id }),
     'cancel-plan': (id: string) => backend.call('cancel_plan', { job_id: id }),
+    'workbuddy-status': (launch = false) => backend.call('workbuddy_status', { launch }),
+    'start-execution': (id: number, request: string) =>
+      backend.call('start_task_execution', { task_id: id, request_id: request }),
+    'execution-status': (id: string) => backend.call('get_execution_status', { job_id: id }),
+    'cancel-execution': (id: string) => backend.call('cancel_execution', { job_id: id }),
     'open-workspace': async (id: number) => {
       const context = await backend.call<Context>('get_task_context', { task_id: id })
       const error = await shell.openPath(context.workspace)
@@ -71,7 +76,7 @@ else {
       show: false,
       autoHideMenuBar: true,
       backgroundColor: '#f4f5f3',
-      title: 'Agent Review Loop',
+      title: 'Rondo',
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         sandbox: true,

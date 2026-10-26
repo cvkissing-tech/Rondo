@@ -1,12 +1,12 @@
-# Agent Review Loop
+# Rondo
 
 一个本地运行的学习型开源项目：把一项 Git 修改交给不同 Agent 实现、审查，再由用户选择是否修复。
 
 产品运行时，在成本与限额约束下组织角色：**WorkBuddy + DeepSeek 实现与修复，Codex 强模型负责关键审查，自动化检查提供可复现证据**。不要求先运行全 Codex 对照。用户负责需求取舍与最终接受；具体模型版本和质量由接入实验记录，不承诺这一组合必然省钱或保持同等质量。
 
-当前版本：**0.10.0，以连续工作记录组织任务。** 在自己的窗口提出需求、准备独立工作区，查看当前阶段、Agent 分工与下一步动作；需求和路径按需展开，计划与审查记录可恢复，代码差异作为侧面板。界面继续复用 Jean、Vibe Kanban、T3 Code、REA 恢复的 Codex 输入样式及 Pierre Diffs。WorkBuddy 自动执行与返修尚未接通。
+当前版本：**0.11.0，接通 WorkBuddy 原生执行与自动审查。** 在 Rondo 提需求、准备独立工作区并生成 Codex 计划，点击“执行并审查”后，在 WorkBuddy 专用桌面会话中完成修改、通过 MCP 提交，再由 Rondo 接续检查及 Codex 审查。界面继续复用 Jean、Vibe Kanban、T3 Code、REA 恢复的 Codex 输入样式及 Pierre Diffs。审查意见自动返修尚未实现。
 
-产品入口是自己的桌面工作台；Codex 负责规划/审查，WorkBuddy 负责执行。当前已可准备任务、显式生成 Codex 执行计划及审查，WorkBuddy 自动执行尚未接入。兼容的另一条入口是让 WorkBuddy 作为 MCP 客户端主动领取任务和请求审查，这不需要第三方应用；**MCP 连接不等于工作台已能启动并指挥 WorkBuddy。** 接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
+本机已通过真实任务验证“计划 → 原生执行 → MCP 提交 → 固定检查 → Codex 审查”。本地通道不需要第三方 Open API 应用；适配 WorkBuddy 5.9.2 的原生 RPC，后续版本需要核对兼容性。接入说明见 [WorkBuddy 本地接入](integrations/workbuddy/README.md)。
 
 ## 现在可以运行
 
@@ -20,7 +20,7 @@ npm --prefix desktop run build
 npm --prefix desktop start
 ```
 
-需要 Node 24+ 和 Python 3.11+。这是依赖源码环境的 Windows 开发预览，还不是可独立分发的安装包。默认使用 `.agent-review-loop/workbuddy.sqlite3`，不会自动发送任务给 WorkBuddy，也不会自动调用模型。按“发起 Codex 审查”才会消耗 Codex 额度。运行配置、关键代码和验收说明见 [第9课：桌面端调用链](docs/learning/09-desktop-workbench.md)。
+需要 Node 24+ 和 Python 3.11+。这是依赖源码环境的 Windows 开发预览，还不是独立安装包。默认数据库为 `.agent-review-loop/workbuddy.sqlite3`。创建和刷新任务不调用模型；生成计划使用 Codex 额度，“执行并审查”使用 WorkBuddy 和 Codex 各自额度。未配置 `--check-config` 时固定检查明确记录为 `not_run`，不会声称通过。运行配置见 [第9课](docs/learning/09-desktop-workbench.md)，本次接入及真实结果见 [第14课](docs/learning/14-workbuddy-native-execution.md)。
 
 0.8.1 使用 [Jean](https://github.com/coollabsio/jean) 固定提交的真实侧栏、输入组合、分栏和控件源码，提供任务筛选、Ctrl+B 收起导航、键盘/鼠标调整分栏与持久化浅深主题。来源和适配见 [第10课：直接移植产品 UI](docs/learning/10-reuse-product-ui.md) 及 [源码记录](desktop/src/renderer/src/vendor/jean/NOTICE.md)。根目录启动器把界面偏好保存在忽略于 Git 的 `.agent-review-loop/desktop-profile/`；任务仍保存在 SQLite。
 
@@ -112,7 +112,7 @@ CLI 提供 `workspace`、`package`、`record-review`、`review-status`；各命�
 
 真实合成审查耗时13.021秒，准确指出第2行的加减法错误；服务报告总用量26303 token，其中输入26057，费用未知。小样例仍有明显额外上下文开销，来源尚未定位；64 KiB 限制不等于完整模型上下文或费用上限。详见第5课，不据一次简单样例宣称一般审查质量。
 
-WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state，不需要 Client Secret，不代表已经授权。后续令牌交换和只读在线状态已实现；用户目前尚未创建第三方应用，应用申请条件、所需权限和审核尚待确认。WorkBuddy 保持候选适配，不将获批作为核心开发的前置条件；不会提取桌面端私有凭据，也不会自动向助理发送修改任务。
+WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state，不需要 Client Secret，不代表已经授权。后续令牌交换和只读在线状态已实现；用户目前尚未创建第三方应用，应用申请条件、所需权限和审核尚待确认。WorkBuddy 保持候选适配，不将获批作为核心开发的前置条件；不会提取桌面端私有凭据，0.11.0 的本机原生通道单独实现任务派发，与本节 Open API 授权路线无关。
 
 演示依次显示 `completed / 0`、`failed / 7`、`timed_out / 非零退出码`。超时退出码取决于操作系统，不要求固定数值。演示只运行自带 Python 程序，不访问网络和模型，临时输出在演示结束后清理。
 
@@ -165,7 +165,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 ### 负责人推进规则
 
 - 每轮只推进一个明确任务：目标、输入输出、改动范围、验收命令、当前限制写清后再实现。
-- 后台审查已接入 MCP；下一阶段验证 WorkBuddy 实际工具发现、只读调用与一个明确指定的实验仓库，分别记录执行、审查和用户选择修复的证据。
+- 后台审查及 WorkBuddy 原生执行已接入；后续在真实需求上继续验证，并实现审查意见的有界返修。
 - MCP 是正式协议边界，采用官方 SDK；不自行拼出简化版协议，也不提前增加桌面壳、账户体系或云服务。
 - 自动化检查离线可运行；真实模型检查单独记录，涉及实际调用时再明确目标、权限和预算。
 - 每阶段交付可运行示例、检查结果与一个能解释的技术点。涉及全局环境或现有应用配置的变化单独说明。
@@ -189,7 +189,7 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 
 - Codex 提供非交互执行及 JSONL 输出：https://learn.chatgpt.com/docs/non-interactive-mode
 - WorkBuddy 支持本地 stdio MCP 连接器：https://open.workbuddy.cn/docs/connector
-- 产品主流程目标为一次发起后自动执行和交接；真实调度尚在验证，不把“支持连接器”当作真实闭环已经通过。
+- 0.11.0 已在 Windows / WorkBuddy 5.9.2 完成一次原生执行、结果提交、固定检查及 Codex 审查；自动返修尚未实现。
 - WorkBuddy 另有经应用注册和用户授权调用本地助理的 Open API；首版不以开通该接口为前置条件：https://open.workbuddy.cn/docs/openapi
 - 本机已确认 WorkBuddy V5.9.2，安装于 `C:/Users/cvkis/AppData/Local/Programs/WorkBuddy`；本服务用户级配置已备份、保存并由用户信任。客户端只读验收使用界面所示 Deepseek-V4.1-Flash，执行轨迹包含工具搜索和 list tasks；未启动 Codex 审查。详见第6课的后续验收记录。
 
@@ -218,3 +218,5 @@ WorkBuddy 的 `workbuddy-authorize` 命令只生成授权入口与本地 state�
 0.9.1 UI 复用记录：[第12课：产品界面移植与 REA](docs/learning/12-product-ui-reuse.md)。Jean 产品布局、Vibe Kanban 计划组件与 Codex 发布包输入 CSS 的来源及适配边界分别记录在各 vendor 目录。
 
 0.10.0 工作记录：[第13课：任务页面围绕开发过程组织](docs/learning/13-task-work-records.md)。状态断言：`node desktop/scripts/flow-check.mjs`；桌面默认 smoke 不调用模型。
+
+0.11.0 原生执行：[第14课：从 Rondo 指挥 WorkBuddy 并自动交给 Codex 审查](docs/learning/14-workbuddy-native-execution.md)。

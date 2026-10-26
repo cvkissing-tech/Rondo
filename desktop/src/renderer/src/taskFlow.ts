@@ -1,16 +1,29 @@
-import type { Context, PlanResult, Review, ReviewStatus } from '../../shared/types'
+import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from '../../shared/types'
 
 export const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 export type TaskAction =
-  'plan' | 'review' | 'refresh' | 'changes' | 'guide' | 'plan-record' | 'review-record'
+  'plan' | 'review' | 'execute' | 'refresh' | 'changes' | 'guide' | 'plan-record' | 'review-record'
 export function taskFlow(
   context: Context,
   planJob?: ReviewStatus,
   plan?: PlanResult,
   reviewJob?: ReviewStatus,
   review?: Review,
-  patch?: string
+  patch?: string,
+  execution?: ExecutionStatus
 ) {
+  if (execution && !terminal.has(execution.status))
+    return {
+      label:
+        execution.phase === 'waiting_input'
+          ? 'WorkBuddy 等待你处理权限或输入'
+          : execution.status === 'cancelling'
+            ? '正在停止 WorkBuddy'
+            : 'WorkBuddy 正在执行',
+      detail: '在专用原生会话执行；完成提交后自动接续检查与 Codex 审查。',
+      action: 'refresh' as TaskAction,
+      button: '刷新执行记录'
+    }
   if (planJob && !terminal.has(planJob.status))
     return {
       label:
@@ -64,6 +77,16 @@ export function taskFlow(
       action: 'review-record' as TaskAction,
       button: '查看审查记录'
     }
+  if (execution && terminal.has(execution.status) && execution.status !== 'succeeded')
+    return {
+      label:
+        execution.phase === 'dispatch_unknown' || execution.status === 'interrupted'
+          ? '执行状态需要核对'
+          : 'WorkBuddy 执行未完成',
+      detail: execution.summary || '读取原执行记录；不会自动重发任务。',
+      action: 'refresh' as TaskAction,
+      button: '刷新执行记录'
+    }
   if (context.task.status === 'claimed')
     return {
       label: '执行任务已领取',
@@ -101,10 +124,10 @@ export function taskFlow(
         button: '核对代码改动'
       }
     return {
-      label: '计划就绪，等待执行接入',
-      detail: 'WorkBuddy 自动执行尚未接入。计划中的步骤和验收方式均未执行。',
-      action: 'guide' as TaskAction,
-      button: '查看执行接入说明'
+      label: '计划就绪，可以交给 WorkBuddy',
+      detail: '启动一次原生执行；提交结果后自动检查并交给 Codex 审查。两者均使用各自账号额度。',
+      action: 'execute' as TaskAction,
+      button: '执行并审查（消耗额度）'
     }
   }
   if (planJob && terminal.has(planJob.status))

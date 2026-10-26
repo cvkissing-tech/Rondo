@@ -1,6 +1,6 @@
 {
   "name": "agent-review-loop-desktop",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Local workspace for agent development, task handoffs and code review",
   "main": "./out/main/index.js",
   "author": "Agent Review Loop contributors",

@@ -17,6 +17,10 @@ const api: DesktopAPI = {
   planStatus: (id) => invoke('plan-status', id),
   readPlan: (id) => invoke('read-plan', id),
   cancelPlan: (id) => invoke('cancel-plan', id),
+  workbuddyStatus: (launch = false) => invoke('workbuddy-status', launch),
+  startExecution: (id, request) => invoke('start-execution', id, request),
+  executionStatus: (id) => invoke('execution-status', id),
+  cancelExecution: (id) => invoke('cancel-execution', id),
   openWorkspace: (id) => invoke('open-workspace', id),
   copyWorkspace: (id) => invoke('copy-workspace', id),
   openGuide: () => invoke('open-guide')

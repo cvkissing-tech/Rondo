@@ -1,6 +1,18 @@
 # WorkBuddy 本地接入
 
-不需要 Open API 第三方应用。WorkBuddy 作为任务入口，主动调用本地 stdio MCP；本服务后台启动 Codex 审查，WorkBuddy 查询并读取结果。
+0.11.0 支持从 Rondo 指挥 WorkBuddy 原生桌面会话，再自动交给 Codex 审查；不需要 Open API 第三方应用。原有的 WorkBuddy 主动调用本地 MCP 入口继续保留。
+
+## 从 Rondo 派发原生任务
+
+1. 保留下文已信任的 `agent-review-loop` MCP 连接；它与 Rondo 必须使用同一数据库。默认是项目的 `.agent-review-loop/workbuddy.sqlite3`。更新服务后重启 WorkBuddy，工具目录应包含22个工具。
+2. 在 Rondo 的“Agent 连接”点击“检查连接”。首次需要正常退出 WorkBuddy，再点击“启动并连接”；它为该次启动设置 `WORKBUDDY_REMOTE_DEBUGGING_PORT=18493`。已经运行且未开启本机通道的 WorkBuddy，重复启动不会补上启动参数。
+3. 准备任务并生成 Codex 计划，点击“执行并审查”。Rondo 创建专用原生会话并自动打开；WorkBuddy 按自身的权限要求提示用户。执行会使用其模型与工具，完成后通过 MCP 提交结果，Rondo 再运行配置的检查并启动 Codex 审查。
+
+可用环境变量：`ARL_NODE`（Node 24+绝对路径）、`ARL_WORKBUDDY_EXECUTABLE`、`ARL_WORKBUDDY_CDP_PORT`；`ARL_WORKBUDDY_MODEL` 可指定 WorkBuddy 当前实际可用的模型 ID，设置仅作用于新建的任务会话，并读取原生配置确认。省略时保留 WorkBuddy 会话默认模型。
+
+本机通道使用 WorkBuddy 5.9.2 内部 RPC，兼容性目前只验证这一版本。监听端口须由所选 WorkBuddy 程序占用且仅在 loopback；驱动不提取账号凭据，不改 WorkBuddy 私有数据库。派发不明确时保留会话并报错，不自动重发。每个任务最多一次派发；当前不自动返修。
+
+2026-10-26 实测：Codex 计划 → DeepSeek `deepseek-v4.1-flash` 原生会话 → 修改 `slug.py` → MCP 领取/提交 → 固定副本运行4个测试通过 → Codex 审查 `approved`，结果与当前代码一致。完整学习说明见[第14课](../../docs/learning/14-workbuddy-native-execution.md)。
 
 ## 本机准备
 
