@@ -45,3 +45,13 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 已保存作业区显示计划、执行/返修与审查各自的 `n/2` 计数，失败和取消也计入；执行/返修上限对应首次执行加一次返修。返修后仍有问题时转为查看剩余问题；审查达到 `2/2` 时，新审查按钮显示“审查次数已用完（2/2）”并原生禁用。恢复只读取已有作业；自动交接需要 Rondo 服务持续运行，重启不自动重放付费调用。
 
 本轮浅色主窗口、960px窄桌面、返修记录、深色主题与次数用完的历史状态已逐张核对，截图为 `.impeccable/review/repair/desktop.png`、`desktop-960.png`、`repair-record.png`、`desktop-dark.png`、`budget-history.png`。事实与验证范围以 `PRODUCT.md` 和 `docs/learning/15-bounded-repair.md` 为准：108项 Python、20项前端状态断言、零模型 Electron smoke 与构建通过。真实验收以明确预埋缺陷开始，真实 Codex 提出1项 `changes_requested`，显式发起原生 DeepSeek 返修，随后自动真实 Codex 复查为 `approved`，最终 `current`；首次审查自动交回返修的调度分支由离线测试覆盖。此证据不扩大为首次缺陷由 Agent 写出、所有 WorkBuddy 版本兼容或完整自动开发。
+
+## Project entry extension · 2026-10-26
+
+普通 extension，仅同步现有新任务入口和反馈行为，保留 Jean 输入、Codex 需求容器、Button、Alert 及浅深主题；不增加 CSS、token、布局或组件视觉变体。入口统一选择项目文件夹或保存位置，无“新建 / 已有项目”模式切换。输入提示“选择项目文件夹（支持空文件夹）”，上方辅助说明已有文件会保留、新项目自动使用独立子文件夹；需求、验收、可选任务名称及“准备任务”主动作维持既有顺序和层级。
+
+空目录自动初始化；普通保存目录已有文件时建立独立子项目并保留原文件；已有 Git 项目根目录沿用提交基线。选择 Git 子目录时用中文提示改选项目根目录。目录、需求、验收与任务名称草稿在本机恢复；准备任务仍不消耗模型额度，准备成功进入同一工作记录，计划、执行与审查尚未开始时如实显示。
+
+操作错误沿用 destructive Alert，Git 目录错误以中文说明。服务仍连接时显示“关闭错误提示”，只关闭当前错误并保留草稿；服务未连接时显示“重新连接 / 刷新”。简短通知保留既有关闭按钮。测试和准备检查在隐藏窗口运行，不让检查过程弹出额外终端窗口。
+
+已逐张核对 `.impeccable/review/new-project/desktop.png`、`desktop-960.png`、`desktop-dark.png`、`friendly-error.png` 与 `prepared.png`，覆盖浅色主窗口、窄桌面、深色入口、中文目录错误和准备后的工作记录。本轮实现验收为24项相关 Python、build/lint 和零模型新项目 smoke 通过；文档同步未重跑这些检查。截图证明列出的界面状态，零模型 smoke 不代表真实模型完成新项目开发。实现事实以 `PRODUCT.md` 与本轮源码为准。

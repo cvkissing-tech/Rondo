@@ -79,6 +79,7 @@ export interface Review {
   checks: { status: string }
 }
 export interface StartInput {
+  new_project?: boolean
   repo: string
   title: string
   instructions: string

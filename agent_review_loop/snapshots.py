@@ -71,9 +71,14 @@ def repository_root(repo):
     repo = Path(repo).resolve()
     if not repo.is_dir():
         raise SnapshotError('INVALID_REPOSITORY', 'Repository directory does not exist')
-    root = Path(_git(repo, 'rev-parse', '--show-toplevel').decode('utf-8').strip()).resolve()
+    try:
+        root = Path(_git(repo, 'rev-parse', '--show-toplevel').decode('utf-8').strip()).resolve()
+    except SnapshotError as error:
+        if error.code == 'GIT_FAILED' and 'not a git repository' in str(error):
+            raise SnapshotError('NOT_GIT_REPOSITORY', '这个文件夹已有内容，但还不是 Git 项目。请选择已有项目的根目录；从零开发可直接选择空文件夹。') from error
+        raise
     if root != repo:
-        raise SnapshotError('INVALID_REPOSITORY', 'Use the Git working tree root, not a subdirectory')
+        raise SnapshotError('INVALID_REPOSITORY', f'你选择的是项目内的子目录。请使用项目根目录：{root}；从零开发可直接选择空文件夹。')
     if _git(repo, 'config', '--bool', 'core.sparseCheckout', check=False).strip() == b'true':
         raise SnapshotError('UNSUPPORTED_ENTRY', 'Sparse checkouts are not supported')
     return repo
@@ -86,7 +91,12 @@ def common_directory(repo):
 def _commit(repo, ref):
     if not isinstance(ref, str) or not ref or ref.startswith('-'):
         raise SnapshotError('INVALID_ARGUMENT', 'An explicit commit/ref is required')
-    return _git(repo, 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}').decode().strip()
+    try:
+        return _git(repo, 'rev-parse', '--verify', '--end-of-options', ref + '^{commit}').decode().strip()
+    except SnapshotError as error:
+        if ref == 'HEAD' and error.code == 'GIT_FAILED':
+            raise SnapshotError('BASE_COMMIT_MISSING', '这个 Git 项目还没有可用的初始版本，请先完成一次提交。若从零开发，也可选择“新项目”并使用空文件夹。') from error
+        raise
 
 
 def safe_relative(value):

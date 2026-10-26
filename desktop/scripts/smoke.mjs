@@ -1,3 +1,4 @@
+import { capture } from './capture.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
@@ -24,6 +25,7 @@ git('add', '.')
 git('commit', '-qm', 'baseline')
 const env = {
   ...process.env,
+  ARL_HEADLESS: '1',
   ARL_PROJECT_ROOT: root,
   ARL_DATABASE: join(evidence, 'tasks.sqlite3'),
   ARL_TASK_ROOT: join(evidence, 'tasks'),
@@ -61,7 +63,7 @@ try {
   assert.equal(await page.locator('[data-upstream="jean/MainWindow"]').count(), 1)
   const composer = page.locator('[data-upstream="codex/ComposerLayout"]')
   assert.equal(await composer.evaluate((element) => getComputedStyle(element).borderRadius), '28px')
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '01-new-task-1360.png') })
+  await capture(app, page, { animations: 'disabled', path: join(evidence, '01-new-task-1360.png') })
   await page.getByLabel('项目目录', { exact: true }).fill(repo)
   await page.locator('summary').filter({ hasText: '任务设置' }).click()
   await page.getByLabel('任务名称').fill('桌面端真实链路验收')
@@ -91,7 +93,7 @@ try {
       .getAttribute('aria-expanded'),
     'false'
   )
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '02-task-1360.png') })
+  await capture(app, page, { animations: 'disabled', path: join(evidence, '02-task-1360.png') })
   await page.getByRole('tab', { name: '已提交', exact: true }).click()
   await page.getByText('还没有已提交的任务。', { exact: true }).waitFor()
   await page.getByRole('tab', { name: '任务', exact: true }).click()
@@ -131,13 +133,13 @@ try {
     assert.ok(completedPlan.plan.steps.length > 0)
     await page.getByText('计划已生成', { exact: true }).waitFor()
     await page.getByText(completedPlan.plan.summary, { exact: true }).waitFor()
-    await page.screenshot({ animations: 'disabled', path: join(evidence, '07-plan-1360.png') })
+    await capture(app, page, { animations: 'disabled', path: join(evidence, '07-plan-1360.png') })
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
-    await page.screenshot({ animations: 'disabled', path: join(evidence, '08-plan-960.png') })
+    await capture(app, page, { animations: 'disabled', path: join(evidence, '08-plan-960.png') })
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
     await writeFile(join(evidence, 'real-plan.json'), JSON.stringify(completedPlan, null, 2))
   } else {
-    await page.screenshot({
+    await capture(app, page, {
       animations: 'disabled',
       path: join(evidence, '07-plan-entry-1360.png')
     })
@@ -147,14 +149,14 @@ try {
   if (realPlan) {
     await page.getByRole('button', { name: '刷新计划状态', exact: true }).click()
     await page.getByText('代码已变化，计划已过期', { exact: true }).waitFor()
-    await page.screenshot({
+    await capture(app, page, {
       animations: 'disabled',
       path: join(evidence, '09-plan-stale-1360.png')
     })
   }
   await page.getByRole('button', { name: '查看代码改动', exact: true }).click()
   await page.locator('diffs-container').first().waitFor({ timeout: 10000 })
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '03-changes-1360.png') })
+  await capture(app, page, { animations: 'disabled', path: join(evidence, '03-changes-1360.png') })
   const patch = await page.evaluate(() => window.workbench.changes(1))
   assert.match(patch.patch, /\+print\(2\)/)
   assert.match(patch.patch, /README.md/)
@@ -175,20 +177,23 @@ try {
   await openRecord(page, 'review')
   await page.getByRole('button', { name: '发起 Codex 审查', exact: true }).waitFor()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '04-review-960.png') })
+  await capture(app, page, { animations: 'disabled', path: join(evidence, '04-review-960.png') })
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
     false
   )
   await page.getByRole('button', { name: 'Agent 连接', exact: true }).click()
   await page.getByText('点击检查本机执行通道', { exact: true }).waitFor()
-  await page.screenshot({ animations: 'disabled', path: join(evidence, '05-connections-960.png') })
+  await capture(app, page, {
+    animations: 'disabled',
+    path: join(evidence, '05-connections-960.png')
+  })
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
   await page.getByRole('button', { name: '查看代码改动', exact: true }).click()
   await page.locator('diffs-container').first().waitFor()
-  await page.screenshot({
+  await capture(app, page, {
     animations: 'disabled',
     path: join(evidence, '06-changes-dark-1360.png')
   })
@@ -249,7 +254,7 @@ try {
     await page.getByLabel('Agent 分工').innerText(),
     /执行\s+WorkBuddy\s+·\s+本机原生会话/
   )
-  await page.screenshot({
+  await capture(app, page, {
     animations: 'disabled',
     path: join(evidence, '12-submitted-record-1360.png')
   })
@@ -291,7 +296,7 @@ try {
 } catch (error) {
   if (app) {
     const page = await app.firstWindow()
-    await page.screenshot({ animations: 'disabled', path: join(evidence, 'failure.png') })
+    await capture(app, page, { animations: 'disabled', path: join(evidence, 'failure.png') })
     console.error(await page.locator('body').innerText())
   }
   console.error('Evidence:', evidence)

@@ -1,10 +1,11 @@
 """One task entry point; reuse native Git worktrees and the existing task store."""
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
-from .snapshots import _git, canonical, current_tree, digest, prepare_workspace, repository_root
+from .snapshots import _git, canonical, current_tree, digest, prepare_workspace, repository_root, SnapshotError
 from .store import StoreError, TaskStore, _text
 
 
@@ -14,16 +15,21 @@ class TaskLauncher:
         self.root = (Path(root).resolve() if root else
                      Path.home() / '.agent-review-loop/tasks' / digest(str(store.path).encode())[:16])
 
-    def start(self, repo, title, instructions, acceptance, request_id, base_ref='HEAD'):
+    def start(self, repo, title, instructions, acceptance, request_id, base_ref='HEAD', new_project=False):
         for value, name, limit in ((repo, 'repo', 4096), (title, 'title', 160),
                                    (instructions, 'instructions', 8000), (acceptance, 'acceptance', 4000),
                                    (request_id, 'request_id', 128), (base_ref, 'base_ref', 200)):
             _text(value, name, limit)
+        if type(new_project) is not bool:
+            raise StoreError('INVALID_ARGUMENT', 'new_project must be a boolean')
         path = Path(repo)
         if not path.is_absolute() or not path.is_dir():
             raise StoreError('INVALID_ARGUMENT', 'repo must be an existing absolute Git working directory')
         repo = str(path.resolve())
-        fingerprint = digest(canonical([repo, title, instructions, acceptance, base_ref]))
+        parameters = [repo, title, instructions, acceptance, base_ref]
+        if new_project:
+            parameters.append({'new_project': True})  # Keep old request fingerprints compatible.
+        fingerprint = digest(canonical(parameters))
         # ponytail: serialize local task setup with SQLite; a job queue is unnecessary for one user.
         with self.store._connection(write=True) as db:
             previous = db.execute('SELECT * FROM task_launches WHERE request_id=?', (request_id,)).fetchone()
@@ -35,6 +41,30 @@ class TaskLauncher:
                 directory = self.root / digest(canonical([str(self.store.path), request_id]))[:32]
                 if directory.exists():
                     raise StoreError('TASK_START_INCOMPLETE', f'Inspect preserved task directory before retrying: {directory}')
+                if not new_project and any(path.iterdir()):
+                    try:
+                        repository_root(path)
+                    except SnapshotError as error:
+                        if error.code != 'NOT_GIT_REPOSITORY':
+                            raise
+                        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '-', title).strip(' .')[:40] or 'project'
+                        path = path / ('rondo-' + name + '-' + digest(request_id.encode())[:6])
+                        if path.exists():
+                            raise StoreError('NEW_PROJECT_INCOMPLETE', f'项目子目录已存在，请直接选择它继续：{path}')
+                        path.mkdir()
+                        repo = str(path.resolve())
+                if new_project or not any(path.iterdir()):
+                    if base_ref != 'HEAD':
+                        raise StoreError('INVALID_ARGUMENT', '新项目使用初始版本，不接受其他基础版本。')
+                    if any(path.iterdir()):
+                        raise StoreError('NEW_PROJECT_NOT_EMPTY', '新项目请选择空文件夹。这个目录已有内容；如果已是 Git 项目，请切换“已有项目”。')
+                    _git(path, 'init', '-q')
+                    (path / '.gitignore').write_text(
+                        'node_modules/\n.venv/\n__pycache__/\n*.py[cod]\n.env\n.env.*\n!.env.example\ndist/\nbuild/\n',
+                        encoding='utf-8')
+                    _git(path, 'add', '--', '.gitignore')
+                    _git(path, '-c', 'user.name=Rondo', '-c', 'user.email=rondo@localhost',
+                         '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Initialize Rondo project')
                 workspace = prepare_workspace(Path(repo), directory, base_ref)
                 task_id = self.store._create_task(db, title, instructions, acceptance)['task_id']
                 context = {**workspace, 'task_id': task_id, 'request_id': request_id,

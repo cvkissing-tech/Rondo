@@ -22,7 +22,7 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Operating Context
 
-本机项目、独立Git工作目录、持久任务、检查与代码审查。当前23个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
+本机项目、独立Git工作目录、持久任务、检查与代码审查。可从空文件夹直接开始；普通保存目录已有文件时自动新建项目子文件夹，保留原文件，无新/已有项目模式选择。已有Git项目仍使用其提交基线。新建任务草稿在本机恢复。当前23个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
 
 ## Capabilities and Constraints
 

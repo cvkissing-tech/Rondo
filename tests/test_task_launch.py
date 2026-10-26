@@ -10,6 +10,7 @@ from contextlib import closing
 
 from agent_review_loop.store import StoreError, TaskStore
 from agent_review_loop.task_launch import TaskLauncher
+from agent_review_loop.snapshots import SnapshotError
 
 
 class TaskLaunchTests(unittest.TestCase):
@@ -93,6 +94,50 @@ class TaskLaunchTests(unittest.TestCase):
         self.assertEqual([record['status'] for record in records], ['succeeded', 'cancelled', 'failed'])
         self.assertEqual(set(records[1]), {'id', 'kind', 'status', 'created_at', 'updated_at', 'error_code'})
         self.assertFalse(self.launcher.context(task['task_id'])['activity_truncated'])
+
+    def test_empty_folder_new_project_creates_baseline_and_replays_once(self):
+        empty = self.root / '新项目 空目录'
+        empty.mkdir()
+        args = (str(empty), '贪吃蛇', '做一个可以玩的贪吃蛇', '方向键可移动，碰撞结束', 'new-project')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: self.launcher.start(*args), range(2)))
+        self.assertEqual(results[0]['task_id'], results[1]['task_id'])
+        context = results[0]
+        self.assertTrue((empty / '.git').is_dir())
+        self.assertNotEqual(Path(context['workspace']), empty)
+        self.assertIn('node_modules/', (Path(context['workspace']) / '.gitignore').read_text())
+        self.assertEqual(subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=empty).strip(), b'1')
+        self.assertEqual(subprocess.check_output(['git', 'log', '-1', '--format=%an'], cwd=empty).strip(), b'Rondo')
+        self.assertEqual(len(self.store.list_tasks()['items']), 1)
+
+    def test_plain_folder_creates_child_project_without_importing_existing_files(self):
+        plain = self.root / '普通文件夹'
+        plain.mkdir()
+        (plain / 'notes.txt').write_bytes(b'keep my data')
+        context = self.launcher.start(str(plain), 'New', 'Build', 'Works', 'plain')
+        self.assertEqual(Path(context['repository']).parent, plain)
+        self.assertTrue((Path(context['repository']) / '.git').exists())
+        self.assertFalse((Path(context['workspace']) / 'notes.txt').exists())
+        self.assertEqual((plain / 'notes.txt').read_bytes(), b'keep my data')
+        self.assertFalse((plain / '.git').exists())
+
+    def test_new_mode_preserves_nonempty_folder(self):
+        folder = self.root / '已有资料'
+        folder.mkdir()
+        (folder / 'notes.txt').write_bytes(b'keep my data\n')
+        with self.assertRaises(StoreError) as caught:
+            self.launcher.start(str(folder), 'New', 'Build', 'Works', 'nonempty', new_project=True)
+        self.assertEqual(caught.exception.code, 'NEW_PROJECT_NOT_EMPTY')
+        self.assertFalse((folder / '.git').exists())
+        self.assertEqual((folder / 'notes.txt').read_bytes(), b'keep my data\n')
+
+    def test_git_without_initial_commit_reports_missing_baseline(self):
+        folder = self.root / '尚无提交'
+        folder.mkdir()
+        subprocess.run(['git', 'init', '-q'], cwd=folder, check=True, capture_output=True)
+        with self.assertRaises(SnapshotError) as caught:
+            self.launcher.start(str(folder), 'New', 'Build', 'Works', 'no-head')
+        self.assertEqual(caught.exception.code, 'BASE_COMMIT_MISSING')
 
 
 if __name__ == '__main__':

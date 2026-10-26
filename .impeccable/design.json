@@ -145,8 +145,8 @@
       "name": "项目目录输入",
       "kind": "input",
       "refersTo": "input",
-      "description": "关联真实 label 的项目目录输入，支持键盘焦点。",
-      "html": "<label class=\"ds-label\" for=\"ds-project\">项目目录</label><input class=\"ds-input\" id=\"ds-project\" placeholder=\"选择 Git 项目目录\"/>",
+      "description": "关联真实 label 的项目目录输入，支持键盘焦点；统一选择项目或保存位置，无新建/已有模式切换。空目录自动初始化，普通保存目录中的原文件保留并使用独立子项目，已有 Git 根目录沿用。表单草稿在本机恢复；准备任务不消耗模型额度。目录相关 Git 错误为中文，服务已连接时可关闭操作错误，服务未连接时提供重新连接 / 刷新。沿用既有 CSS 与主题。",
+      "html": "<label class=\"ds-label\" for=\"ds-project\">项目目录</label><input class=\"ds-input\" id=\"ds-project\" placeholder=\"选择项目文件夹（支持空文件夹）\"/>",
       "css": ".ds-label{display:block;font:500 11px 'Segoe UI','Microsoft YaHei UI',sans-serif;color:var(--foreground,oklch(.145 0 0));margin-bottom:7px}.ds-input{font:12px 'Segoe UI','Microsoft YaHei UI',sans-serif;width:100%;min-width:0;padding:8px 12px;background:transparent;color:var(--foreground,oklch(.145 0 0));border:1px solid var(--input,oklch(.922 0 0));border-radius:calc(var(--radius,.5rem) - 2px)}.ds-input::placeholder{color:var(--muted-foreground,#666)}.ds-input:hover{border-color:var(--ring,oklch(.556 0 0))}.ds-btn:focus-visible,.ds-input:focus-visible,.ds-nav button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
     },
     {

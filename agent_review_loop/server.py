@@ -52,7 +52,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Rondo", version="0.12.0", log_level="WARNING", lifespan=lifespan,
+        "Rondo", version="0.13.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -79,9 +79,10 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         acceptance: Annotated[str, Field(strict=True, min_length=1, max_length=4000)],
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
         base_ref: Annotated[str, Field(strict=True, min_length=1, max_length=200)] = 'HEAD',
+        new_project: Annotated[bool, Field(strict=True)] = False,
     ) -> dict[str, Any]:
         """Prepare task + isolated Git workspace + fixed base in ONE call. Same request_id/content reuses it. No model call."""
-        return await asyncio.to_thread(_invoke, tasks.start, repo, title, instructions, acceptance, request_id, base_ref)
+        return await asyncio.to_thread(_invoke, tasks.start, repo, title, instructions, acceptance, request_id, base_ref, new_project)
 
     @server.tool(structured_output=True)
     def get_task_context(task_id: TaskId) -> dict[str, Any]:

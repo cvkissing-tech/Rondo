@@ -61,6 +61,7 @@ def main():
     start.add_argument('--acceptance', required=True)
     start.add_argument('--request-id', required=True)
     start.add_argument('--base', default='HEAD')
+    start.add_argument('--new-project', action='store_true', help='Initialize an empty folder with a local first version')
     start.add_argument('--task-root', type=_absolute_path)
     context = commands.add_parser('context', help='Resume a task with saved workspace, requirements and next action')
     context.add_argument('--db', required=True, type=_absolute_path)
@@ -150,7 +151,7 @@ def main():
         if args.command in ('start', 'context'):
             from .task_launch import TaskLauncher
             tasks = TaskLauncher(store, args.task_root if args.command == 'start' else None)
-            result = (tasks.start(str(args.repo), args.title, args.instructions, args.acceptance, args.request_id, args.base)
+            result = (tasks.start(str(args.repo), args.title, args.instructions, args.acceptance, args.request_id, args.base, args.new_project)
                       if args.command == 'start' else tasks.context(args.task_id))
         elif args.command == "create":
             result = store.create_task(args.title, args.instructions, args.acceptance)

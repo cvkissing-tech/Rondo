@@ -82,10 +82,13 @@ else {
         preload: join(__dirname, '../preload/index.js'),
         sandbox: true,
         contextIsolation: true,
+        backgroundThrottling: process.env.ARL_HEADLESS !== '1',
         nodeIntegration: false
       }
     })
-    window.once('ready-to-show', () => window.show())
+    window.once('ready-to-show', () => {
+      if (process.env.ARL_HEADLESS !== '1') window.show()
+    })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
     if (is.dev && process.env.ELECTRON_RENDERER_URL)

@@ -48,6 +48,7 @@ import type {
   PlanResult,
   Review,
   ReviewStatus,
+  StartInput,
   Task,
   WorkBuddyConnection
 } from '../../shared/types'
@@ -74,7 +75,22 @@ const states: Record<string, string> = {
   interrupted: '已中断'
 }
 function errorText(error: unknown): string {
-  return String(error).replace(/^Error: Error invoking remote method '[^']+': Error: /, '')
+  const message = String(error).replace(/^Error: Error invoking remote method '[^']+': Error: /, '')
+  try {
+    const detail = JSON.parse(message.slice(message.indexOf('{')))
+    if (typeof detail.code === 'string' && typeof detail.message === 'string') return detail.message
+  } catch {
+    /* Non-tool errors retain their original message. */
+  }
+  return message
+}
+function savedDraft(): Partial<StartInput> {
+  try {
+    const value = JSON.parse(localStorage.getItem('arl.draft') || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
 }
 export default function App() {
   const [connection, setConnection] =
@@ -97,10 +113,18 @@ export default function App() {
     api ? '' : '请通过桌面应用打开工作台，浏览器预览无法调用本地服务。'
   )
   const [busy, setBusy] = useState(false)
-  const [repo, setRepo] = useState('')
-  const [title, setTitle] = useState('')
-  const [instructions, setInstructions] = useState('')
-  const [acceptance, setAcceptance] = useState('')
+  const [draft] = useState(savedDraft)
+  const [repo, setRepo] = useState(typeof draft.repo === 'string' ? draft.repo : '')
+  const [title, setTitle] = useState(typeof draft.title === 'string' ? draft.title : '')
+  const [instructions, setInstructions] = useState(
+    typeof draft.instructions === 'string' ? draft.instructions : ''
+  )
+  const [acceptance, setAcceptance] = useState(
+    typeof draft.acceptance === 'string' ? draft.acceptance : ''
+  )
+  useEffect(() => {
+    localStorage.setItem('arl.draft', JSON.stringify({ repo, title, instructions, acceptance }))
+  }, [repo, title, instructions, acceptance])
   const [changes, setChanges] = useState<{ patch: string; truncated: boolean }>()
   const [job, setJob] = useState<ReviewStatus>()
   const [review, setReview] = useState<Review>()
@@ -720,10 +744,10 @@ export default function App() {
                 variant="ghost"
                 onClick={() => {
                   setError('')
-                  protect(() => refresh())
+                  if (!connection?.connected) protect(() => refresh())
                 }}
               >
-                重新连接 / 刷新
+                {connection?.connected ? '关闭错误提示' : '重新连接 / 刷新'}
               </Button>
             </AlertDescription>
           </Alert>
@@ -751,6 +775,9 @@ export default function App() {
             <h1 className="text-4xl font-bold text-foreground">新的开发任务</h1>
             <form onSubmit={prepare} className="w-full max-w-4xl">
               <FieldGroup>
+                <p className="supporting">
+                  选择项目文件夹或保存位置即可。已有文件会保留，新项目会自动使用独立子文件夹。
+                </p>
                 <Field>
                   <FieldLabel htmlFor="repo" className="sr-only">
                     项目目录
@@ -762,7 +789,7 @@ export default function App() {
                       value={repo}
                       onChange={(event) => setRepo(event.target.value)}
                       required
-                      placeholder="选择 Git 项目目录"
+                      placeholder="选择项目文件夹（支持空文件夹）"
                     />
                     <InputGroupAddon align="inline-end">
                       <InputGroupButton
@@ -784,7 +811,7 @@ export default function App() {
                   leading={
                     <span className="flex items-center gap-2 px-2 text-xs text-muted-foreground">
                       <GitBranch className="size-3.5" />
-                      独立工作区 · HEAD
+                      独立工作区
                     </span>
                   }
                   trailing={

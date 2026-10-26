@@ -159,6 +159,8 @@ Vibe 计划组件的品牌边界、正文背景和标题/动作栏背景分别�
 
 项目目录和验收条件继续使用 Jean Field/InputGroup/Textarea。需求输入采用 REA 恢复的 Codex ComposerLayout CSS 与 React 适配，保留 Root/Body/Attachments/Input/Footer 层级、comfortable 密度与 large 圆角。原生 textarea 接现有表单状态；label 保持关联。
 
+新任务入口复用同一表单，不增加新建/已有项目模式切换。项目输入提示“选择项目文件夹（支持空文件夹）”，辅助文字说明保存位置中已有文件会保留、新项目自动使用独立子文件夹；空文件夹自动初始化，已有 Git 项目根目录继续沿用。目录、需求、验收与可选任务名称的草稿在本机恢复。“准备任务”仍为唯一提交主动作，并保留不消耗模型额度的说明；准备完成后进入现有工作记录。
+
 ### Navigation
 
 直接移植 Jean MainWindow / SidebarTabRail / ProjectsSidebar / ProjectTreeItem 的产品布局：72px 导航轨、可收起的 240px 任务栏、32px 顶栏；Ctrl B 收起与恢复。真实任务列表支持搜索、已提交筛选、状态、分页；底部保留接入说明与本地 MCP 状态。
@@ -192,6 +194,8 @@ Vibe 计划组件的品牌边界、正文背景和标题/动作栏背景分别�
 ### Connection popover and feedback
 
 连接信息在工具栏 Popover 中查看；WorkBuddy 使用现有 outline“检查连接”和 ghost“启动并连接”按钮，连接期间禁用两项操作。连接返回值决定“待检查/已连接”标记及分工行说明，连接错误就地显示；Codex 继续标为计划与审查时按需连接，不把本地任务服务、MCP 工具数和原生执行通道混作一种状态。错误使用 Alert，简短操作反馈可关闭。Badge 用于任务编号和紧凑结果，不扩展成展示指标。
+
+目录相关的 Git 错误使用中文说明，并在可定位时给出应选择的项目根目录。本地服务仍连接时，操作错误提供“关闭错误提示”；服务未连接时提供“重新连接 / 刷新”。关闭操作错误不触发重新连接，表单草稿保留；两类反馈沿用既有 Alert 与 ghost Button，不新增错误样式。
 
 ## Do's and Don'ts
 
