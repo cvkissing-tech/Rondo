@@ -252,6 +252,65 @@ textarea {
   min-height: 0 !important;
   height: auto !important;
 }
+.task-workbench {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.workflow-strip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+.workflow-description {
+  min-width: 0;
+}
+.workflow-description > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.workflow-description > div > span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.workflow-description p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+  margin: 5px 0 0;
+}
+.workflow-start {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
+}
+.workflow-start > span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 1100px) {
+  .workflow-strip {
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    gap: 8px;
+  }
+  .workflow-start {
+    margin-left: auto;
+  }
+}
 .work-pane {
   height: 100%;
   display: flex;

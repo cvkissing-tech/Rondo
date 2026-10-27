@@ -58,7 +58,8 @@ import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
 import { WorkspaceInspector } from './WorkspaceInspector'
-import type { TaskAction } from './taskFlow'
+import { taskFlow, type TaskAction } from './taskFlow'
+import { WorkflowBar } from './WorkflowBar'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -954,103 +955,113 @@ export default function App() {
             </form>
           </div>
         ) : (
-          <ResizablePanelGroup direction="horizontal" className="task-panels">
-            <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
-              <div className="timeline-pane conversation-pane">
-                <TaskTimeline
-                  key={context.task_id}
-                  context={context}
-                  planJob={planJob}
-                  plan={planResult}
-                  execution={execution}
-                  workbuddyConnected={workbuddy?.connected}
-                  onCancelExecution={() =>
-                    protect(async () => {
-                      if (api && execution)
-                        setExecution(await api.cancelExecution(execution.job_id))
-                    })
-                  }
-                  reviewJob={job}
-                  review={review}
-                  patch={changes?.patch}
-                  busy={busy}
-                  workspaceActions={workspaceActions}
-                  onRefresh={() => protect(refreshTask)}
-                  onAction={taskAction}
-                  conversation={conversation}
-                  dark={dark}
-                  onSend={sendPlanning}
-                  onStopPlan={() => protect(stopPlan)}
-                  onViewPlan={(id) => protect(() => viewPlan(id))}
-                  onViewFiles={() => openInspector('files')}
-                  reviewContent={reviewPanel}
-                />
-              </div>
-            </ResizablePanel>
-            {changesOpen && (
-              <>
-                <ResizableHandle />
-                <ResizablePanel id="changes" order={2} defaultSize={38} minSize={28}>
-                  <WorkspaceInspector
+          <div className="task-workbench">
+            <WorkflowBar
+              flow={taskFlow(context, planJob, planResult, job, review, changes?.patch, execution)}
+              plan={planResult}
+              executor={agentName((context.agents || defaultAgents).executor)}
+              reviewer={reviewerName}
+              busy={busy}
+              onExecute={startExecution}
+            />
+            <ResizablePanelGroup direction="horizontal" className="task-panels">
+              <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
+                <div className="timeline-pane conversation-pane">
+                  <TaskTimeline
                     key={context.task_id}
                     context={context}
-                    plan={planJob}
-                    review={job}
+                    planJob={planJob}
+                    plan={planResult}
                     execution={execution}
-                    difference={difference}
-                    request={inspectorRequest}
-                    planContent={
-                      <>
-                        {historicalPlan && (
-                          <div className="historical-plan-note">
-                            正在查看历史计划 V{historicalPlan.version || 1}
-                            ；执行按钮始终使用当前版本。
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setHistoricalPlan(undefined)}
-                            >
-                              返回当前计划
-                            </Button>
-                          </div>
-                        )}
-                        <PlanPanel
-                          agentName={plannerName}
-                          job={
-                            historicalPlan
-                              ? conversation?.items.find(
-                                  (turn) => turn.job_id === historicalPlan.job_id
-                                )
-                              : planJob
-                          }
-                          result={historicalPlan || planResult}
-                          busy={
-                            busy ||
-                            Boolean(job && !terminal.has(job.status)) ||
-                            Boolean(planJob && !terminal.has(planJob.status)) ||
-                            Boolean(execution && !terminal.has(execution.status))
-                          }
-                          onStart={startPlan}
-                          onRefresh={() => protect(refreshPlan)}
-                          onCancel={() => protect(stopPlan)}
-                        />
-                      </>
+                    workbuddyConnected={workbuddy?.connected}
+                    onCancelExecution={() =>
+                      protect(async () => {
+                        if (api && execution)
+                          setExecution(await api.cancelExecution(execution.job_id))
+                      })
                     }
-                    onDiff={showChanges}
-                    onClose={() => {
-                      setChangesOpen(false)
-                      requestAnimationFrame(() =>
-                        document
-                          .querySelector<HTMLTextAreaElement>('[aria-label="讨论或修改方案"]')
-                          ?.focus()
-                      )
-                    }}
-                    refreshKey={`${execution?.status}:${execution?.phase}:${context.task.status}`}
+                    reviewJob={job}
+                    review={review}
+                    patch={changes?.patch}
+                    busy={busy}
+                    workspaceActions={workspaceActions}
+                    onRefresh={() => protect(refreshTask)}
+                    onAction={taskAction}
+                    conversation={conversation}
+                    dark={dark}
+                    onSend={sendPlanning}
+                    onStopPlan={() => protect(stopPlan)}
+                    onViewPlan={(id) => protect(() => viewPlan(id))}
+                    onViewFiles={() => openInspector('files')}
+                    reviewContent={reviewPanel}
                   />
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
+                </div>
+              </ResizablePanel>
+              {changesOpen && (
+                <>
+                  <ResizableHandle />
+                  <ResizablePanel id="changes" order={2} defaultSize={38} minSize={28}>
+                    <WorkspaceInspector
+                      key={context.task_id}
+                      context={context}
+                      plan={planJob}
+                      review={job}
+                      execution={execution}
+                      difference={difference}
+                      request={inspectorRequest}
+                      planContent={
+                        <>
+                          {historicalPlan && (
+                            <div className="historical-plan-note">
+                              正在查看历史计划 V{historicalPlan.version || 1}
+                              ；执行按钮始终使用当前版本。
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setHistoricalPlan(undefined)}
+                              >
+                                返回当前计划
+                              </Button>
+                            </div>
+                          )}
+                          <PlanPanel
+                            agentName={plannerName}
+                            job={
+                              historicalPlan
+                                ? conversation?.items.find(
+                                    (turn) => turn.job_id === historicalPlan.job_id
+                                  )
+                                : planJob
+                            }
+                            result={historicalPlan || planResult}
+                            busy={
+                              busy ||
+                              Boolean(job && !terminal.has(job.status)) ||
+                              Boolean(planJob && !terminal.has(planJob.status)) ||
+                              Boolean(execution && !terminal.has(execution.status))
+                            }
+                            onStart={startPlan}
+                            onRefresh={() => protect(refreshPlan)}
+                            onCancel={() => protect(stopPlan)}
+                          />
+                        </>
+                      }
+                      onDiff={showChanges}
+                      onClose={() => {
+                        setChangesOpen(false)
+                        requestAnimationFrame(() =>
+                          document
+                            .querySelector<HTMLTextAreaElement>('[aria-label="讨论或修改方案"]')
+                            ?.focus()
+                        )
+                      }}
+                      refreshKey={`${execution?.status}:${execution?.phase}:${context.task.status}`}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+          </div>
         )}
       </WorkbenchShell>
     </SidebarProvider>

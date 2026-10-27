@@ -8,6 +8,10 @@ assert.equal(taskFlow(context).action, 'plan')
 assert.equal(taskFlow(context, state('running')).action, 'plan-record')
 assert.equal(taskFlow(context, state('succeeded')).action, 'refresh')
 assert.equal(taskFlow(context, state('succeeded'), plan).action, 'execute')
+assert.equal(
+  taskFlow(context, state('succeeded'), plan, undefined, undefined, '+already planned').action,
+  'execute'
+)
 assert.equal(taskFlow(context, state('succeeded'), { freshness: 'stale' }).action, 'changes')
 assert.equal(
   taskFlow({ task: { status: 'claimed', owner: 'external executor' } }).label,
@@ -91,4 +95,4 @@ assert.equal(
   ).action,
   'review-record'
 )
-console.log('Task flow: 20 state assertions passed; no model calls.')
+console.log('Task flow: 21 state assertions passed; no model calls.')

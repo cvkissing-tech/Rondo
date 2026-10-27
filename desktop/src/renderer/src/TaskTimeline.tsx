@@ -325,14 +325,14 @@ export function TaskTimeline({
                 查看文件与产出
               </button>
             </div>
-            <div className="dock-action">
-              <p>{flow.action === 'execute' ? '自动检查与审查，最多返修一次。' : flow.detail}</p>
-              <Button size="sm" disabled={busy} onClick={() => action(flow.action)}>
-                {flow.action === 'execute'
-                  ? `采用 V${plan?.version || 1}，交给 ${executor} 执行`
-                  : flow.button}
-              </Button>
-            </div>
+            {flow.action !== 'execute' && (
+              <div className="dock-action">
+                <p>{flow.detail}</p>
+                <Button size="sm" disabled={busy} onClick={() => action(flow.action)}>
+                  {flow.button}
+                </Button>
+              </div>
+            )}
             <PlanningComposer
               task={context.task_id}
               planner={planner}

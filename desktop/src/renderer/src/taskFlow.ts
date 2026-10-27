@@ -142,7 +142,7 @@ export function taskFlow(
       action: 'review' as TaskAction,
       button: `发起 ${reviewerName} 审查（消耗额度）`
     }
-  if (patch?.trim())
+  if (patch?.trim() && !plan)
     return {
       label: '检测到工作区改动',
       detail: '差异来自当前文件；尚未收到执行完成提交。可核对后发起审查。',
