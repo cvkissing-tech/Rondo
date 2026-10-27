@@ -21,6 +21,8 @@ npm start
 
 创建任务时，分别选择 **规划、执行、审查** Agent，组合随任务保存。
 
+侧栏和顶部的 **Agent设置** 提供本机检测、搜索筛选、自定义程序添加/编辑/移除和协议握手检查。选择程序后逐项填写参数即可，无需手改JSON；账号、模型和Skills由Agent自身管理。协议检查不创建开发会话或调用模型，也不冒充账号认证。
+
 | 接入 | 角色 | 当前范围 |
 |---|---|---|
 | Codex App Server | 规划、执行、审查 | 沿用本机 CLI 配置、账号、Skills、MCP与默认模型；保存具名会话 |
@@ -51,6 +53,7 @@ python -m unittest discover -s tests -v
 npm --prefix desktop run lint
 npm --prefix desktop run build
 node --experimental-strip-types desktop/scripts/flow-check.mjs
+node --experimental-strip-types desktop/scripts/agent-settings-check.mjs
 ```
 
 默认测试和GitHub工作流不调用商业模型。安装desktop依赖后，ACP协议fixture可以验证真实acpx运行时、权限答复、文件回调及三角色闭环；它不是商业Agent账号验收。桌面smoke在隔离数据库、隐藏窗口运行。
@@ -62,6 +65,7 @@ node --experimental-strip-types desktop/scripts/flow-check.mjs
 - [acpx](https://github.com/openclaw/acpx)：固定0.21.0运行时、Agent registry、ACP会话、权限与文件/终端协议。具体边界见[integrations/acp/NOTICE.md](integrations/acp/NOTICE.md)。
 - [ACP Registry](https://github.com/agentclientprotocol/registry)：兼容实现的参考索引，不作为静默下载或自动执行源。
 - Jean、T3 Code、Vibe Kanban、Codex输入容器、Pierre Diffs：工作台结构及界面模块；各vendor目录保留来源、固定版本、哈希与必要适配。
+- [AionUi](https://github.com/iOfficeAI/AionUi)：Agent列表、可用性筛选和自定义编辑流程；[Goose](https://github.com/block/goose)：接入检查面板。已适配Rondo数据与IPC，来源、固定commit、原文件哈希、修改范围和许可证见对应vendor目录。
 
 新ACP Agent通常只需配置本机argv，不必修改Rondo源码。新增专有协议适配时，请提供无账号、无模型的协议fixture，并区分安装检测、真实执行与平台兼容证据。保留各组件许可证与NOTICE；项目许可证见 [LICENSE](LICENSE)。
 

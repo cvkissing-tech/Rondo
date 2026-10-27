@@ -1,0 +1,18 @@
+[
+  {
+    "source": "packages/desktop/src/renderer/pages/settings/AgentSettings/AgentCard.tsx",
+    "sha256": "cdd86a341f7d09a6bd7a7be63564d2305ec376c6d2188dc8e1aec8a3f4a545b2"
+  },
+  {
+    "source": "packages/desktop/src/renderer/pages/settings/AgentSettings/agentFilters.ts",
+    "sha256": "0c78ca21fc5d7e2358948f1827309e1a711db170dd786bcd3cc33e52be2fba8b"
+  },
+  {
+    "source": "packages/desktop/src/renderer/pages/settings/AgentSettings/LocalAgents.tsx",
+    "sha256": "1606bff56a1c55a32ab17b2ed52be9f310eaf68fb23dce43d92ebf1bdb8d1626"
+  },
+  {
+    "source": "packages/desktop/src/renderer/pages/settings/AgentSettings/InlineAgentEditor.tsx",
+    "sha256": "fa5bdf34b5c2c41476f8b7dbbbbe21de598e5e8ae493de5d7ae0a403b4bf3422"
+  }
+]

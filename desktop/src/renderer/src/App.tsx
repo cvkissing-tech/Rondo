@@ -17,9 +17,7 @@ import {
   InputGroupButton,
   InputGroupInput
 } from '@jean/components/ui/input-group'
-import { Popover, PopoverContent, PopoverTrigger } from '@jean/components/ui/popover'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@jean/components/ui/resizable'
-import { Separator } from '@jean/components/ui/separator'
 import { SidebarProvider } from '@jean/components/ui/sidebar'
 import { WorkbenchShell } from '@jean/components/workbench/WorkbenchShell'
 import { TaskSidebar } from '@jean/components/workbench/TaskSidebar'
@@ -28,7 +26,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
   ChevronRight,
-  Code2,
+  Settings2,
   Copy,
   FileCode2,
   FolderOpen,
@@ -53,6 +51,8 @@ import type {
 import { defaultAgents, agentName } from '../../shared/types'
 import type { AgentAssignments } from '../../shared/types'
 import { AgentPicker } from './AgentPicker'
+import { AgentSettings } from './AgentSettings'
+import { errorText } from './errors'
 import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
@@ -76,16 +76,6 @@ const states: Record<string, string> = {
   cancelled: '已取消',
   interrupted: '已中断'
 }
-function errorText(error: unknown): string {
-  const message = String(error).replace(/^Error: Error invoking remote method '[^']+': Error: /, '')
-  try {
-    const detail = JSON.parse(message.slice(message.indexOf('{')))
-    if (typeof detail.code === 'string' && typeof detail.message === 'string') return detail.message
-  } catch {
-    /* Non-tool errors retain their original message. */
-  }
-  return message
-}
 function savedDraft(): Partial<StartInput> {
   try {
     const value = JSON.parse(localStorage.getItem('arl.draft') || '{}')
@@ -98,6 +88,8 @@ export default function App() {
   const [connection, setConnection] =
     useState<Awaited<ReturnType<NonNullable<typeof api>['status']>>>()
   const [search, setSearch] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [workbuddy, setWorkbuddy] = useState<WorkBuddyConnection>()
   const [dark, setDark] = useState(
     () =>
       localStorage.getItem('arl.theme') === 'dark' ||
@@ -144,8 +136,6 @@ export default function App() {
   const [planJob, setPlanJob] = useState<ReviewStatus>()
   const [planResult, setPlanResult] = useState<PlanResult>()
   const [execution, setExecution] = useState<ExecutionStatus>()
-  const [workbuddy, setWorkbuddy] = useState<WorkBuddyConnection>()
-  const [connectingBuddy, setConnectingBuddy] = useState(false)
   const [notice, setNotice] = useState('')
   const generation = useRef(0)
   const startRequest = useRef({ fingerprint: '', id: '' })
@@ -443,12 +433,6 @@ export default function App() {
     else if (action === 'changes') showChanges()
     else if (action === 'guide') protect(async () => api?.openGuide())
   }
-  async function connectWorkbuddy(launch = false) {
-    if (!api) return
-    setConnectingBuddy(true)
-    await protect(async () => setWorkbuddy(await api.workbuddyStatus(launch)))
-    setConnectingBuddy(false)
-  }
   async function startExecution() {
     if (!api || !context) return
     const id = context.task_id,
@@ -459,7 +443,7 @@ export default function App() {
         const status = await api.workbuddyStatus()
         setWorkbuddy(status)
         if (!status.connected)
-          throw Error('WorkBuddy 本地通道未连接。打开“Agent 连接”检查或启动 WorkBuddy。')
+          throw Error('WorkBuddy 本地通道未连接。打开“Agent 设置”检查或启动 WorkBuddy。')
       }
       if (executionRequest.current.task !== id)
         executionRequest.current = { task: id, id: crypto.randomUUID() }
@@ -670,14 +654,21 @@ export default function App() {
     >
       <WorkbenchShell
         onGuide={() => protect(async () => api?.openGuide())}
+        onAgents={() => setSettingsOpen(true)}
         sidebar={
           <TaskSidebar
             tasks={[...tasks].reverse()}
             selected={context?.task_id}
             search={search}
             onSearch={setSearch}
-            onSelect={selectTask}
-            onNew={newTask}
+            onSelect={(id) => {
+              setSettingsOpen(false)
+              selectTask(id)
+            }}
+            onNew={() => {
+              setSettingsOpen(false)
+              newTask()
+            }}
             onRefresh={() => protect(() => refresh())}
             onLoadMore={next !== null ? () => protect(() => refresh(next)) : undefined}
             busy={busy}
@@ -689,7 +680,9 @@ export default function App() {
             <div className="breadcrumb">
               <span>{workspaceName || '工作台'}</span>
               <ChevronRight />
-              <strong>{context ? context.task.title : '新建任务'}</strong>
+              <strong>
+                {settingsOpen ? 'Agent 设置' : context ? context.task.title : '新建任务'}
+              </strong>
             </div>
             <div className="toolbar-actions">
               {context && (
@@ -706,67 +699,10 @@ export default function App() {
                   代码改动
                 </Button>
               )}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button size="sm" variant="ghost">
-                    <span className="status-dot" />
-                    Agent 连接
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end">
-                  <h2 className="popover-title">Agent 连接</h2>
-                  <p className="supporting">MCP · {connection?.tools ?? 0} 个工具可用</p>
-                  <div className="connection-row">
-                    <ShieldCheck />
-                    <div>
-                      <strong>Codex</strong>
-                      <span>沿用本机配置、Skills 与 MCP；新会话保存到 Codex</span>
-                    </div>
-                    <Badge variant="outline">按需</Badge>
-                  </div>
-                  <div className="connection-row">
-                    <Code2 />
-                    <div>
-                      <strong>WorkBuddy</strong>
-                      <span>
-                        {workbuddy?.connected ? '本机原生通道可用' : '点击检查本机执行通道'}
-                      </span>
-                    </div>
-                    <Badge variant="outline">{workbuddy?.connected ? '已连接' : '待检查'}</Badge>
-                  </div>
-                  {workbuddy?.error && <p className="supporting">{workbuddy.error}</p>}
-                  <div className="document-actions">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={connectingBuddy}
-                      onClick={() => connectWorkbuddy()}
-                    >
-                      {connectingBuddy ? '连接中…' : '检查连接'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={connectingBuddy}
-                      onClick={() => connectWorkbuddy(true)}
-                    >
-                      启动并连接
-                    </Button>
-                  </div>
-                  <Separator />
-                  <p className="supporting">
-                    可在任务内显式生成 Codex
-                    执行计划。创建任务只准备本地工作区，不会自动派发或调用模型。
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => protect(async () => api?.openGuide())}
-                  >
-                    查看接入说明
-                  </Button>
-                </PopoverContent>
-              </Popover>
+              <Button size="sm" variant="ghost" onClick={() => setSettingsOpen(true)}>
+                <Settings2 />
+                Agent 设置
+              </Button>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -817,7 +753,9 @@ export default function App() {
             </AlertDescription>
           </Alert>
         )}
-        {!context ? (
+        {settingsOpen ? (
+          <AgentSettings onClose={() => setSettingsOpen(false)} />
+        ) : !context ? (
           <div className="new-task-surface" data-upstream="jean/WelcomeProjectGrid">
             <h1 className="new-task-title">开始一项开发任务</h1>
             <form onSubmit={prepare} className="w-full max-w-4xl">
@@ -900,7 +838,11 @@ export default function App() {
                     aria-label="怎样算完成？"
                   />
                 </Field>
-                <AgentPicker value={agents} onChange={setAgents} />
+                <AgentPicker
+                  value={agents}
+                  onChange={setAgents}
+                  onManage={() => setSettingsOpen(true)}
+                />
                 <details className="task-settings">
                   <summary>
                     <MoreHorizontal />

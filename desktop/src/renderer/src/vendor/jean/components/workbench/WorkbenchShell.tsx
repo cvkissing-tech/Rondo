@@ -1,7 +1,7 @@
 // Product layout adapted from Jean MainWindow.tsx and SidebarTabRail.tsx at
 // cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3. See ../../NOTICE.md.
 import type { ReactNode } from 'react'
-import { Code, BookOpen } from 'lucide-react'
+import { Code, BookOpen, Settings2 } from 'lucide-react'
 import { useSidebar } from '@jean/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@jean/components/ui/tooltip'
 
@@ -9,12 +9,14 @@ export function WorkbenchShell({
   sidebar,
   toolbar,
   children,
-  onGuide
+  onGuide,
+  onAgents
 }: {
   sidebar: ReactNode
   toolbar: ReactNode
   children: ReactNode
   onGuide: () => void
+  onAgents: () => void
 }) {
   const { open, toggleSidebar, state } = useSidebar()
   return (
@@ -32,6 +34,9 @@ export function WorkbenchShell({
           <span>本地工作台</span>
         </div>
         {sidebar}
+        <button type="button" className="sidebar-guide" onClick={onAgents}>
+          <Settings2 className="size-4" />Agent 设置
+        </button>
         <button type="button" className="sidebar-guide" onClick={onGuide}>
           <BookOpen className="size-4" />
           接入说明

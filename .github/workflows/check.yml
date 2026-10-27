@@ -22,7 +22,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install -e .
-      - run: python -X utf8 -m unittest tests.test_acp tests.test_provider_pipeline tests.test_native_session -v
+      - run: python -X utf8 -m unittest tests.test_acp tests.test_provider_pipeline tests.test_native_session tests.test_agent_check -v
+      - run: node --experimental-strip-types desktop/scripts/agent-settings-check.mjs
       - run: node --test integrations/workbuddy/native-bridge.test.mjs
   check:
     strategy:

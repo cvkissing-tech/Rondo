@@ -5,6 +5,10 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import tempfile
+import queue
+import threading
+from datetime import datetime, timezone
 
 from .store import StoreError
 
@@ -62,3 +66,45 @@ def require_agent(agent):
     if not info or not info['available']:
         raise StoreError('AGENT_UNAVAILABLE', 'Agent尚未安装或适配器不可用：' + agent + '；请在Agent设置中检查依赖。')
     return info
+
+
+def check_agent(agent):
+    """Explicit handshake only. No session, prompt, automatic authentication or model call."""
+    from .codex_rpc import CodexRpc
+    from .processes import ProcessTree
+    info = require_agent(agent)
+    checked_at = datetime.now(timezone.utc).isoformat()
+    try:
+        with tempfile.TemporaryDirectory(prefix='rondo-agent-check-') as folder:
+            cwd = Path(folder)
+            if agent == 'codex':
+                with CodexRpc([shutil.which('codex'), 'app-server'], cwd, cwd / 'stderr.log') as rpc:
+                    rpc.initialize()
+                report = {'ok': True, 'message': 'Codex App Server 握手通过'}
+            elif agent == 'workbuddy':
+                from .execution import workbuddy_connection
+                report = workbuddy_connection(cwd, False)
+                report = {'ok': report['connected'], 'message': report.get('error') or 'WorkBuddy 本机通道可用'}
+            else:
+                argv = [node_executable(), str(ROOT / 'integrations/acp/runtime.mjs'), '--probe', agent[4:]]
+                with ProcessTree(argv, cwd, cwd / 'stderr.log') as child:
+                    messages = queue.Queue(maxsize=1)
+                    def read():
+                        try: messages.put(child.stdout.readline(65537))
+                        except (OSError, ValueError): pass
+                    reader = threading.Thread(target=read, daemon=True)
+                    reader.start()
+                    try:
+                        line = messages.get(timeout=25)
+                        if len(line) > 65536 or not line:
+                            raise RuntimeError('ACP 程序未返回握手结果，请检查程序和启动参数')
+                        report = json.loads(line)
+                    except queue.Empty:
+                        raise TimeoutError('握手超过 25 秒，请检查程序是否支持 ACP stdio')
+                reader.join(timeout=2)
+        return {'agent': agent, 'ok': bool(report.get('ok')), 'stage': 'protocol',
+                'message': report.get('message', ''), 'details': report.get('details', []),
+                'auth': 'not_checked', 'checked_at': checked_at}
+    except Exception as failure:
+        return {'agent': agent, 'ok': False, 'stage': 'protocol', 'message': str(failure)[:1200],
+                'auth': 'not_checked', 'checked_at': checked_at}

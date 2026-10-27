@@ -4,10 +4,12 @@ import { Field, FieldLabel } from '@jean/components/ui/field'
 import type { AgentAssignments, AgentCatalog } from '../../shared/types'
 export function AgentPicker({
   value,
-  onChange
+  onChange,
+  onManage
 }: {
   value: AgentAssignments
   onChange: (value: AgentAssignments) => void
+  onManage: () => void
 }) {
   const [catalog, setCatalog] = useState<AgentCatalog>()
   const [error, setError] = useState('')
@@ -48,12 +50,8 @@ export function AgentPicker({
           <Button size="sm" variant="ghost" disabled={checking} onClick={refresh}>
             {checking ? '检测中…' : '重新检测'}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => window.workbench?.openGuide().catch((e) => setError(String(e)))}
-          >
-            接入与安装说明
+          <Button size="sm" variant="ghost" onClick={onManage}>
+            管理 Agent
           </Button>
         </div>
       </div>
@@ -73,6 +71,11 @@ export function AgentPicker({
               onChange={(e) => onChange({ ...value, [role]: e.target.value })}
             >
               {!catalog && <option value={value[role]}>{value[role]} · 检测中</option>}
+              {catalog && !catalog.agents.some((a) => a.id === value[role]) && (
+                <option value={value[role]} disabled>
+                  {value[role]} · 配置已移除
+                </option>
+              )}
               {catalog?.agents
                 .filter((agent) => agent.roles.includes(role))
                 .sort((a, b) => Number(b.available) - Number(a.available))

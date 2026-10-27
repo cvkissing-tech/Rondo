@@ -1049,3 +1049,246 @@ textarea {
 .agent-role-selects label {
   font-size: 12px;
 }
+
+/* Agent management extends AionUi's list/editor and Goose's readiness panel. */
+.agent-settings {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agent-settings-header {
+  padding: 28px 32px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.agent-settings-header h1 {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0 0 6px;
+}
+.agent-settings-body {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+.agent-directory {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+}
+.agent-directory-tools {
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+}
+.agent-search {
+  position: relative;
+}
+.agent-search > svg {
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.agent-search input {
+  padding-left: 32px;
+  background: var(--background);
+}
+.agent-directory-tools select {
+  height: 32px;
+  padding: 0 8px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.agent-directory-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.agent-list-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  text-align: left;
+  border-radius: 8px;
+  margin-bottom: 3px;
+}
+.agent-list-row:hover {
+  background: var(--muted);
+}
+.agent-list-row[aria-current='true'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.agent-row-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.agent-row-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-row-copy > span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.agent-detail {
+  overflow-y: auto;
+  padding: 28px 32px 36px;
+  min-width: 0;
+  font-size: 13px;
+}
+.agent-detail h2 {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.agent-detail h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.agent-detail .supporting {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.agent-facts {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.agent-facts > div {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px;
+}
+.agent-facts dt {
+  color: var(--muted-foreground);
+}
+.agent-readiness {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 18px 0;
+  margin: 12px 0;
+  border-block: 1px solid var(--border);
+}
+.agent-readiness pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    11px/1.6 Consolas,
+    monospace;
+  max-width: 100%;
+}
+.agent-readiness details {
+  margin-top: 8px;
+}
+.agent-readiness summary {
+  cursor: pointer;
+}
+.agent-editor {
+  display: grid;
+  gap: 22px;
+  max-width: 640px;
+}
+.agent-editor input {
+  min-width: 0;
+}
+.agent-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.agent-command {
+  padding: 10px 0;
+  margin-bottom: 14px;
+}
+.agent-command p {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 8px;
+}
+.agent-command code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.agent-help {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 28px;
+}
+.agent-inline-error,
+.agent-remove {
+  color: var(--destructive);
+  background: var(--background);
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  margin-bottom: 16px;
+}
+.agent-remove > p {
+  margin-bottom: 12px;
+}
+.agent-notice {
+  margin-bottom: 18px;
+  padding: 10px 0;
+  font-weight: 500;
+}
+.agent-detail .agent-config-location {
+  margin-top: 28px;
+  font-size: 11px;
+}
+.agent-list-row:focus-visible,
+.agent-directory-tools select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (max-width: 1100px) {
+  .agent-settings-body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .agent-detail {
+    padding: 24px 20px;
+  }
+  .agent-settings-header {
+    padding: 22px 20px;
+  }
+  .agent-directory {
+    padding: 14px 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-readiness .animate-spin {
+    animation: none;
+  }
+}

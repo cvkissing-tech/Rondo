@@ -1,0 +1,10 @@
+[
+  {
+    "source": "ui/desktop/src/components/settings/providers/AcpReadinessPanel.tsx",
+    "sha256": "2aee84e8aad1f7540b6daa92c665f96674adc211cd1490aed4788bdad898b0ab"
+  },
+  {
+    "source": "ui/desktop/src/components/settings/SettingsView.tsx",
+    "sha256": "c6cfe4931c85ce29a00f2d3c88ef06aee89f9ddc87f2ac5ca54af982b65037a6"
+  }
+]

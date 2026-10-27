@@ -24,6 +24,21 @@ export interface AgentCatalog {
   error?: string | null
   note: string
 }
+export interface AgentSettingsState {
+  path: string
+  revision: string
+  agents: Record<string, string[]>
+  error?: string
+}
+export interface AgentCheck {
+  agent: string
+  ok: boolean
+  stage: string
+  message: string
+  details?: string[]
+  auth: string
+  checked_at: string
+}
 export interface Task {
   task_id: number
   title: string
@@ -146,6 +161,15 @@ export interface StartInput {
   request_id: string
 }
 export interface DesktopAPI {
+  agentSettings(): Promise<AgentSettingsState>
+  saveAgent(input: {
+    id: string
+    argv: string[] | null
+    revision: string
+  }): Promise<AgentSettingsState>
+  chooseAgentProgram(): Promise<string | undefined>
+  checkAgent(id: string): Promise<AgentCheck>
+  openAgentConfig(): Promise<void>
   agents(): Promise<AgentCatalog>
   status(): Promise<{ connected: boolean; tools: number; database: string; error?: string }>
   chooseProject(): Promise<string | undefined>

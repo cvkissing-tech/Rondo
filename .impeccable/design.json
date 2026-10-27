@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-27T02:37:09Z",
+  "generatedAt": "2026-10-27T04:05:19Z",
   "title": "Design System: Rondo",
   "extensions": {
     "colorMeta": {
@@ -155,8 +155,65 @@
       "rolePicker": {
         "source": "desktop/src/renderer/src/AgentPicker.tsx",
         "kind": "ordinary extension of Jean Field/Button with native selects",
-        "behavior": "planner/executor/reviewer labels; role-filtered options, unavailable adapters disabled; read-only installation detection, refresh and setup guide; task-bound selected Agent names",
+        "behavior": "planner/executor/reviewer labels; role-filtered options, unavailable adapters disabled; read-only installation detection and refresh; Manage Agent opens settings while preserving task draft; removed task choices visibly disabled; task-bound selected Agent names",
         "limits": "Installation discovery is not login verification, model execution, or certification of commercial ACP account combinations."
+      },
+      "agentSetup": {
+        "kind": "ordinary source-led extension; preserves the Jean/T3/Vibe/Codex/Pierre visual world and existing tokens",
+        "directionContract": ".impeccable/surfaces/desktop-src-renderer-src-app-tsx.md#agent-setup-extension--2026-10-27",
+        "sources": [
+          {
+            "repository": "iOfficeAI/AionUi",
+            "commit": "11cd2a9a20d1e033157636efc570b41384c66d85",
+            "reuse": "AgentCard row; availability filters; LocalAgents search/filter and custom create/edit/save/refresh flow; InlineAgentEditor separate executable/argv fields",
+            "notice": "desktop/src/renderer/src/vendor/aionui/NOTICE.md",
+            "originalSha256Manifest": "desktop/src/renderer/src/vendor/aionui/source-manifest.json"
+          },
+          {
+            "repository": "block/goose",
+            "commit": "2c6812a358db1b11953b9fafc05c6126eb818788",
+            "reuse": "AcpReadinessPanel status, diagnostics and action structure; SettingsView inspected for workspace allocation, not runtime reuse",
+            "notice": "desktop/src/renderer/src/vendor/goose/NOTICE.md",
+            "originalSha256Manifest": "desktop/src/renderer/src/vendor/goose/source-manifest.json"
+          }
+        ],
+        "componentSources": [
+          "desktop/src/renderer/src/AgentSettings.tsx",
+          "desktop/src/renderer/src/AgentPicker.tsx",
+          "desktop/src/renderer/src/vendor/aionui/AgentRow.tsx",
+          "desktop/src/renderer/src/vendor/aionui/agentFilters.ts",
+          "desktop/src/renderer/src/vendor/goose/AgentReadinessPanel.tsx",
+          "desktop/src/renderer/src/assets/main.css",
+          "desktop/src/renderer/src/vendor/jean/components/workbench/WorkbenchShell.tsx"
+        ],
+        "layout": "Task sidebar retained; 272px directory and flexible detail, 220px directory at <=1100px; list and detail scroll independently; fixed bottom Add action; inline editor max-width 640px",
+        "interaction": "Native executable file picker; separate ordered argv inputs; saved identifier fixed; returning preserves task draft and compact three-role selects",
+        "conflictRecovery": "Retain pending identifier/program/argv, load latest config revision, then require explicit Save configuration retry; no automatic submit",
+        "protocolTruth": "Explicit initialize-only handshake; no prompt, development session, authentication or model call; installation, protocol readiness and account availability remain separate facts",
+        "evidence": {
+          "uiResult": ".agent-review-loop/agent-settings-ui-5iBYDc/result.json",
+          "captures": [
+            ".impeccable/review/agent-settings/desktop.png",
+            ".impeccable/review/agent-settings/editor.png",
+            ".impeccable/review/agent-settings/checked.png",
+            ".impeccable/review/agent-settings/desktop-960.png",
+            ".impeccable/review/agent-settings/desktop-dark.png",
+            ".impeccable/review/agent-settings/conflict.png",
+            ".impeccable/review/agent-settings/conflict-recovered.png",
+            ".impeccable/review/agent-settings/empty-search.png",
+            ".impeccable/review/agent-settings/task-roles.png"
+          ],
+          "modelsCalled": 0,
+          "protocolRequests": [
+            "initialize"
+          ],
+          "detectorResult": ".agent-review-loop/agent-settings-detector.json",
+          "detectorFindings": [],
+          "implementationRecord": "docs/learning/19-agent-setup-workspace.md",
+          "reviewScope": "Initial finish review identified one conflict-action issue; its fix was reviewed as resolved with disposition ship, alongside original matching evidence. This does not certify all commercial Agent backends.",
+          "documentPass": "Static source and nine existing capture review only; no model calls, UI runs or implementation tests rerun."
+        },
+        "limits": "No upstream authentication/analytics/backend runtime copied; trusted local single-user Windows source build; no cross-platform packaged installation or universal commercial-account acceptance claim."
       }
     }
   },
@@ -233,9 +290,16 @@
     {
       "name": "Agent分工选择",
       "kind": "custom",
-      "description": "普通扩展：复用Field/Button和现有主题的三列原生select。这里只演示控件状态，不检测安装、不验证登录、不调用模型。选项为结构示例，不代表本机可用Agent。",
-      "html": "<section class=\"ds-agent-picker\" aria-label=\"Agent分工结构示例\"><div class=\"ds-agent-heading\"><strong>Agent 分工</strong><div><button type=\"button\">重新检测</button><button type=\"button\">接入与安装说明</button></div></div><div class=\"ds-agent-selects\"><label for=\"ds-agent-planner\">规划<select id=\"ds-agent-planner\"><option>规划 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-executor\">执行<select id=\"ds-agent-executor\"><option>执行 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-reviewer\">审查<select id=\"ds-agent-reviewer\"><option>审查 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label></div><p>各角色使用所选 Agent 的本机配置与账号，任务创建后固定。安装检测不验证登录，也不调用模型。</p></section>",
+      "description": "普通扩展：复用Field/Button和现有主题的三列原生select；管理 Agent进入独立设置，返回保留草稿，已移除配置的选择明确禁用。这里只演示控件状态，不检测安装、不验证登录、不调用模型。选项为结构示例，不代表本机可用Agent。",
+      "html": "<section class=\"ds-agent-picker\" aria-label=\"Agent分工结构示例\"><div class=\"ds-agent-heading\"><strong>Agent 分工</strong><div><button type=\"button\">重新检测</button><button type=\"button\">管理 Agent</button></div></div><div class=\"ds-agent-selects\"><label for=\"ds-agent-planner\">规划<select id=\"ds-agent-planner\"><option>规划 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-executor\">执行<select id=\"ds-agent-executor\"><option>执行 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-reviewer\">审查<select id=\"ds-agent-reviewer\"><option>审查 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label></div><p>各角色使用所选 Agent 的本机配置与账号，任务创建后固定。安装检测不验证登录，也不调用模型。</p></section>",
       "css": ".ds-agent-picker{font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;color:var(--foreground,oklch(.145 0 0));background:var(--background,#fff);border-top:1px solid var(--border,oklch(.922 0 0));padding-top:14px;max-width:720px}.ds-agent-heading{display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:12px}.ds-agent-heading strong{font-weight:600}.ds-agent-heading>div{display:flex;align-items:center;gap:4px}.ds-agent-heading button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border:0;border-radius:calc(var(--radius,.5rem) - 2px);padding:7px 10px;background:transparent;color:inherit;cursor:pointer}.ds-agent-heading button:hover{background:var(--accent,oklch(.97 0 0))}.ds-agent-heading button:disabled{opacity:.5;cursor:default}.ds-agent-heading button:focus-visible,.ds-agent-selects select:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-agent-selects{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.ds-agent-selects label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:500}.ds-agent-selects select{width:100%;height:36px;border:1px solid var(--border,oklch(.922 0 0));border-radius:6px;color:var(--foreground,oklch(.145 0 0));background:var(--background,#fff);padding:0 9px;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-agent-picker p{font-size:11px;line-height:1.8;color:var(--muted-foreground,#666);margin:12px 0}"
+    },
+    {
+      "name": "Agent设置目录与协议详情",
+      "kind": "custom",
+      "description": "AionUi目录与Goose协议面板的普通扩展结构示例；使用既有Jean语义主题。列表与详情独立滚动、添加入口固定底部。示例不连接程序；编辑使用原生文件浏览和独立argv行，版本冲突保留输入、读取最新版本后显式再次保存。",
+      "html": "<section class=\"ds-setup\" aria-label=\"Agent设置结构示例\"><header><strong>Agent 设置</strong><button type=\"button\">返回工作台</button></header><div class=\"ds-setup-body\"><aside class=\"ds-setup-directory\"><label for=\"ds-setup-search\">本机 Agent · 结构示例</label><input id=\"ds-setup-search\" placeholder=\"搜索名称或协议\"/><label class=\"ds-setup-filter-label\" for=\"ds-setup-filter\">安装筛选</label><select id=\"ds-setup-filter\"><option>全部</option><option>已找到</option><option>未找到</option></select><div class=\"ds-setup-list\"><button type=\"button\" class=\"ds-setup-row\" aria-current=\"true\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"4\" y=\"7\" width=\"16\" height=\"13\" rx=\"2\"/><path d=\"M12 3v4M8 11v3m8-3v3M1 12h3m16 0h3\"/></svg><span><strong>Agent · 结构示例</strong><small>已找到程序</small></span></button></div><button type=\"button\">添加自定义 Agent</button></aside><div class=\"ds-setup-detail\"><h2>Agent · 结构示例</h2><p>可承担角色　规划、执行、审查</p><p>安装检测　已找到程序，账号未检查</p><section class=\"ds-setup-readiness\" aria-label=\"协议检查结构示例\"><strong>程序已找到，尚未检查协议</strong><p>检查会启动所选程序并完成握手，不发送任务、不调用模型。账号、额度与模型可用性需在 Agent 中确认。</p><button type=\"button\">检查协议</button><details><summary>查看诊断结构示例</summary><pre>此预览不运行检查，也不表示协议或账号可用。</pre></details></section><p>启动程序和每项参数分别编辑。版本冲突时保留输入，读取最新配置后再次显式保存。</p><p>仅为静态结构示例，不代表本机安装或检查结果。</p></div></div></section>",
+      "css": ".ds-setup{display:flex;flex-direction:column;height:420px;max-width:900px;min-width:0;background:var(--background,#fff);color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-setup>header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 20px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-setup>header>strong{font-size:21px;font-weight:600;letter-spacing:-.025em}.ds-setup button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;color:inherit;background:var(--background,#fff);border:1px solid var(--border,oklch(.922 0 0));border-radius:calc(var(--radius,.5rem) - 2px);padding:7px 12px;cursor:pointer}.ds-setup button:hover{background:var(--accent,oklch(.97 0 0))}.ds-setup button:active{opacity:.9}.ds-setup button:focus-visible,.ds-setup input:focus-visible,.ds-setup select:focus-visible,.ds-setup summary:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-setup-body{display:grid;grid-template-columns:272px minmax(0,1fr);flex:1;min-height:0}.ds-setup-directory{display:flex;flex-direction:column;gap:12px;min-height:0;padding:18px 16px;background:var(--sidebar,#f7f7f7);border-right:1px solid var(--border,oklch(.922 0 0))}.ds-setup-directory>label{font-weight:600}.ds-setup-directory .ds-setup-filter-label{font-size:11px;font-weight:500}.ds-setup input,.ds-setup select{min-width:0;background:var(--background,#fff);color:inherit;border:1px solid var(--border,oklch(.922 0 0));border-radius:6px;padding:7px 8px;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-setup-list{flex:1;min-height:0;overflow-y:auto;scrollbar-gutter:stable}.ds-setup .ds-setup-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px 10px;text-align:left;border:0;border-radius:8px}.ds-setup-row[aria-current=true]{background:var(--accent,oklch(.97 0 0));color:var(--accent-foreground,oklch(.205 0 0))}.ds-setup-row svg{width:20px;height:20px;flex-shrink:0}.ds-setup-row>span{display:grid;gap:3px;min-width:0}.ds-setup-row strong{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-setup-row small{font-size:11px;color:var(--muted-foreground,#666)}.ds-setup-detail{min-width:0;overflow-y:auto;padding:28px 32px 36px}.ds-setup-detail h2{font-size:19px;font-weight:600;margin:0 0 6px;overflow-wrap:anywhere}.ds-setup-detail p{font-size:12px;line-height:1.65;overflow-wrap:anywhere;color:var(--muted-foreground,#666)}.ds-setup-readiness{display:grid;justify-items:start;gap:12px;padding:18px 0;margin:12px 0;border-block:1px solid var(--border,oklch(.922 0 0))}.ds-setup-readiness p{margin:0}.ds-setup-readiness summary{cursor:pointer}.ds-setup-readiness summary:hover{color:var(--muted-foreground,#666)}.ds-setup-readiness pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font:11px/1.6 Consolas,monospace}@media(max-width:1100px){.ds-setup-body{grid-template-columns:220px minmax(0,1fr)}.ds-setup-directory{padding:14px 10px}.ds-setup-detail{padding:24px 20px}}"
     }
   ],
   "narrative": {

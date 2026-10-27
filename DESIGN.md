@@ -141,6 +141,7 @@ Vibe 计划组件在 `.vibe-plan-surface` 中将边界、正文和标题/动作�
 - 底部动作区不随消息滚走；内边距 14px 24px 18px，包含真实阶段、说明和一个下一步主动作。跳转已有计划或审查时，将相应消息滚入会话区并将焦点移至其按钮。
 - 右侧检查面板默认可见，拥有高 42px 的“文件 / 改动 / 会话”标签栏。文件列表、源码、差异和会话列表各自按内容滚动；文件列表不超过面板高度的 36%，至少保留 90px。源码区域使用剩余空间。
 - 1100px 以下任务侧栏为 210px，会话内容内边距为 22px 18px，底部动作为 12px 16px 并允许按钮换行；去掉重复的动作区环境尾注。最小桌面窗口宽度为 960px，不据此宣称移动端支持。
+- Agent 设置继续保留任务侧栏与主区工具栏；管理区使用 272px 目录和流式详情，1100px 以下目录为 220px。目录列表与详情各自滚动，搜索/筛选和底部“添加自定义 Agent”不随列表滚走；详情长路径与诊断允许换行。编辑表单最大宽度 640px，留在详情区内，不新增弹窗。
 
 ## Elevation & Depth
 
@@ -158,15 +159,27 @@ Vibe 计划组件在 `.vibe-plan-surface` 中将边界、正文和标题/动作�
 
 使用 Jean Button 的 default、outline、ghost 变体及大小接口。主动作保留明确文字；工具栏使用 ghost，打开目录或原生会话使用 outline。禁用状态使用实际 disabled，不能仅变灰。表单继续使用 Jean Field/InputGroup/Textarea 和 REA 恢复的 Codex ComposerLayout，保持 label 关联与本机草稿恢复。
 
-新任务入口统一选择项目或保存位置，不增加新建/已有模式选择；保留“准备任务不消耗模型额度”说明。接入配置按需展开，错误沿用 Alert；服务连接中断与普通操作失败分别提供重连或关闭错误操作。
+新任务入口统一选择项目或保存位置，不增加新建/已有模式选择；保留“准备任务不消耗模型额度”说明。Agent 安装与启动配置移入独立设置工作区，新任务保留角色选择与管理入口；错误沿用既有语义反馈，服务连接中断与普通操作失败分别提供重连或关闭错误操作。
 
 ### Agent role picker
 
 0.15 普通扩展在新任务中加入 `AgentPicker.tsx`，继续使用 Jean Field / FieldLabel / ghost Button 与原生 select，不新增调色板、字体、阴影或布局世界。分工区以 1px border 分隔、上内边距 14px；“规划 / 执行 / 审查”三列等宽，列间距 12px。select 高 36px、圆角 6px、内边距 0 9px、字号 12px，表面与文字使用既有 `background`、`foreground`、`border` 语义变量，保留原生键盘选择。
 
-每个 select 有可见且关联 id 的标签，仅列出支持该角色的 Agent，可用项在前；缺失适配器的 option 实际禁用并标注“未安装适配器”。初次检测与“重新检测”期间显示“检测中…”，并禁用重复检测；“接入与安装说明”使用既有 ghost Button，失败说明在分工区就地显示。说明明确：检测只读取本机安装状态，不验证登录、不下载、不调用模型。
+每个 select 有可见且关联 id 的标签，仅列出支持该角色的 Agent，可用项在前；缺失适配器的 option 实际禁用并标注“未安装适配器”。初次检测与“重新检测”期间显示“检测中…”，并禁用重复检测；“管理 Agent”使用既有 ghost Button 进入设置，返回保留任务草稿。已移除配置的既有选择显示“配置已移除”且禁用，不暗换角色。失败说明在分工区就地显示。说明明确：检测只读取本机安装状态，不验证登录、不下载、不调用模型。
 
 创建时选择的角色随任务固定。任务标题分工、计划、执行、审查、权限说明和原生会话区显示实际所选 Agent，而不是将 Codex / WorkBuddy 写成不可变角色；旧任务保留 Codex / WorkBuddy / Codex 默认值。各 Agent 的账号、默认模型、Skills 和 MCP 由自身环境决定；检测可用不是商业账号或模型能力已验证。
+
+### Agent setup directory, editor and readiness
+
+2026-10-27 的普通扩展继续现有 Jean / T3 / Vibe / Codex / Pierre 世界。AionUi 提交 `11cd2a9a20d1e033157636efc570b41384c66d85` 提供 AgentCard 行、agentFilters 和 LocalAgents / InlineAgentEditor 的搜索、筛选与原位编辑流程；Goose 提交 `2c6812a358db1b11953b9fafc05c6126eb818788` 提供 AcpReadinessPanel 的状态、诊断与动作结构。适配到 Rondo 数据、IPC 与 Jean 控件；来源、原始文件 SHA256 和 Apache-2.0 许可保留在对应 vendor 目录，不宣称复制上游认证或整个运行时。
+
+目录行是原生 button，名称单行省略、安装事实显示为次级文字，选中用现有 accent 表面和 `aria-current`，键盘焦点使用 ring 轮廓。搜索与“全部 / 已找到 / 未找到”筛选只作用于 Agent 目录；无匹配时保留说明与添加入口。详情按角色、安装、协议检查、启动配置和帮助顺序呈现，以细分隔与现有语义表面组织，不新增配色或阴影。
+
+编辑沿用 Jean Field / Input / Button：标识保存后固定，程序使用原生文件选择器，每个 argv 参数独立一行，保留添加/移除参数与明确保存/取消。含空格路径无需加引号，不拼接成 shell 命令。版本冲突在详情顶部显示可读错误与“保留输入，读取最新配置”；此动作只读取最新版本，保留当前标识、程序和参数，提示核对后再次点击“保存配置”，不自动重试提交。移除配置使用原位警告与明确确认，说明对任务绑定的影响。
+
+协议面板使用状态图标、文字、诊断 details 与 outline Button，分别表达未找到、已找到但未检查、检查中、通过与失败；检查中的重复动作禁用，减少动态效果偏好下关闭旋转。显式检查只初始化协议，不发送开发任务、prompt 或登录；“协议检查通过”不能代替账号、额度或模型能力验证。WorkBuddy 的实验通道与启动操作保持原有边界。
+
+静态文档同步依据当前源码和逐张查看的 `.impeccable/review/agent-settings/` 九张捕获：`desktop.png`、`editor.png`、`checked.png`、`desktop-960.png`、`desktop-dark.png`、`conflict.png`、`conflict-recovered.png`、`empty-search.png`、`task-roles.png`。既有零模型证据 `.agent-review-loop/agent-settings-ui-5iBYDc/result.json` 记录 `modelsCalled: 0`、仅 `initialize` 请求、版本冲突后保留输入与显式再次保存、草稿返回和三角色选择；本次文档同步未重跑 UI、模型或实现测试。实现验收及独立审查范围见 `docs/learning/19-agent-setup-workspace.md`：冲突动作修复已复核为 resolved、ship，不扩大为所有商业 Agent 后端验收。
 
 ### Task navigation
 
@@ -192,7 +205,7 @@ Vibe 计划组件在 `.vibe-plan-surface` 中将边界、正文和标题/动作�
 
 原生与 ACP 工具、会话事件位于对应所选 Agent 消息中，原生 details 按需展开；最近事件有界显示，输出区域内部滚动。待处理的 command/file 审批和用户问题在现有输入、select 和 Button 中呈现，不能用模拟答复继续执行。本文记录实现中的状态与控件，不据源码存在宣称已验证原生跳转或审批交互。
 
-连接信息放在工具栏 Popover 中，本地任务服务、MCP 配置项、WorkBuddy 原生通道与模型就绪是不同状态。反馈使用原有 Alert 和可关闭通知；刷新和恢复是只读操作，不能变成付费重试。
+工具栏与任务侧栏的“Agent 设置”入口打开设置工作区，本地任务服务、MCP 配置项、WorkBuddy 原生通道与模型就绪仍是不同状态。反馈使用原有语义错误与可关闭通知；目录刷新和任务恢复是只读操作，显式协议检查可启动程序但不发起模型任务，不能把这些动作变成付费重试。
 
 ## Do's and Don'ts
 

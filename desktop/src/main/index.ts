@@ -4,6 +4,7 @@ import { readdir, realpath, readFile, stat } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
 import { previewHtml, closePreviews } from './preview'
+import { agentConfigPath, readAgentSettings, updateAgentSettings } from './agentSettings'
 import type {
   Context,
   StartInput,
@@ -31,6 +32,27 @@ async function workspaceFile(id: number, name: string): Promise<string> {
 }
 function handlers(): void {
   const actions: Record<string, (...args: never[]) => unknown> = {
+    'agent-settings': () => {
+      try {
+        const state = readAgentSettings()
+        return { path: state.path, revision: state.revision, agents: state.agents }
+      } catch (error) {
+        return { path: agentConfigPath(), agents: {}, revision: '', error: String(error) }
+      }
+    },
+    'save-agent': (input: Parameters<typeof updateAgentSettings>[0]) => updateAgentSettings(input),
+    'choose-agent-program': async () =>
+      (
+        await dialog.showOpenDialog(window, {
+          title: '选择 Agent 启动程序',
+          properties: ['openFile']
+        })
+      ).filePaths[0],
+    'check-agent': (agent: string) => backend.call('check_agent_connection', { agent }),
+    'open-agent-config': async () => {
+      const error = await shell.openPath(agentConfigPath())
+      if (error) throw Error(error)
+    },
     status: () => backend.status(),
     agents: () => backend.call('list_agents'),
     'choose-project': async () =>

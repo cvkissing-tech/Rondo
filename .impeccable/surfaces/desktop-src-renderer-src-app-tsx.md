@@ -63,3 +63,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## 0.15.0 Agent角色扩展
 
 普通功能扩展，继续现行T3/Jean/Vibe/Codex/Pierre视觉系统。新任务增加三列原生select的Agent分工区，复用Field/Button与既有边框、字体和浅深主题；不新增品牌视觉。标题、计划面板、工作流、工具权限与会话区显示实际选定Agent，旧任务保留默认角色。安装检测明确区别登录；缺失适配器禁用；ACP没有原生GUI跳转时说明并禁用入口，不虚构Codex链接。差异标签必须真实读取并在失败时提供重试。Task4恢复截图和无模型角色选择截图一起验收；fixture明确标记为离线，不冒充商业模型。
+
+
+## Agent setup extension · 2026-10-27
+
+THESIS: 把安装与程序配置放入可返回的设置工作区，新任务继续专注需求与角色选择。属于既有世界的功能扩展，用户已确认由负责人直接决定布局，不再进行风格选择。
+
+OWN-WORLD: 沿用Jean浅深主题、系统字体、Field/Input/Button，保持任务侧栏。管理区域分成272px目录与流式详情；960px下目录220px。列表与详情独立滚动，底部添加入口固定。
+
+STORY: 搜索/筛选已找到的程序，查看角色与安装事实；自定义程序使用原生文件浏览、独立参数行，保存后返回任务选择。协议检查是显式握手，账号与模型依旧归各Agent。
+
+FIRST VIEWPORT: 设置标题与返回按钮、目录筛选与列表、当前Agent角色/安装情况、协议检查动作。编辑在同一详情区，长路径换行，错误可读；返回保留任务草稿。
+
+FORM: code-led；直接适配AionUi AgentCard/agentFilters/LocalAgents/InlineAgentEditor的相关结构与流程，Goose AcpReadinessPanel的状态/诊断/动作；保留出处、commit、SHA256与Apache许可证。去除其品牌、认证、Analytics与应用专属依赖，不声称复制整个上游。
+
+FINISH: 检查桌面、960px、深色、编辑、保存/握手、搜索空态、版本冲突及草稿返回；以隔离配置和标准协议fixture验收，默认零商业模型。新页面和历史任务不伪造连接或认证成功。需完成独立finish reviewer和documenter。

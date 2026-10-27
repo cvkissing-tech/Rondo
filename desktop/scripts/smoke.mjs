@@ -183,13 +183,13 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
     false
   )
-  await page.getByRole('button', { name: 'Agent 连接', exact: true }).click()
-  await page.getByText('点击检查本机执行通道', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Agent 设置', exact: true }).first().click()
+  await page.getByRole('heading', { name: 'Agent 设置', exact: true }).waitFor()
   await capture(app, page, {
     animations: 'disabled',
     path: join(evidence, '05-connections-960.png')
   })
-  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '返回工作台', exact: true }).click()
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
   await page.getByRole('button', { name: '查看代码改动', exact: true }).click()

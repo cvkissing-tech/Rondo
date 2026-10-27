@@ -54,6 +54,16 @@ if (process.argv.includes("--list")) {
       };
     }),
   });
+} else if (process.argv.includes("--probe")) {
+  const id = process.argv[process.argv.indexOf("--probe") + 1];
+  if (!agents.list().includes(id) || agents.inspect(id)?.launch.kind !== "installed")
+    throw Error("ACP adapter is not installed");
+  const runtime = createAcpRuntime({
+    cwd: process.cwd(), agentRegistry: agents, probeAgent: id,
+    permissionMode: "approve-reads", permissionPolicy: { defaultAction: "deny" },
+    nonInteractivePermissions: "fail", fs: false, terminal: false,
+  });
+  try { emit(await runtime.doctor()); } finally { await runtime.shutdown(); }
 } else {
   const lines = readline.createInterface({ input: process.stdin });
   let runtime, turn, input, handle;

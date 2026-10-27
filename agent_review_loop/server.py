@@ -16,7 +16,7 @@ from .review_jobs import ReviewJobs
 from .task_launch import TaskLauncher
 from .planning import PlanJobs
 from .execution import ExecutionJobs, workbuddy_connection
-from .agents import catalog
+from .agents import catalog, check_agent
 
 
 TaskId = Annotated[int, Field(strict=True, ge=1, le=2**63 - 1)]
@@ -71,6 +71,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
             " Locally configured checks run on a disposable snapshot copy before Codex; check failures stop generation."
         ),
     )
+
+    @server.tool(structured_output=True)
+    async def check_agent_connection(agent: Annotated[str, Field(strict=True, min_length=1, max_length=50)]) -> dict[str, Any]:
+        """Explicit local protocol handshake; starts the selected program but no session, prompt, login or model call. Does not certify account or quota."""
+        return await asyncio.to_thread(_invoke, check_agent, agent)
 
     @server.tool(structured_output=True)
     async def start_task(
