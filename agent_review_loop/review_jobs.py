@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from .codex_review import run_codex_review
 from .native_session import read_state
-from .agents import task_agents, require_agent, node_executable
+from .agents import task_agents, require_agent, node_executable, codex_executable
 from .checks import run_checks, validate_config
 from .reviews import review_status
 from .snapshots import SnapshotError, bind_check_evidence, canonical, create_review_package, digest
@@ -185,11 +185,11 @@ class ReviewJobs:
                     if backend.startswith('acp:'):
                         require_agent(backend)
                     configured = self.reviews.executable if self.table == 'execution_jobs' else self.executable
-                    executable = (configured or shutil.which('codex')) if backend == 'codex' else node_executable()
+                    executable = codex_executable(configured) if backend == 'codex' else node_executable()
                 else:
                     executable = self.executable or shutil.which('codex')
                 if executable is None or not Path(executable).is_file():
-                    raise StoreError('CODEX_NOT_FOUND', 'Native Codex CLI is not available')
+                    raise StoreError('CODEX_NOT_FOUND', 'Rondo未找到Codex命令行程序。请在Agent设置检查本机接入；若指定过路径，请确认该文件仍存在。')
                 job_id = uuid4().hex
                 directory = self.root / job_id
                 directory.mkdir(parents=True, exist_ok=False)

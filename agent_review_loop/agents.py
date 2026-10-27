@@ -8,12 +8,35 @@ import subprocess
 import tempfile
 import queue
 import threading
+import sys
 from datetime import datetime, timezone
 
 from .store import StoreError
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AGENTS = {'planner': 'codex', 'executor': 'workbuddy', 'reviewer': 'codex'}
+
+
+def codex_executable(configured=None):
+    """Find an installed CLI even when Explorer does not inherit Codex's PATH."""
+    explicit = configured or os.environ.get('ARL_CODEX_EXECUTABLE')
+    if explicit:
+        return str(Path(explicit).resolve()) if Path(explicit).is_file() else None
+    command = shutil.which('codex')
+    if command and Path(command).is_file():
+        return command
+    if sys.platform == 'win32':
+        local = Path(os.environ.get('LOCALAPPDATA') or Path.home() / 'AppData/Local')
+        roaming = Path(os.environ.get('APPDATA') or Path.home() / 'AppData/Roaming')
+        try:
+            bundled = local / 'OpenAI/Codex/bin'
+            candidates = [*bundled.glob('*/codex.exe'), bundled / 'codex.exe', roaming / 'npm/codex.cmd']
+            installed = [path for path in candidates if path.is_file()]
+            if installed:
+                return str(max(installed, key=lambda path: path.stat().st_mtime_ns).resolve())
+        except OSError:
+            pass
+    return None
 
 
 def normalize_agents(value=None):
@@ -46,7 +69,7 @@ def catalog():
                  Path(os.environ.get('LOCALAPPDATA', '')) / 'Programs/WorkBuddy/WorkBuddy.exe')
     items = [
         {'id': 'codex', 'name': 'Codex · 本机环境', 'roles': list(DEFAULT_AGENTS),
-         'available': bool(shutil.which('codex')), 'protocol': 'Codex App Server', 'auth': 'not_checked'},
+         'available': bool(codex_executable()), 'protocol': 'Codex App Server', 'auth': 'not_checked'},
         {'id': 'workbuddy', 'name': 'WorkBuddy · 本机桌面', 'roles': ['executor'],
          'available': os.name == 'nt' and buddy.is_file(), 'protocol': 'WorkBuddy 5.9.2 native (experimental)', 'auth': 'not_checked'},
     ]
@@ -78,7 +101,7 @@ def check_agent(agent):
         with tempfile.TemporaryDirectory(prefix='rondo-agent-check-') as folder:
             cwd = Path(folder)
             if agent == 'codex':
-                with CodexRpc([shutil.which('codex'), 'app-server'], cwd, cwd / 'stderr.log') as rpc:
+                with CodexRpc([codex_executable(), 'app-server'], cwd, cwd / 'stderr.log') as rpc:
                     rpc.initialize()
                 report = {'ok': True, 'message': 'Codex App Server 握手通过'}
             elif agent == 'workbuddy':
