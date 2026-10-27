@@ -78,3 +78,7 @@ FIRST VIEWPORT: 设置标题与返回按钮、目录筛选与列表、当前Agen
 FORM: code-led；直接适配AionUi AgentCard/agentFilters/LocalAgents/InlineAgentEditor的相关结构与流程，Goose AcpReadinessPanel的状态/诊断/动作；保留出处、commit、SHA256与Apache许可证。去除其品牌、认证、Analytics与应用专属依赖，不声称复制整个上游。
 
 FINISH: 检查桌面、960px、深色、编辑、保存/握手、搜索空态、版本冲突及草稿返回；以隔离配置和标准协议fixture验收，默认零商业模型。新页面和历史任务不伪造连接或认证成功。需完成独立finish reviewer和documenter。
+
+## WorkBuddy progress bounded repair · 2026-10-27
+
+普通修复，保留所有视觉token、组件、字体、主题和布局。既有NativeEvents承载WorkBuddy公开消息/工具记录；任务执行开始后，未手动指定展开状态的计划默认收起，刷新执行记录直接定位执行行。只显示真实保存记录，取消不代表完成，不重新生成。用户#4恢复后47项历史与文件区一起可读；代码已有变化，所以原计划仍如实为过期。验收为隔离DB恢复页面与HTTP产物读取、浅深主题/960px，默认零模型。

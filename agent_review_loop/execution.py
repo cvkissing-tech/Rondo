@@ -5,6 +5,7 @@ from pathlib import Path
 import queue
 import re
 import shutil
+import sqlite3
 import subprocess
 import threading
 import time
@@ -15,6 +16,8 @@ from .review_jobs import ReviewJobs
 from .repair import repair_context, unauthorized_changed_files
 from .snapshots import _git, canonical, current_tree
 from .store import StoreError, _text, _timestamp
+from .native_session import write_state
+from .workbuddy_progress import project_update, public_text
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / 'integrations/workbuddy/native-driver.mjs'
@@ -28,7 +31,7 @@ def node_executable():
 
 
 def native_run(payload, directory, executable, *, cancel_check=lambda: False, on_event=lambda event: None,
-               timeout=900):
+               timeout=3600):
     """JSONL only; an interrupted dispatch is never retried. Own only the helper process."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
@@ -58,9 +61,11 @@ def native_run(payload, directory, executable, *, cancel_check=lambda: False, on
         threading.Thread(target=read, daemon=True).start()
         started, stop_at, cancelling = time.monotonic(), None, False
         submitted = False
+        stop_reason = None
         while True:
             now = time.monotonic()
             if (cancel_check() or now - started > timeout) and not cancelling:
+                stop_reason = 'timeout' if now - started > timeout else 'user_cancelled'
                 cancelling = True
                 stop_at = now + 12
                 try:
@@ -83,7 +88,7 @@ def native_run(payload, directory, executable, *, cancel_check=lambda: False, on
                 raise StoreError('DISPATCH_UNKNOWN' if submitted or payload.get('command') == 'run' else 'WORKBUDDY_NOT_CONNECTED',
                                  event.get('error', 'Native execution failed'))
             if event['event'] in ('turn_ended', 'cancelled', 'connected') or (payload.get('command') == 'inspect' and event['event'] == 'state'):
-                return event
+                return {**event, **({'stop_reason': stop_reason, 'timeout_seconds': timeout} if stop_reason else {})}
         raise StoreError('DISPATCH_UNKNOWN', 'Native helper closed without a confirmed terminal receipt')
 
 
@@ -119,6 +124,7 @@ class ExecutionJobs(ReviewJobs):
     @staticmethod
     def _public(row):
         result = ReviewJobs._public(row)
+        if result.get('backend') == 'workbuddy-native': result['backend'] = 'workbuddy'
         details = json.loads(row['result_json']) if row['result_json'] else {}
         return {**result, **{key: details.get(key, result.get(key)) for key in
                             ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model',
@@ -300,7 +306,7 @@ class ExecutionJobs(ReviewJobs):
                 '先通过 agent-review-loop MCP 的 get_task_context 读取任务，并核对返回的 workspace 与以下路径完全一致。'
                 '若工具不可用或目录不一致，停止并说明原因。\n'
                 f"task_id={task['task_id']}\nworkspace={repo}\n"
-                f"使用 claim_task 领取，owner 必须是 {owner}；expected_version 使用刚读取的版本；lease_seconds=900。\n"
+                f"使用 claim_task 领取，owner 必须是 {owner}；expected_version 使用刚读取的版本；lease_seconds=3600。\n"
                 '只在指定工作区修改代码，先读项目约定，再按计划实现并运行相关检查。长任务及时 renew_claim。'
                 '完成后必须通过 submit_result 提交真实修改和检查摘要，使用领取返回的 attempt_id、claim_token、version；'
                 f'request_id 使用 {job_id}。不要自行调用规划或审查工具，Rondo 会自动接续审查。'
@@ -318,7 +324,27 @@ class ExecutionJobs(ReviewJobs):
                     payload['model'] = model
                 (directory / 'input.json').write_bytes(canonical(payload) + b'\n')
 
+                progress = {'environment': 'workbuddy', 'persistent': True, 'session_id': details['session_id'], 'events': []}
+                activated = False
+                def activate():
+                    nonlocal activated
+                    if activated or os.name != 'nt' or self.runner is not native_run: return
+                    activated = True
+                    # Open after a real event: opening the empty shell before the prompt
+                    # was persisted raced WorkBuddy's history projection.
+                    try: os.startfile('workbuddy://chat/' + details['session_id'])
+                    except OSError: details['activation_notice'] = 'Open the dedicated session in WorkBuddy to inspect its progress'
                 def event(value):
+                    if value['event'] == 'progress':
+                        if project_update(progress, value.get('update', {})):
+                            try:
+                                write_state(directory / 'runtime', progress)
+                                with (directory / 'runtime' / 'progress.jsonl').open('ab') as log:
+                                    log.write(canonical({'event': 'progress', 'update': {**value['update'], 'text': public_text(value['update'].get('text') or '', 8000)}}) + b'\n')
+                            except (OSError, sqlite3.Error) as error:
+                                details['projection_error'] = str(error)[:500]
+                            activate()
+                        return
                     phase = value['event']
                     if phase == 'state':
                         phase = 'waiting_input' if value.get('state') == 'waiting_input' else 'running'
@@ -326,12 +352,7 @@ class ExecutionJobs(ReviewJobs):
                     if value['event'] == 'dispatched' and value.get('model'):
                         details['model'] = value['model']
                     self._save_details(job_id, details)
-                    if value['event'] == 'session_created' and os.name == 'nt' and self.runner is native_run:
-                        # Adapted from Kxiandaoyan's activate_via_deeplink: open ONLY our new session.
-                        try:
-                            os.startfile('workbuddy://chat/' + details['session_id'])
-                        except OSError:
-                            details['activation_notice'] = 'Open the dedicated session in WorkBuddy to inspect its progress'
+                    if value['event'] == 'state' and value.get('state') == 'waiting_input': activate()
                     if value['event'] == 'dispatched':
                         with self.store._connection(write=True) as db:
                             db.execute("UPDATE execution_jobs SET state='running' WHERE id=? AND state='preparing'", (job_id,))
@@ -340,6 +361,11 @@ class ExecutionJobs(ReviewJobs):
                                      cancel_check=lambda: self._cancelled(job_id), on_event=event)
             if result.get('event') == 'cancelled':
                 details['phase'] = 'cancelled'
+                details['stop_reason'] = result.get('stop_reason', 'user_cancelled')
+                details['summary'] = (
+                    f"执行达到 {result.get('timeout_seconds', 3600) // 60} 分钟上限，已停止。"
+                    if details['stop_reason'] == 'timeout' else '执行已取消。'
+                ) + '工作区改动和原生会话记录保留；尚未提交执行结果，也未完成审查。'
                 self._finish(job_id, 'cancelled', details)
                 return
             if self._cancelled(job_id):

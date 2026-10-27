@@ -24,3 +24,10 @@ first-frame-as-success behavior are not copied.
 The other surveyed projects supply comparisons, not vendored code. In particular this
 implementation does not extract account credentials, spawn a replacement coding harness,
 force fullAccess/allow_always or insert rows into WorkBuddy's private history database.
+
+2026-10-27 Rondo fixes: bridge revision4 retains bounded public agent-message/tool-call
+updates for the owned worker and exposes drainEvents; reasoning updates and unrelated
+sessions are excluded. `terminated` is considered idle only after outgoing RPCs and native
+active-session checks clear. Native activation moves from empty session creation to the
+first public progress event (or native input wait), avoiding the observed early history-read
+race. These are Rondo adaptations, not claims of an upstream patch or all-version support.

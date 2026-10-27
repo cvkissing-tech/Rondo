@@ -201,10 +201,11 @@ export function TaskTimeline({
     reviewer = agentName(selected.reviewer)
   const [sessionError, setSessionError] = useState('')
   const planRef = useRef<HTMLElement>(null)
+  const executionRef = useRef<HTMLElement>(null)
   const reviewRef = useRef<HTMLElement>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const flow = taskFlow(context, planJob, plan, reviewJob, review, patch, execution)
-  const planOpen = expanded.plan ?? Boolean(planJob && !reviewJob)
+  const planOpen = expanded.plan ?? Boolean(planJob && !execution && !reviewJob)
   const reviewOpen = expanded.review ?? Boolean(reviewJob)
   const executionOpen = expanded.execution ?? Boolean(execution || context.task.result)
   const executionSummary = execution?.summary || context.task.result?.summary
@@ -216,11 +217,15 @@ export function TaskTimeline({
       ...(current ? [current.job_id] : [])
     ]).size
   function action(value: TaskAction) {
+    const showExecution =
+      value === 'execute' || value === 'repair' || (value === 'refresh' && execution && !reviewJob)
+    if (showExecution) setExpanded((p) => ({ ...p, execution: true }))
     if (value === 'plan-record' || value === 'plan') setExpanded((p) => ({ ...p, plan: true }))
     if (value === 'review-record' || value === 'review')
       setExpanded((p) => ({ ...p, review: true }))
-    const destination =
-      value === 'plan-record' || value === 'plan'
+    const destination = showExecution
+      ? executionRef
+      : value === 'plan-record' || value === 'plan'
         ? planRef
         : value === 'review-record' || value === 'review'
           ? reviewRef
@@ -321,11 +326,13 @@ export function TaskTimeline({
             planContent
           ) : (
             <p className="message-preview">
-              {plan?.plan.summary || '从需求与项目源码拆解实施步骤，交给所选执行 Agent。'}
+              {plan && plan.freshness !== 'current' && '原计划基于旧代码，查看时请核对当前改动。 '}
+              {plan?.plan.summary.slice(0, 180) ||
+                '从需求与项目源码拆解实施步骤，交给所选执行 Agent。'}
             </p>
           )}
         </article>
-        <article className="agent-message">
+        <article className="agent-message" ref={executionRef}>
           {rowHeading(
             'execution',
             context.task.status === 'submitted'

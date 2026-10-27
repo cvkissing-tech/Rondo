@@ -1,7 +1,7 @@
 export const RENDERER_BRIDGE = String.raw`(async function(){
-  if(globalThis.__rondoNativeBridgeV1?.revision===3) return true;
+  if(globalThis.__rondoNativeBridgeV1?.revision===4) return true;
   globalThis.__rondoNativeBridgeV1?.close?.();
-  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map();
+  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map();
   let sequence=0, openResolve, closed=false;
   const opened=new Promise(resolve=>openResolve=resolve);
   const marker=(sid,id)=>{if(typeof id==='string'&&/^wake-run-[a-f0-9-]{36}$/.test(id)){if(!markers.has(sid))markers.set(sid,new Set());markers.get(sid).add(id);}};
@@ -18,6 +18,15 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
         for(const key of ['requestId','userMessageId','messageRequestId'])marker(sid,meta[key]);
         const content=Array.isArray(update.content)?update.content:[update.content];
         for(const item of content){if(item?.type==='text'&&typeof item.text==='string'){const match=item.text.match(/\[CODEX_QUEUE_WAKE (wake-run-[a-f0-9-]{36})\]/);if(match)marker(sid,match[1]);}}
+      }
+      const queue=progress.get(sid);
+      if(queue&&['agent_message_chunk','tool_call','tool_call_update'].includes(update.sessionUpdate)){
+        const content=Array.isArray(update.content)?update.content:[update.content];
+        const text=content.map(x=>x?.type==='text'?x.text:x?.content?.type==='text'?x.content.text:'').filter(Boolean).join('\n').slice(-8000);
+        const last=queue.at(-1);
+        if(update.sessionUpdate==='agent_message_chunk'&&last?.sessionUpdate==='agent_message_chunk')last.text=(last.text+text).slice(-6000);
+        else queue.push({sessionUpdate:update.sessionUpdate,toolCallId:update.toolCallId,title:update.title,kind:update.kind,status:update.status,text});
+        if(queue.length>100)queue.splice(0,queue.length-100);
       }
       return;
     }
@@ -42,7 +51,7 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     const waiting=session.pendingInputKind||(session.pendingPermissions?.length)||(session.pendingQuestions?.length)||(session.pendingElicitations?.length);
     if(waiting)return {state:'waiting_input',workspace:session.cwd,reason:'WorkBuddy requires native permission or input'};
     if(outgoing.has(sid)||active.some(s=>(s.sessionId||s.id)===sid||s.cwd===session.cwd)||session.isProcessing||session.stopRequested||session.hasActiveTeamMembers||session.hasActiveToolCalls)return {state:'busy',workspace:session.cwd,reason:'Native WorkBuddy session is active'};
-    if(!['completed','failed','cancelled','idle','stopped','pending'].includes(String(session.status).toLowerCase()))return {state:'busy',workspace:session.cwd,reason:'Native state is not confirmed idle: '+String(session.status)};
+    if(!['completed','failed','cancelled','idle','stopped','pending','terminated'].includes(String(session.status).toLowerCase()))return {state:'busy',workspace:session.cwd,reason:'Native state is not confirmed idle: '+String(session.status)};
     return {state:'idle',workspace:session.cwd};
   };
   const findWake=async(sid,wakeId)=>{
@@ -96,6 +105,7 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     throw Error('Native submission receipt is uncertain; do not automatically replay');
   };
   const createWorker=async(workspace,sessionId,title)=>{
+    progress.set(sessionId,[]);
     const initialized=await rpc('workspace:initialize',[{cwd:workspace}]);
     if(!initialized?.success)throw Error(initialized?.error||'Native workspace initialization failed');
     const created=await rpc('session:create',[{cwd:workspace,sessionId,isPlayground:false}],45000);
@@ -103,6 +113,7 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     if(title)await rpc('session:rename',[sessionId,title]);
     return {sessionId:created.sessionId,workspace:created.cwd};
   };
-  globalThis.__rondoNativeBridgeV1={revision:3,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,close:()=>mc.port1.close()};
+  const drainEvents=sid=>{const queue=progress.get(sid);if(!queue)return [];return queue.splice(0);};
+  globalThis.__rondoNativeBridgeV1={revision:4,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,close:()=>mc.port1.close()};
   return true;
 })()`;

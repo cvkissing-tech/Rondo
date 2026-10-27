@@ -48,6 +48,7 @@ async function fixture() {
     setTimeout: (fn, delay) => setTimeout(() => { if (delay === 100) clock += 100; fn() }, delay === 100 ? 0 : delay), clearTimeout })
   await vm.runInContext(RENDERER_BRIDGE, context)
   return { bridge: vm.runInContext('globalThis.__rondoNativeBridgeV1', context), requests, state, sid,
+    update: update => ports[0].postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid, result: { sessionId: sid, update } } }),
     busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false } }
 }
 test('native workspace/session creation preserves identity and does not prompt', async () => {
@@ -74,4 +75,28 @@ test('uncertain submission is an error and never triggers a second send', async 
   const f=await fixture();f.noReceipt()
   await assert.rejects(f.bridge.wakeIdle(f.sid,'wake-run-22222222-2222-4222-8222-222222222222','x'),/uncertain/)
   assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,1)
+})
+
+test('terminated is idle only after native active sessions and outgoing calls clear', async () => {
+  const f = await fixture(); f.state.status = 'terminated'
+  assert.equal((await f.bridge.inspect(f.sid)).state, 'idle')
+  f.busy()
+  assert.equal((await f.bridge.inspect(f.sid)).state, 'busy')
+})
+
+test('owned worker publishes messages and tool progress, excludes reasoning and drains once', async () => {
+  const f = await fixture()
+  await f.bridge.createWorker('C:/fixture', f.sid, 'Rondo')
+  f.update({ sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'private thought' } })
+  f.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Writing ' } })
+  f.update({ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'code' } })
+  f.update({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'Write game.js', status: 'in_progress' })
+  f.update({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'saved' } }] })
+  await new Promise(resolve => setImmediate(resolve))
+  const events = f.bridge.drainEvents(f.sid)
+  assert.equal(events.length, 3)
+  assert.equal(events[0].text, 'Writing code')
+  assert.equal(events[2].text, 'saved')
+  assert.equal(f.bridge.drainEvents(f.sid).length, 0)
+  assert.equal(f.bridge.drainEvents('unowned').length, 0)
 })

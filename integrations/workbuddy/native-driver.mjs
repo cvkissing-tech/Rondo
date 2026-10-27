@@ -71,7 +71,7 @@ export class NativeClient {
     })
   }
   call(method, ...args) {
-    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'rpc'].includes(method)) throw Error('Unsupported native operation')
+    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'drainEvents', 'rpc'].includes(method)) throw Error('Unsupported native operation')
     return this.evaluate(`globalThis.__rondoNativeBridgeV1[${JSON.stringify(method)}](...${JSON.stringify(args)})`, 55000)
   }
   close() { this.socket?.close() }
@@ -112,6 +112,7 @@ async function main(input) {
     })
     for (;;) {
       const state = await client.call('inspect', sid)
+      for (const update of await client.call('drainEvents', sid)) emit({ event: 'progress', update })
       emit({ event: 'state', ...state })
       if (state.state === 'idle') { emit({ event: cancelling ? 'cancelled' : 'turn_ended' }); break }
       await pause(1500)

@@ -8,6 +8,7 @@ import threading
 import time
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from agent_review_loop.execution import ExecutionJobs
 from agent_review_loop.review_jobs import ReviewJobs
@@ -91,6 +92,26 @@ class ExecutionTests(unittest.TestCase):
                 return state
             time.sleep(.02)
         self.fail(str(state))
+
+    def test_native_progress_reaches_existing_status_projection(self):
+        def runner(payload, directory, executable, *, cancel_check, on_event):
+            directory.mkdir(parents=True, exist_ok=True)
+            on_event({'event': 'progress', 'update': {'sessionUpdate': 'agent_message_chunk', 'text': 'Writing fixture code'}})
+            return self.native(payload, directory, executable, cancel_check=cancel_check, on_event=on_event)
+        self.execution.runner = runner
+        job = self.execution.start_execution(self.task_id, 'progress')
+        state = self.wait(job, 'succeeded')
+        self.assertEqual(state['events'][0]['text'], 'Writing fixture code')
+        self.assertEqual(state['environment'], 'workbuddy')
+
+    def test_native_projection_failure_does_not_stop_execution(self):
+        def runner(payload, directory, executable, *, cancel_check, on_event):
+            on_event({'event': 'progress', 'update': {'sessionUpdate': 'agent_message_chunk', 'text': 'Writing fixture code'}})
+            return self.native(payload, directory, executable, cancel_check=cancel_check, on_event=on_event)
+        self.execution.runner = runner
+        with patch('agent_review_loop.execution.write_state', side_effect=OSError('cache busy')):
+            job = self.execution.start_execution(self.task_id, 'cache-failure')
+            self.wait(job, 'succeeded')
 
     def test_receipt_submission_and_automatic_fixed_review(self):
         job = self.execution.start_execution(self.task_id, 'once')
