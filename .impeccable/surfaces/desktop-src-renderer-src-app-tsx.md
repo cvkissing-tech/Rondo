@@ -58,3 +58,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 操作错误沿用 destructive Alert，Git 目录错误以中文说明。服务仍连接时显示“关闭错误提示”，只关闭当前错误并保留草稿；服务未连接时显示“重新连接 / 刷新”。简短通知保留既有关闭按钮。测试和准备检查在隐藏窗口运行，不让检查过程弹出额外终端窗口。
 
 已逐张核对 `.impeccable/review/new-project/desktop.png`、`desktop-960.png`、`desktop-dark.png`、`friendly-error.png` 与 `prepared.png`，覆盖浅色主窗口、窄桌面、深色入口、中文目录错误和准备后的工作记录。本轮实现验收为24项相关 Python、build/lint 和零模型新项目 smoke 通过；文档同步未重跑这些检查。截图证明列出的界面状态，零模型 smoke 不代表真实模型完成新项目开发。实现事实以 `PRODUCT.md` 与本轮源码为准。
+
+
+## 0.15.0 Agent角色扩展
+
+普通功能扩展，继续现行T3/Jean/Vibe/Codex/Pierre视觉系统。新任务增加三列原生select的Agent分工区，复用Field/Button与既有边框、字体和浅深主题；不新增品牌视觉。标题、计划面板、工作流、工具权限与会话区显示实际选定Agent，旧任务保留默认角色。安装检测明确区别登录；缺失适配器禁用；ACP没有原生GUI跳转时说明并禁用入口，不虚构Codex链接。差异标签必须真实读取并在失败时提供重试。Task4恢复截图和无模型角色选择截图一起验收；fixture明确标记为离线，不冒充商业模型。

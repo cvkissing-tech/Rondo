@@ -16,6 +16,7 @@ from .review_jobs import ReviewJobs
 from .task_launch import TaskLauncher
 from .planning import PlanJobs
 from .execution import ExecutionJobs, workbuddy_connection
+from .agents import catalog
 
 
 TaskId = Annotated[int, Field(strict=True, ge=1, le=2**63 - 1)]
@@ -52,7 +53,7 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
                 await anyio.to_thread.run_sync(reviews.close)
 
     server = MCPServer(
-        "Rondo", version="0.14.0", log_level="WARNING", lifespan=lifespan,
+        "Rondo", version="0.15.0", log_level="WARNING", lifespan=lifespan,
         instructions=(
             "Local task handoffs for one trusted user. Read a task before claiming. "
             "Use start_task to prepare a new task and isolated workspace; retain task_id and recover with get_task_context. "
@@ -80,9 +81,15 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
         base_ref: Annotated[str, Field(strict=True, min_length=1, max_length=200)] = 'HEAD',
         new_project: Annotated[bool, Field(strict=True)] = False,
+        agents: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Prepare task + isolated Git workspace + fixed base in ONE call. Same request_id/content reuses it. No model call."""
-        return await asyncio.to_thread(_invoke, tasks.start, repo, title, instructions, acceptance, request_id, base_ref, new_project)
+        return await asyncio.to_thread(_invoke, tasks.start, repo, title, instructions, acceptance, request_id, base_ref, new_project, agents)
+
+    @server.tool(structured_output=True)
+    async def list_agents() -> dict[str, Any]:
+        """Read local native/ACP agents and prerequisites. Installed is not authenticated; no model or download."""
+        return await asyncio.to_thread(catalog)
 
     @server.tool(structured_output=True)
     def get_task_context(task_id: TaskId) -> dict[str, Any]:
@@ -139,9 +146,9 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     @server.tool(structured_output=True)
     def answer_native_request(job_id: JobId, request_id: str, answer: str | dict[str, str], kind: str) -> dict[str, Any]:
         """Reply to a pending Codex request after the user chooses in Rondo; never auto-approve. kind: plan or review."""
-        if kind not in ('plan', 'review'):
-            raise ValueError('Expected plan or review')
-        return _invoke((plans if kind == 'plan' else reviews).answer, job_id, request_id, answer)
+        if kind not in ('plan', 'review', 'execution'):
+            raise ValueError('Expected plan, review or execution')
+        return _invoke({'plan': plans, 'review': reviews, 'execution': executions}[kind].answer, job_id, request_id, answer)
 
     @server.tool(structured_output=True)
     async def read_plan(job_id: JobId) -> dict[str, Any]:

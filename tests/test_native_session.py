@@ -6,7 +6,7 @@ import time
 import unittest
 
 from agent_review_loop.codex_rpc import RpcError, ReviewCancelled
-from agent_review_loop.native_session import interactive_request, project_event, read_state
+from agent_review_loop.native_session import interactive_request, project_event, read_state, write_state
 
 
 class NativeSessionTests(unittest.TestCase):
@@ -47,3 +47,27 @@ class NativeSessionTests(unittest.TestCase):
         self.assertEqual(len(state['events']), 60)
         self.assertEqual(state['events'][-1]['status'], 'completed')
         self.assertEqual(state['events'][-1]['output'], 'done')
+
+    def test_concurrent_status_readers_do_not_break_writer(self):
+        legacy = self.root / 'session.json'
+        legacy.write_text('{}')
+        stop, errors = threading.Event(), []
+        def read():
+            while not stop.is_set():
+                try: read_state(self.root)
+                except Exception as error: errors.append(error); return
+        readers = [threading.Thread(target=read) for _ in range(3)]
+        for reader in readers: reader.start()
+        try:
+            # A held legacy JSON read handle reproduces the old Windows replace failure.
+            with legacy.open('rb'):
+                for n in range(100): write_state(self.root, {'counter': n})
+            self.assertEqual(read_state(self.root), {'counter': 99})
+        finally:
+            stop.set()
+            for reader in readers: reader.join(5)
+        self.assertEqual(errors, [])
+
+    def test_corrupt_optional_projection_does_not_hide_primary_job_access(self):
+        (self.root/'session.sqlite3').write_bytes(b'corrupt projection')
+        self.assertEqual(read_state(self.root), {})

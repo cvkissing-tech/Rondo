@@ -1,3 +1,4 @@
+import { agentName, defaultAgents } from '../../shared/types.ts'
 import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from '../../shared/types'
 
 export const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -20,17 +21,21 @@ export function taskFlow(
   patch?: string,
   execution?: ExecutionStatus
 ) {
+  const selected = context.agents || defaultAgents
+  const plannerName = agentName(selected.planner),
+    executorName = agentName(selected.executor),
+    reviewerName = agentName(selected.reviewer)
   if (execution && !terminal.has(execution.status))
     return {
       label:
         execution.phase === 'waiting_input'
-          ? 'WorkBuddy 等待你处理权限或输入'
+          ? `${executorName} 等待你处理权限或输入`
           : execution.status === 'cancelling'
-            ? '正在停止 WorkBuddy'
+            ? `正在停止 ${executorName}`
             : execution.mode === 'repair'
-              ? 'WorkBuddy 正在返修'
-              : 'WorkBuddy 正在执行',
-      detail: '在专用原生会话执行；完成提交后自动接续检查与 Codex 审查。',
+              ? `${executorName} 正在返修`
+              : `${executorName} 正在执行`,
+      detail: `在专用原生会话执行；完成提交后自动接续检查与 ${reviewerName} 审查。`,
       action: 'refresh' as TaskAction,
       button: '刷新执行记录'
     }
@@ -41,7 +46,7 @@ export function taskFlow(
           ? '正在停止规划'
           : planJob.status === 'preparing'
             ? '正在准备规划'
-            : 'Codex 规划作业进行中',
+            : `${plannerName} 规划作业进行中`,
       detail: '本次生成在后台进行；不会自动重试。',
       action: 'plan-record' as TaskAction,
       button: '查看规划状态'
@@ -53,7 +58,7 @@ export function taskFlow(
           ? '正在停止审查'
           : reviewJob.status === 'preparing'
             ? '正在准备审查'
-            : 'Codex 审查作业进行中',
+            : `${reviewerName} 审查作业进行中`,
       detail: '正在处理本次审查作业；执行与审查记录分开保存。',
       action: 'review-record' as TaskAction,
       button: '查看审查状态'
@@ -71,8 +76,8 @@ export function taskFlow(
         execution.phase === 'dispatch_unknown' || execution.status === 'interrupted'
           ? '执行状态需要核对'
           : execution.mode === 'repair'
-            ? 'WorkBuddy 返修未完成'
-            : 'WorkBuddy 执行未完成',
+            ? `${executorName} 返修未完成`
+            : `${executorName} 执行未完成`,
       detail: execution.summary || '读取原执行记录；不会自动重发任务。',
       action: 'refresh' as TaskAction,
       button: '刷新执行记录'
@@ -104,9 +109,9 @@ export function taskFlow(
             ? '本任务的两次审查已用完，查看剩余问题后决定下一步。'
             : execution?.repair_error
               ? `自动交接已停止：${execution.repair_error}。核对记录后可继续交接。`
-              : '将根据当前审查定位的问题返修一次，然后自动复查；使用两边账号额度。',
+              : '将根据当前审查定位的问题返修一次，然后自动复查；使用各Agent账号额度。',
         action: canRepair ? ('repair' as TaskAction) : ('review-record' as TaskAction),
-        button: canRepair ? '交给 WorkBuddy 返修（消耗额度）' : '查看剩余问题'
+        button: canRepair ? `交给 ${executorName} 返修（消耗额度）` : '查看剩余问题'
       }
     }
     return {
@@ -133,16 +138,16 @@ export function taskFlow(
   if (context.task.status === 'submitted')
     return {
       label: '执行结果已提交',
-      detail: '提交结果与代码检查、Codex 审查分别记录。',
+      detail: `提交结果与代码检查、${reviewerName} 审查分别记录。`,
       action: 'review' as TaskAction,
-      button: '发起 Codex 审查（消耗额度）'
+      button: `发起 ${reviewerName} 审查（消耗额度）`
     }
   if (patch?.trim())
     return {
       label: '检测到工作区改动',
       detail: '差异来自当前文件；尚未收到执行完成提交。可核对后发起审查。',
       action: 'review' as TaskAction,
-      button: '发起 Codex 审查（消耗额度）'
+      button: `发起 ${reviewerName} 审查（消耗额度）`
     }
   if (planJob?.status === 'succeeded' && !plan)
     return {
@@ -160,8 +165,8 @@ export function taskFlow(
         button: '核对代码改动'
       }
     return {
-      label: '计划就绪，可以交给 WorkBuddy',
-      detail: '执行后自动检查、审查；需要修改时至多返修并复查一次。使用双方账号额度。',
+      label: `计划就绪，可以交给 ${executorName}`,
+      detail: '执行后自动检查、审查；需要修改时至多返修并复查一次。使用各Agent账号额度。',
       action: 'execute' as TaskAction,
       button: '执行、审查与一次返修（消耗额度）'
     }
@@ -175,8 +180,8 @@ export function taskFlow(
     }
   return {
     label: '工作区就绪，等待规划',
-    detail: '下一步由 Codex 根据需求生成计划；生成会使用本机账号额度。',
+    detail: `下一步由 ${plannerName} 根据需求生成计划；生成会使用本机账号额度。`,
     action: 'plan' as TaskAction,
-    button: '生成 Codex 计划（消耗额度）'
+    button: `生成 ${plannerName} 计划（消耗额度）`
   }
 }

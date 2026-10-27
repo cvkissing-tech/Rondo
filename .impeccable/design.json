@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-26T17:07:42Z",
+  "generatedAt": "2026-10-27T02:37:09Z",
   "title": "Design System: Rondo",
   "extensions": {
     "colorMeta": {
@@ -105,7 +105,7 @@
       }
     ],
     "sourceReuse": {
-      "version": "0.14.0",
+      "version": "0.15.0",
       "direction": "User-authorized code-led source reuse; no seed or comp claim",
       "jeanCommit": "cdbb6af79c745e4ff9d51d592bf4e90e9f1308d3",
       "vibeCommit": "d5cbb5380fa0b32e98ef9b8d987f63decce4be3a",
@@ -151,7 +151,13 @@
         "UserTimelineRow message container extracted; attachments and guest accounts omitted because Rondo does not provide them",
         "TimelineSystemDivider copied; import aliases and Base UI Tooltip render prop adapted to installed Radix asChild",
         "Right panel tab pattern adapted to existing react-resizable-panels; no upstream browser/terminal services copied"
-      ]
+      ],
+      "rolePicker": {
+        "source": "desktop/src/renderer/src/AgentPicker.tsx",
+        "kind": "ordinary extension of Jean Field/Button with native selects",
+        "behavior": "planner/executor/reviewer labels; role-filtered options, unavailable adapters disabled; read-only installation detection, refresh and setup guide; task-bound selected Agent names",
+        "limits": "Installation discovery is not login verification, model execution, or certification of commercial ACP account combinations."
+      }
     }
   },
   "components": [
@@ -206,23 +212,30 @@
     {
       "name": "执行计划步骤",
       "kind": "custom",
-      "description": "工作记录内的 Vibe ChatEntryContainer(plan)/ChatTodoList 结构示例：中性边界、正文工作面、muted 标题与动作区，整体和步骤按需折叠；未执行步骤保留空心状态。额度、真实 tokens 与只读刷新沿用实际作业说明。",
-      "html": "<section class=\"ds-plan\" aria-label=\"执行计划结构示例\"><details class=\"ds-plan-entry\" open><summary>Codex · 执行计划</summary><div class=\"ds-plan-content\"><p>计划说明来自已保存结果。</p><details class=\"ds-plan-todos\" open><summary>计划步骤</summary><ul><li><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg><div>步骤标题<p>本步执行说明。</p><code>src/example.ts</code><p>验收方式：说明本步可检查的结果，尚未执行。</p></div></li></ul></details><details class=\"ds-plan-assumptions\" open><summary>假设与待确认项</summary><p>列出执行前需要核对的依据。</p></details></div></details><p class=\"ds-plan-note\">结构示例；计划不代表执行完成。</p></section>",
+      "description": "Vibe 计划结构示例，标题与额度说明跟随所选规划 Agent；达到两次规划上限时禁用新生成。步骤与假设按需展开，计划不等于执行或验收。",
+      "html": "<section class=\"ds-plan\" aria-label=\"执行计划结构示例\"><details class=\"ds-plan-entry\" open><summary>所选规划 Agent · 执行计划</summary><div class=\"ds-plan-content\"><p>计划说明来自已保存结果。</p><details class=\"ds-plan-todos\" open><summary>计划步骤</summary><ul><li><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/></svg><div>步骤标题<p>本步执行说明。</p><code>src/example.ts</code><p>验收方式：说明本步可检查的结果，尚未执行。</p></div></li></ul></details><details class=\"ds-plan-assumptions\" open><summary>假设与待确认项</summary><p>列出执行前需要核对的依据。</p></details></div></details><p class=\"ds-plan-note\">结构示例；计划不代表执行完成。</p></section>",
       "css": ".ds-plan{color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;overflow-wrap:anywhere}.ds-plan-entry{border:1px solid var(--border,oklch(.922 0 0));border-radius:.1875rem;background:var(--background,oklch(1 0 0))}.ds-plan-entry>summary{padding:.5rem 1rem;background:var(--muted,oklch(.97 0 0));border-radius:.1875rem}.ds-plan summary{cursor:pointer;color:var(--muted-foreground,#666)}.ds-plan summary:hover{color:var(--foreground,oklch(.145 0 0))}.ds-plan summary:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-plan-content{padding:1rem}.ds-plan-content p{font-size:12px;line-height:1.9}.ds-plan-todos ul{list-style:none;padding:.5rem 0 0 1.5rem;margin:0}.ds-plan-todos li{display:flex;align-items:flex-start;gap:8px;line-height:1.5}.ds-plan-todos svg{height:16px;width:16px;flex-shrink:0;color:var(--muted-foreground,#666);margin-top:2px}.ds-plan code{font:10px Consolas,\"Courier New\",monospace;padding:4px 6px;border-radius:4px;background:var(--muted,oklch(.97 0 0))}.ds-plan-assumptions{font-size:12px;margin-top:18px}.ds-plan-note{font-size:11px;line-height:1.9;color:var(--muted-foreground,#666)}"
     },
     {
       "name": "会话与底部动作区",
       "kind": "custom",
-      "description": "T3 ChatView / UserTimelineRow 结构示例；报告初始展开，消息独立滚动，底部动作不随消息滚走。示例不代表真实任务状态。",
-      "html": "<section class=\"ds-chat\" aria-label=\"会话结构示例\"><header><strong>任务标题 · 结构示例</strong><span>Codex 规划与审查 / WorkBuddy 执行</span></header><div class=\"ds-messages\"><div class=\"ds-user\">用户需求全文<details><summary>验收条件</summary><p>可验证的预期结果。</p></details></div><p class=\"ds-divider\">规划 → 执行 → 审查</p><details class=\"ds-agent\" open><summary>执行结果已提交 · 结构示例</summary><p>完整 WorkBuddy 报告初始展开。报告正文保留换行，初始视图不截断正文。</p></details><p class=\"ds-note\">结构示例，不代表实际执行或审查通过。</p></div><footer><span>当前阶段由真实任务推导</span><div><p>下一步说明与模型额度行为。</p><button type=\"button\">下一步动作</button></div></footer></section>",
+      "description": "T3 ChatView / UserTimelineRow 结构示例；显示任务所选规划/执行/审查 Agent，完整执行报告默认展开，消息独立滚动，动作固定底部。示例不代表真实任务状态。",
+      "html": "<section class=\"ds-chat\" aria-label=\"会话结构示例\"><header><strong>任务标题 · 结构示例</strong><span>规划 Agent / 执行 Agent / 审查 Agent</span></header><div class=\"ds-messages\"><div class=\"ds-user\">用户需求全文<details><summary>验收条件</summary><p>可验证的预期结果。</p></details></div><p class=\"ds-divider\">规划 → 执行 → 审查</p><details class=\"ds-agent\" open><summary>执行结果已提交 · 结构示例</summary><p>所选执行 Agent 的完整报告初始展开。报告正文保留换行，初始视图不截断正文。</p></details><p class=\"ds-note\">结构示例，不代表实际执行或审查通过。</p></div><footer><span>当前阶段由真实任务推导</span><div><p>下一步说明与模型额度行为。</p><button type=\"button\">下一步动作</button></div></footer></section>",
       "css": ".ds-chat{display:flex;flex-direction:column;height:420px;min-height:0;max-width:680px;background:var(--background,#fff);color:var(--foreground,oklch(.145 0 0));font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-chat>header{display:flex;flex-direction:column;justify-content:center;height:68px;flex-shrink:0;padding:0 24px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-chat>header strong{font-size:15px;font-weight:600}.ds-chat>header span{font-size:11px;color:var(--muted-foreground,#666);margin-top:4px}.ds-messages{flex:1;min-height:0;overflow:auto;padding:28px 26px 32px}.ds-user{max-width:88%;margin-left:auto;padding:12px;background:var(--muted,oklch(.97 0 0));border-radius:1rem;line-height:1.8;overflow-wrap:anywhere}.ds-user details{margin-top:10px;padding-top:7px;border-top:1px solid var(--border,oklch(.922 0 0));font-size:12px}.ds-divider{font-size:10px;text-align:center;color:var(--muted-foreground,#666);padding:8px 0}.ds-agent{margin:16px 0 28px}.ds-agent summary{font-size:12px;font-weight:600;cursor:pointer;min-height:34px}.ds-agent p{padding-left:24px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}.ds-note{font-size:11px;color:var(--muted-foreground,#666)}.ds-chat>footer{flex-shrink:0;padding:14px 24px 18px;background:var(--background,#fff);border-top:1px solid var(--border,oklch(.922 0 0))}.ds-chat>footer>span{font-size:11px;color:var(--muted-foreground,#666)}.ds-chat>footer>div{display:flex;align-items:center;gap:14px;margin-top:9px}.ds-chat footer p{flex:1;font-size:12px;line-height:1.75;margin:0;color:var(--muted-foreground,#666)}.ds-chat footer button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;padding:7px 12px;border:1px solid transparent;border-radius:calc(var(--radius,.5rem) - 2px);background:var(--primary,oklch(.205 0 0));color:var(--primary-foreground,oklch(.985 0 0));cursor:pointer}.ds-chat summary:hover{color:var(--muted-foreground,#666)}.ds-chat footer button:hover{opacity:.9}.ds-chat footer button:active{opacity:.8}.ds-chat summary:focus-visible,.ds-chat button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}"
     },
     {
       "name": "工作区检查面板",
       "kind": "custom",
-      "description": "T3右侧面板模式的只读结构示例；文件/改动/会话来自任务，界面默认打开并可调整或收起。此片段不模拟原生跳转。",
+      "description": "T3右侧面板模式的只读结构示例；激活改动标签实际读取，失败显示原因并可重试。会话按所选角色命名；缺少持久会话或不支持ACP原生GUI跳转时解释并禁用。片段不模拟商业账号、原生跳转或审批。",
       "html": "<aside class=\"ds-inspector\" aria-label=\"工作区面板结构示例\"><div class=\"ds-tabs\" role=\"tablist\" aria-label=\"工作区\"><button role=\"tab\" aria-selected=\"true\">文件</button><button role=\"tab\" aria-selected=\"false\">改动</button><button role=\"tab\" aria-selected=\"false\">会话</button></div><div class=\"ds-files\" role=\"tabpanel\" aria-label=\"文件结构示例\"><button aria-current=\"true\">README.md<span>文件大小</span></button></div><div class=\"ds-source\"><strong>README.md · 结构示例</strong><pre>源码内容来自任务工作区。\n此片段不表示已生成或验收。</pre></div></aside>",
       "css": ".ds-inspector{display:flex;flex-direction:column;height:340px;min-width:0;width:320px;max-width:100%;background:var(--background,#fff);color:var(--foreground,oklch(.145 0 0));font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border-left:1px solid var(--border,oklch(.922 0 0))}.ds-tabs{display:flex;align-items:center;height:42px;flex-shrink:0;padding:0 10px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-tabs button{height:100%;padding:0 10px;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border:0;background:transparent;color:var(--muted-foreground,#666);cursor:pointer}.ds-tabs button[aria-selected=true]{color:var(--foreground,oklch(.145 0 0));border-bottom:2px solid var(--foreground,oklch(.145 0 0))}.ds-files{padding:8px;overflow:auto;max-height:36%;min-height:90px}.ds-files button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 8px;border:0;border-radius:4px;background:var(--muted,oklch(.97 0 0));color:inherit;text-align:left;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;cursor:pointer}.ds-files span{margin-left:auto;font-size:10px;color:var(--muted-foreground,#666)}.ds-source{display:flex;flex-direction:column;flex:1;min-height:0;border-top:1px solid var(--border,oklch(.922 0 0))}.ds-source strong{font-size:11px;font-weight:400;padding:6px 12px;border-bottom:1px solid var(--border,oklch(.922 0 0))}.ds-source pre{flex:1;min-height:0;overflow:auto;white-space:pre;margin:0;padding:16px;font:12px/1.7 Consolas,\"Courier New\",monospace}.ds-inspector button:hover{background:var(--accent,oklch(.97 0 0))}.ds-inspector button:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:-2px}"
+    },
+    {
+      "name": "Agent分工选择",
+      "kind": "custom",
+      "description": "普通扩展：复用Field/Button和现有主题的三列原生select。这里只演示控件状态，不检测安装、不验证登录、不调用模型。选项为结构示例，不代表本机可用Agent。",
+      "html": "<section class=\"ds-agent-picker\" aria-label=\"Agent分工结构示例\"><div class=\"ds-agent-heading\"><strong>Agent 分工</strong><div><button type=\"button\">重新检测</button><button type=\"button\">接入与安装说明</button></div></div><div class=\"ds-agent-selects\"><label for=\"ds-agent-planner\">规划<select id=\"ds-agent-planner\"><option>规划 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-executor\">执行<select id=\"ds-agent-executor\"><option>执行 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label><label for=\"ds-agent-reviewer\">审查<select id=\"ds-agent-reviewer\"><option>审查 Agent · 结构示例</option><option disabled>其他 Agent · 未安装适配器</option></select></label></div><p>各角色使用所选 Agent 的本机配置与账号，任务创建后固定。安装检测不验证登录，也不调用模型。</p></section>",
+      "css": ".ds-agent-picker{font:13px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;color:var(--foreground,oklch(.145 0 0));background:var(--background,#fff);border-top:1px solid var(--border,oklch(.922 0 0));padding-top:14px;max-width:720px}.ds-agent-heading{display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:12px}.ds-agent-heading strong{font-weight:600}.ds-agent-heading>div{display:flex;align-items:center;gap:4px}.ds-agent-heading button{font:500 12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif;border:0;border-radius:calc(var(--radius,.5rem) - 2px);padding:7px 10px;background:transparent;color:inherit;cursor:pointer}.ds-agent-heading button:hover{background:var(--accent,oklch(.97 0 0))}.ds-agent-heading button:disabled{opacity:.5;cursor:default}.ds-agent-heading button:focus-visible,.ds-agent-selects select:focus-visible{outline:2px solid var(--ring,oklch(.556 0 0));outline-offset:2px}.ds-agent-selects{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.ds-agent-selects label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:500}.ds-agent-selects select{width:100%;height:36px;border:1px solid var(--border,oklch(.922 0 0));border-radius:6px;color:var(--foreground,oklch(.145 0 0));background:var(--background,#fff);padding:0 9px;font:12px \"Segoe UI\",\"Microsoft YaHei UI\",sans-serif}.ds-agent-picker p{font-size:11px;line-height:1.8;color:var(--muted-foreground,#666);margin:12px 0}"
     }
   ],
   "narrative": {
@@ -247,7 +260,7 @@
       "**Do** 区分真实状态、已保存记录、只读刷新与消耗额度的动作。"
     ],
     "donts": [
-      "**Don't** 恢复旧图标轨、墨绿静态角色栏或默认收起完整 WorkBuddy 报告的旧布局。",
+      "**Don't** 恢复旧图标轨、墨绿静态角色栏或默认收起完整执行报告的旧布局。",
       "**Don't** 为填满页面虚构任务、报告、进度、会话或连接成功。",
       "**Don't** 将源码结构复用说成完整移植上游运行时，或将窗口截图扩大为原生会话与审批验收。"
     ]

@@ -54,7 +54,14 @@ try {
   await page.getByRole('button', { name: '打开 WorkBuddy 会话', exact: true }).click()
   await page.evaluate(() => window.workbench.openSession(3, 'workbuddy'))
   const routes = await app.evaluate(() => globalThis.rondoOpened)
-  assert.ok(routes.some((x) => x.endsWith('index.html')))
+  const preview = routes.find((x) => x.startsWith('http://127.0.0.1:') && x.endsWith('index.html'))
+  assert.ok(preview)
+  const response = await fetch(preview)
+  assert.equal(response.status, 200)
+  assert.match(await response.text(), /snake|贪吃蛇/i)
+  const code = await fetch(new URL('game.js', preview))
+  assert.match(code.headers.get('content-type'), /javascript/)
+  assert.equal((await fetch(new URL('.git/config', preview))).status, 403)
   assert.ok(routes.includes('workbuddy://chat/8bc9cb41-1ebb-48f5-8f1c-43c58440d94a'))
   async function goToReview(suffix) {
     await page.locator('.session-scroll').evaluate((e) => {

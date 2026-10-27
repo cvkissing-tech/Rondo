@@ -10,6 +10,7 @@ import {
   ShieldCheck
 } from 'lucide-react'
 import { Button } from '@jean/components/ui/button'
+import { agentName, defaultAgents } from '../../shared/types'
 import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from '../../shared/types'
 import { taskFlow, terminal, type TaskAction } from './taskFlow'
 import { ChatWorkspace, UserMessage } from './vendor/t3code/ChatWorkspace'
@@ -21,7 +22,7 @@ function NativeEvents({
   onRefresh
 }: {
   job?: ReviewStatus
-  kind: 'plan' | 'review'
+  kind: 'plan' | 'review' | 'execution'
   onRefresh: () => void
 }) {
   const [answer, setAnswer] = useState<Record<string, string>>({})
@@ -40,6 +41,7 @@ function NativeEvents({
       setSending(false)
     }
   }
+  const name = agentName(job?.backend || 'codex')
   return (
     <>
       {job?.environment === 'native' && (
@@ -47,6 +49,11 @@ function NativeEvents({
           本机配置 · {job.model || '默认模型'}
           {job.effort && ` · ${job.effort}`} · {job.skills_count ?? '—'} Skills ·{' '}
           {job.mcp_servers?.length ?? 0} MCP 配置 · 会话已保存
+        </p>
+      )}
+      {job?.environment === 'acp' && (
+        <p className="native-environment">
+          ACP · {name} · {job.model || 'Agent默认模型'} · 会话记录已保存
         </p>
       )}
       {!!job?.events?.length && (
@@ -57,7 +64,7 @@ function NativeEvents({
               <summary>
                 <Code2 className="size-3.5" />
                 <span>
-                  {entry.kind === 'agentMessage' ? 'Codex 回复' : entry.text.slice(0, 110)}
+                  {entry.kind === 'agentMessage' ? `${name} 回复` : entry.text.slice(0, 110)}
                 </span>
                 <small>{entry.status}</small>
               </summary>
@@ -71,8 +78,8 @@ function NativeEvents({
         </details>
       )}
       {job?.pending && (
-        <section className="native-request" aria-label="Codex 等待你处理">
-          <strong>Codex 等待你处理</strong>
+        <section className="native-request" aria-label={`${name} 等待你处理`}>
+          <strong>{name} 等待你处理</strong>
           <p>{job.pending.params.reason || '本机策略要求确认后才能继续。'}</p>
           {job.pending.params.command ? (
             <pre>{job.pending.params.command}</pre>
@@ -81,7 +88,21 @@ function NativeEvents({
               <pre>{JSON.stringify(job.pending.params, null, 2)}</pre>
             )
           )}
-          {job.pending.method === 'item/tool/requestUserInput' ? (
+          {job.pending.method === 'acp/permission' ? (
+            <div className="document-actions">
+              {job.pending.params.options?.map((option) => (
+                <Button
+                  key={option.optionId}
+                  size="sm"
+                  variant={option.kind.startsWith('reject') ? 'outline' : 'default'}
+                  disabled={sending}
+                  onClick={() => respond(option.optionId)}
+                >
+                  {option.name}
+                </Button>
+              ))}
+            </div>
+          ) : job.pending.method === 'item/tool/requestUserInput' ? (
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -174,6 +195,10 @@ export function TaskTimeline({
   onAction: (action: TaskAction) => void
   onRefresh: () => void
 }) {
+  const selected = context.agents || defaultAgents
+  const planner = agentName(selected.planner),
+    executor = agentName(selected.executor),
+    reviewer = agentName(selected.reviewer)
   const [sessionError, setSessionError] = useState('')
   const planRef = useRef<HTMLElement>(null)
   const reviewRef = useRef<HTMLElement>(null)
@@ -185,7 +210,7 @@ export function TaskTimeline({
   const executionSummary = execution?.summary || context.task.result?.summary
   const toggle = (key: string, value: boolean) =>
     setExpanded((previous) => ({ ...previous, [key]: !value }))
-  const count = (kind: 'plan' | 'review' | 'execution', current?: ReviewStatus) =>
+  const count = (kind: 'plan' | 'review' | 'execution' | 'execution', current?: ReviewStatus) =>
     new Set([
       ...context.activity.filter((row) => row.kind === kind).map((row) => row.id),
       ...(current ? [current.job_id] : [])
@@ -233,7 +258,9 @@ export function TaskTimeline({
           <>
             <div className="session-title">
               <h1>{context.task.title}</h1>
-              <span>#{context.task_id} · Codex 规划与审查 / WorkBuddy 执行</span>
+              <span>
+                #{context.task_id} · {planner} 规划 / {executor} 执行 / {reviewer} 审查
+              </span>
             </div>
             <Button size="icon-sm" variant="ghost" aria-label="刷新任务记录" onClick={onRefresh}>
               <RefreshCw />
@@ -284,7 +311,7 @@ export function TaskTimeline({
         <article className="agent-message" ref={planRef}>
           {rowHeading(
             'plan',
-            'Codex · 执行计划',
+            `${planner} · 执行计划`,
             planOpen,
             <ListChecks className="size-4" />,
             planJob ? (planJob.status === 'succeeded' ? '已生成' : planJob.status) : '待开始'
@@ -294,7 +321,7 @@ export function TaskTimeline({
             planContent
           ) : (
             <p className="message-preview">
-              {plan?.plan.summary || '从需求与项目源码拆解实施步骤，交给 WorkBuddy。'}
+              {plan?.plan.summary || '从需求与项目源码拆解实施步骤，交给所选执行 Agent。'}
             </p>
           )}
         </article>
@@ -305,7 +332,7 @@ export function TaskTimeline({
               ? execution?.mode === 'repair'
                 ? '返修结果已提交'
                 : '执行结果已提交'
-              : 'WorkBuddy · 执行',
+              : `${executor} · 执行`,
             executionOpen,
             <Code2 className="size-4" />,
             execution
@@ -314,10 +341,11 @@ export function TaskTimeline({
                 : execution.phase || execution.status
               : '待派发'
           )}
+          <NativeEvents job={execution} kind="execution" onRefresh={onRefresh} />
           {executionOpen && (
             <div className="execution-message">
               <p className="preserve">
-                {executionSummary || '计划就绪后，在下方交给 WorkBuddy 执行。结果将返回这里审查。'}
+                {executionSummary || '计划就绪后，在下方交给所选 Agent 执行。结果将返回这里审查。'}
               </p>
               {execution?.session_id && (
                 <p className="supporting">
@@ -329,6 +357,7 @@ export function TaskTimeline({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={selected.executor.startsWith('acp:')}
                   onClick={() =>
                     window
                       .workbench!.openSession(context.task_id, 'workbuddy')
@@ -336,7 +365,7 @@ export function TaskTimeline({
                   }
                 >
                   <ExternalLink />
-                  打开 WorkBuddy 会话
+                  打开 {executor} 会话
                 </Button>
               )}
               {sessionError && <p role="alert">{sessionError}</p>}
@@ -358,7 +387,7 @@ export function TaskTimeline({
                   disabled={execution.status === 'cancelling'}
                   onClick={onCancelExecution}
                 >
-                  停止 WorkBuddy 执行
+                  停止 {executor} 执行
                 </Button>
               )}
             </div>
@@ -370,7 +399,7 @@ export function TaskTimeline({
         <article className="agent-message" ref={reviewRef}>
           {rowHeading(
             'review',
-            'Codex · 代码审查',
+            `${reviewer} · 代码审查`,
             reviewOpen,
             <ShieldCheck className="size-4" />,
             review

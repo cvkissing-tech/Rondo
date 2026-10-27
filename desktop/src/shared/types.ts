@@ -1,3 +1,29 @@
+export type AgentAssignments = { planner: string; executor: string; reviewer: string }
+export const defaultAgents: AgentAssignments = {
+  planner: 'codex',
+  executor: 'workbuddy',
+  reviewer: 'codex'
+}
+export function agentName(id: string): string {
+  return (
+    ({ codex: 'Codex', workbuddy: 'WorkBuddy' } as Record<string, string>)[id] ||
+    id.replace(/^acp:/, '')
+  )
+}
+export interface AgentInfo {
+  id: string
+  name: string
+  roles: string[]
+  available: boolean
+  protocol: string
+  auth: string
+  requirements?: string[]
+}
+export interface AgentCatalog {
+  agents: AgentInfo[]
+  error?: string | null
+  note: string
+}
 export interface Task {
   task_id: number
   title: string
@@ -8,6 +34,7 @@ export interface Task {
   result?: { summary: string } | null
 }
 export interface Context {
+  agents?: AgentAssignments
   repository: string
   task_id: number
   workspace: string
@@ -41,6 +68,9 @@ export interface PlanResult {
   context: { files: string[]; file_count: number; file_list_truncated: boolean }
 }
 export interface ReviewStatus {
+  backend?: string
+  session_id?: string | null
+  agent_session_id?: string | null
   job_id: string
   status: string
   error_code?: string
@@ -57,6 +87,7 @@ export interface ReviewStatus {
     id: string
     method: string
     params: {
+      options?: { optionId: string; kind: string; name: string }[]
       command?: string
       reason?: string
       questions?: {
@@ -106,6 +137,7 @@ export interface Review {
   checks: { status: string }
 }
 export interface StartInput {
+  agents?: AgentAssignments
   new_project?: boolean
   repo: string
   title: string
@@ -114,6 +146,7 @@ export interface StartInput {
   request_id: string
 }
 export interface DesktopAPI {
+  agents(): Promise<AgentCatalog>
   status(): Promise<{ connected: boolean; tools: number; database: string; error?: string }>
   chooseProject(): Promise<string | undefined>
   listTasks(after?: number): Promise<{ items: Task[]; next_after_id: number | null }>
@@ -142,7 +175,7 @@ export interface DesktopAPI {
     job: string,
     request: string,
     answer: string | Record<string, string>,
-    kind: 'plan' | 'review'
+    kind: 'plan' | 'review' | 'execution'
   ): Promise<void>
   copyWorkspace(id: number): Promise<void>
   openGuide(): Promise<void>

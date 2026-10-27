@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from .codex_review import run_codex_review
 from .native_session import read_state
+from .agents import task_agents, require_agent, node_executable
 from .checks import run_checks, validate_config
 from .reviews import review_status
 from .snapshots import SnapshotError, bind_check_evidence, canonical, create_review_package, digest
@@ -59,6 +60,7 @@ class ReviewJobs:
         self.store = store
         self.root = Path(root).resolve() if root else Path.home() / '.agent-review-loop/runs' / digest(str(store.path).encode())[:16]
         self.runner, self.executable, self.backend = runner, executable, backend
+        self.native_routing = runner is run_codex_review
         self.check_config = validate_config(check_config) if check_config is not None else None
         self._guard = threading.Lock()
         self._workers = {}
@@ -84,12 +86,12 @@ class ReviewJobs:
                 result['checks'] = checks
                 if checks['status'] != 'not_run':
                     result['check_evidence_path'] = str(Path(row['directory']) / 'package/checks')
-            result.update({key: saved[key] for key in ('thread_id', 'model', 'effort', 'persistent', 'environment',
+            result.update({key: saved[key] for key in ('thread_id', 'session_id', 'agent_session_id', 'model', 'effort', 'persistent', 'environment',
                                                       'mcp_servers', 'skills_count') if key in saved})
             if isinstance(saved.get('error'), str):
                 result['error_message'] = saved['error'][:2000]
         native = read_state(Path(row['directory']) / 'runtime')
-        result.update({key: native[key] for key in ('thread_id', 'model', 'effort', 'persistent', 'environment',
+        result.update({key: native[key] for key in ('thread_id', 'session_id', 'agent_session_id', 'model', 'effort', 'persistent', 'environment',
                                                    'mcp_servers', 'skills_count', 'events', 'pending') if key in native})
         return result
 
@@ -106,6 +108,8 @@ class ReviewJobs:
                 questions = pending['params'].get('questions', [])
                 valid = (isinstance(answer, dict) and set(answer) == {q['id'] for q in questions}
                          and all(isinstance(v, str) and 0 < len(v) <= 4000 for v in answer.values()))
+            elif pending['method'] == 'acp/permission':
+                valid = answer in [option['optionId'] for option in pending['params'].get('options', [])]
             else:
                 valid = answer in ('accept', 'decline')
             if not valid:
@@ -163,7 +167,14 @@ class ReviewJobs:
                             raise StoreError(f'{self.error_prefix}_BUSY', 'One Codex job is active; read its state before starting another')
                 if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
                     raise StoreError(f'{self.error_prefix}_BUDGET_EXHAUSTED', 'This task has used its two attempts for this operation; no automatic reset')
-                executable = self.executable or shutil.which('codex')
+                backend = self.selected_agent(task_id) if self.native_routing else self.backend
+                if self.native_routing:
+                    if backend.startswith('acp:'):
+                        require_agent(backend)
+                    configured = self.reviews.executable if self.table == 'execution_jobs' else self.executable
+                    executable = (configured or shutil.which('codex')) if backend == 'codex' else node_executable()
+                else:
+                    executable = self.executable or shutil.which('codex')
                 if executable is None or not Path(executable).is_file():
                     raise StoreError('CODEX_NOT_FOUND', 'Native Codex CLI is not available')
                 job_id = uuid4().hex
@@ -178,7 +189,7 @@ class ReviewJobs:
                     db.execute(f'''INSERT INTO {self.table}
                         (id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at,result_json)
                         VALUES (?,?,?,?,'preparing',?,?,?,?,?,?,?)''',
-                               (job_id, task_id, request_id, fingerprint, repo, base_ref, str(directory), self.backend, now, now,
+                               (job_id, task_id, request_id, fingerprint, repo, base_ref, str(directory), backend, now, now,
                                 json.dumps(metadata) if metadata else None))
                 except BaseException:
                     lock.close()
@@ -198,6 +209,10 @@ class ReviewJobs:
     def _prepare_start(self, db, task, repo, request_id):
         """Reserve subclass-specific state in the SAME transaction as the new job."""
         return None
+
+    def selected_agent(self, task_id):
+        role = {'plan_jobs': 'planner', 'review_jobs': 'reviewer', 'execution_jobs': 'executor'}[self.table]
+        return task_agents(self.store, task_id)[role]
 
     def _cancelled(self, job_id):
         if self._closing:
@@ -238,7 +253,8 @@ class ReviewJobs:
             if self._cancelled(job_id):
                 self._finish(job_id, 'cancelled')
                 return
-            result = self.runner(package, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id))
+            options = {'agent': self.selected_agent(task['task_id'])} if self.native_routing else {}
+            result = self.runner(package, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id), **options)
             result['checks'] = manifest['checks']
             if result.get('process_tree_closed') is not True:
                 self._finish(job_id, 'failed', result, 'CLEANUP_UNVERIFIED')

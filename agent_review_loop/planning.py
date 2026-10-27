@@ -108,7 +108,7 @@ def save_plan(directory, plan, context_id):
     return {'context_id': context_id, 'plan_id': digest(content)}
 
 
-def run_codex_plan(context_dir, output_dir, executable, *, timeout=180, cancel_check=None):
+def run_codex_plan(context_dir, output_dir, executable, *, timeout=180, cancel_check=None, agent='codex'):
     payload = load_context(context_dir)
     prompt = ('Create an implementable coding plan for the task using this bounded repository context. '
               'Return JSON only, in the language of the task. Use native tools and installed Skills when useful; do not modify project files. '
@@ -121,7 +121,7 @@ def run_codex_plan(context_dir, output_dir, executable, *, timeout=180, cancel_c
     result = run_inline_json(prompt, plan_schema(payload['context_id']), payload['repository'], output_dir,
                              executable, timeout=timeout, cancel_check=cancel_check,
                              instructions='Plan the task in the actual workspace using native configuration and available Skills. Do not modify project files. Follow workspace AGENTS instructions. Output structured JSON; report only observed evidence.',
-                             session_name='Rondo · 规划 · ' + payload['task']['title'])
+                             session_name='Rondo · 规划 · ' + payload['task']['title'], agent=agent)
     data = result.pop('data', None)
     if result['status'] == 'completed':
         try:
@@ -144,6 +144,7 @@ class PlanJobs(ReviewJobs):
 
     def __init__(self, store, root=None, *, runner=run_codex_plan, executable=None, backend='codex'):
         super().__init__(store, root, runner=runner, executable=executable, backend=backend)
+        self.native_routing = runner is run_codex_plan
 
     def _work(self, job_id, task, repo, base_ref, directory, executable, lock):
         try:
@@ -157,7 +158,8 @@ class PlanJobs(ReviewJobs):
             with self.store._connection(write=True) as db:
                 db.execute("UPDATE plan_jobs SET snapshot_id=?, state=CASE WHEN cancel_requested=1 THEN 'cancelling' ELSE 'running' END, updated_at=? WHERE id=?",
                            (context['context_id'], time.time(), job_id))
-            result = self.runner(inputs, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id))
+            options = {'agent': self.selected_agent(task['task_id'])} if self.native_routing else {}
+            result = self.runner(inputs, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id), **options)
             if result.get('process_tree_closed') is not True:
                 self._finish(job_id, 'failed', result, 'CLEANUP_UNVERIFIED')
             elif result['status'] == 'plan_saved' and result.get('context_id') == context['context_id']:

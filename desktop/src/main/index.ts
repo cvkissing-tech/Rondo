@@ -3,6 +3,7 @@ import { join, resolve, relative, isAbsolute, extname } from 'node:path'
 import { readdir, realpath, readFile, stat } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
+import { previewHtml, closePreviews } from './preview'
 import type {
   Context,
   StartInput,
@@ -31,6 +32,7 @@ async function workspaceFile(id: number, name: string): Promise<string> {
 function handlers(): void {
   const actions: Record<string, (...args: never[]) => unknown> = {
     status: () => backend.status(),
+    agents: () => backend.call('list_agents'),
     'choose-project': async () =>
       (await dialog.showOpenDialog(window, { properties: ['openDirectory'] })).filePaths[0],
     'list-tasks': (after = 0) => backend.call('list_tasks', { limit: 20, after_id: after }),
@@ -110,11 +112,28 @@ function handlers(): void {
         )
       )
         throw Error('请使用文件查看器阅读源码；运行程序请在工作区操作')
-      const error = await shell.openPath(file)
-      if (error) throw Error(error)
+      if (['.html', '.htm'].includes(extname(file).toLowerCase())) {
+        const context = await backend.call<Context>('get_task_context', { task_id: id })
+        await shell.openExternal(await previewHtml(context.workspace, file))
+      } else {
+        const error = await shell.openPath(file)
+        if (error) throw Error(error)
+      }
     },
     'open-session': async (id: number, agent: string) => {
       const context = await backend.call<Context>('get_task_context', { task_id: id })
+      if (agent === 'workbuddy' && context.agents?.executor === 'codex') {
+        if (!context.latest_execution_job_id) throw Error('还没有执行会话')
+        const status = await backend.call<ReviewStatus>('get_execution_status', {
+          job_id: context.latest_execution_job_id
+        })
+        if (!status.thread_id || !/^[a-f0-9-]{36}$/.test(status.thread_id))
+          throw Error('Codex执行会话不可用')
+        await shell.openExternal(`codex://threads/${status.thread_id}`)
+        return
+      }
+      if (agent === 'workbuddy' && context.agents?.executor?.startsWith('acp:'))
+        throw Error('ACP会话记录在Rondo中查看；原生客户端入口由各Agent提供')
       if (agent === 'workbuddy') {
         if (!context.latest_execution_job_id) throw Error('还没有 WorkBuddy 执行会话')
         const execution = await backend.call<ExecutionStatus>('get_execution_status', {
@@ -131,6 +150,7 @@ function handlers(): void {
           agent === 'codex-plan' ? 'get_plan_status' : 'get_review_status',
           { job_id: job }
         )
+        if (status.backend?.startsWith('acp:')) throw Error('ACP会话记录在Rondo中查看')
         if (!status.persistent || !status.thread_id || !/^[a-f0-9-]{36}$/.test(status.thread_id))
           throw Error('这是旧版本的临时会话，没有可恢复的原生记录；新发起的计划和审查会保存会话')
         await shell.openExternal(`codex://threads/${status.thread_id}`)
@@ -146,7 +166,7 @@ function handlers(): void {
         (await backend.call<Context>('get_task_context', { task_id: id })).workspace
       ),
     'open-guide': async () => {
-      const error = await shell.openPath(join(root, 'integrations/workbuddy/README.md'))
+      const error = await shell.openPath(join(root, 'docs/AGENTS.md'))
       if (error) throw new Error(error)
     }
   }
@@ -199,7 +219,7 @@ else {
     if (!quitting) {
       event.preventDefault()
       quitting = true
-      backend.close().finally(() => app.quit())
+      Promise.all([backend.close(), closePreviews()]).finally(() => app.quit())
     }
   })
 }

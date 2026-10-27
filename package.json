@@ -1,0 +1,11 @@
+{
+  "name": "rondo-workspace",
+  "version": "0.15.0",
+  "private": true,
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "check:setup": "node scripts/setup.mjs --check",
+    "start": "npm --prefix desktop start"
+  },
+  "engines": { "node": ">=22.13" }
+}

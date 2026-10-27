@@ -18,6 +18,12 @@ jobs:
       - run: npm --prefix desktop ci
       - run: npm --prefix desktop run lint
       - run: npm --prefix desktop run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e .
+      - run: python -X utf8 -m unittest tests.test_acp tests.test_provider_pipeline tests.test_native_session -v
+      - run: node --test integrations/workbuddy/native-bridge.test.mjs
   check:
     strategy:
       fail-fast: false

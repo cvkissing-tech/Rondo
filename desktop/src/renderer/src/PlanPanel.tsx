@@ -19,6 +19,8 @@ const labels: Record<string, string> = {
   interrupted: '已中断'
 }
 export default function PlanPanel({
+  agentName = 'Codex',
+  attempts = 0,
   job,
   result,
   busy,
@@ -26,6 +28,8 @@ export default function PlanPanel({
   onCancel,
   onRefresh
 }: {
+  attempts?: number
+  agentName?: string
   job?: ReviewStatus
   result?: PlanResult
   busy: boolean
@@ -35,18 +39,23 @@ export default function PlanPanel({
 }) {
   const [stepsExpanded, setStepsExpanded] = useState(true)
   return (
-    <section className="plan-body vibe-plan-surface" aria-label="Codex 执行计划">
+    <section className="plan-body vibe-plan-surface" aria-label={`${agentName} 执行计划`}>
       <ChatEntryContainer
         variant="plan"
-        title="Codex 执行计划"
+        title={`${agentName} 执行计划`}
         expanded
         headerRight={job && <Badge variant="secondary">{labels[job.status] ?? job.status}</Badge>}
         actions={
           job &&
           terminal.has(job.status) &&
           (job.status !== 'succeeded' || result) && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => onStart(true)}>
-              重新生成计划（消耗额度）
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || attempts >= 2}
+              onClick={() => onStart(true)}
+            >
+              {attempts >= 2 ? '规划次数已用完（2/2）' : '重新生成计划（消耗额度）'}
             </Button>
           )
         }
@@ -55,14 +64,14 @@ export default function PlanPanel({
           {!job ? (
             <>
               <p className="supporting">
-                Codex 使用本机配置、原有 Skills 与项目源码，拆出交给 WorkBuddy 的实施步骤。
+                依据所选 Agent 的能力与本机配置读取项目，生成交给执行方的实施步骤。
               </p>
               <p className="supporting">
-                生成一次计划会消耗本机 Codex 账号额度；每项任务最多两次，失败或取消也计入。
+                生成一次计划会消耗所选 Agent 的账号额度；每项任务最多两次，失败或取消也计入。
               </p>
               <Button disabled={busy} onClick={() => onStart()}>
                 <ListChecks />
-                生成 Codex 计划
+                生成 {agentName} 计划
               </Button>
             </>
           ) : (
@@ -164,7 +173,7 @@ export default function PlanPanel({
           )}
           <div className="next-step">
             <Unplug />
-            <p>计划就绪后，可在任务主动作中交给 WorkBuddy 执行。生成计划本身不会修改代码。</p>
+            <p>计划就绪后，可在任务主动作中交给所选 Agent 执行。生成计划本身不会修改代码。</p>
           </div>
         </div>
       </ChatEntryContainer>

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@jean/components/ui/button'
 import { handleTabKeys } from '@jean/lib/utils'
+import { agentName, defaultAgents } from '../../shared/types'
 import type { Context, ExecutionStatus, ReviewStatus, WorkspaceFiles } from '../../shared/types'
 
 export function WorkspaceInspector({
@@ -93,15 +94,26 @@ export function WorkspaceInspector({
       if (mounted.current && current === sequence.current) setError(String(e))
     }
   }
+  const roles = context.agents || defaultAgents
   const sessions = [
-    { name: 'Codex · 规划', agent: 'codex-plan' as const, job: plan, id: plan?.thread_id },
     {
-      name: 'WorkBuddy · 执行',
+      name: `${agentName(roles.planner)} · 规划`,
+      agent: 'codex-plan' as const,
+      job: plan,
+      id: plan?.thread_id || plan?.session_id
+    },
+    {
+      name: `${agentName(roles.executor)} · 执行`,
       agent: 'workbuddy' as const,
       job: execution,
       id: execution?.session_id
     },
-    { name: 'Codex · 审查', agent: 'codex-review' as const, job: review, id: review?.thread_id }
+    {
+      name: `${agentName(roles.reviewer)} · 审查`,
+      agent: 'codex-review' as const,
+      job: review,
+      id: review?.thread_id || review?.session_id
+    }
   ]
   return (
     <aside
@@ -257,18 +269,23 @@ export function WorkspaceInspector({
               {session.agent !== 'workbuddy' && session.job && !session.job.persistent && (
                 <p>历史临时会话没有保存到 Codex；新发起的会话会持久保存。</p>
               )}
+              {session.job?.backend?.startsWith('acp:') && (
+                <p>ACP会话和工具记录保存在Rondo；此Agent未提供原生客户端快捷入口。</p>
+              )}
               <Button
                 size="sm"
                 variant="outline"
                 disabled={
-                  !session.id || (session.agent !== 'workbuddy' && !session.job?.persistent)
+                  !session.id ||
+                  session.job?.backend?.startsWith('acp:') ||
+                  (session.agent !== 'workbuddy' && !session.job?.persistent)
                 }
                 onClick={() =>
                   action(() => window.workbench!.openSession(context.task_id, session.agent))
                 }
               >
                 <ExternalLink />
-                打开{session.agent === 'workbuddy' ? ' WorkBuddy' : ' Codex'} 会话
+                打开原生会话
               </Button>
             </section>
           ))}

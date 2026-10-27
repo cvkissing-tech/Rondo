@@ -24,6 +24,7 @@ class CodexRpc:
         self._notifications = deque()
         self._counter = 0
         self._closed = False
+        self.cleanup_verified = False
         self._cancel_check = cancel_check
         self._on_request = on_request
         self._reader_error = None
@@ -133,7 +134,7 @@ class CodexRpc:
         return value
 
     def initialize(self):
-        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.14.0'},
+        result = self.request('initialize', {'clientInfo': {'name': 'agent_review_loop', 'version': '0.15.0'},
                                               'capabilities': {'experimentalApi': False}})
         self.send({'method': 'initialized', 'params': {}})
         return result
@@ -153,6 +154,7 @@ class CodexRpc:
             self._writer.join(timeout=2)
         if self._reader.is_alive() or self._writer.is_alive():
             raise RpcError('Protocol I/O workers did not exit')
+        self.cleanup_verified = True
 
     def __enter__(self):
         return self

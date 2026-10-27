@@ -50,6 +50,9 @@ import type {
   Task,
   WorkBuddyConnection
 } from '../../shared/types'
+import { defaultAgents, agentName } from '../../shared/types'
+import type { AgentAssignments } from '../../shared/types'
+import { AgentPicker } from './AgentPicker'
 import PlanPanel from './PlanPanel'
 import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
@@ -114,6 +117,11 @@ export default function App() {
   )
   const [busy, setBusy] = useState(false)
   const [draft] = useState(savedDraft)
+  const [agents, setAgents] = useState<AgentAssignments>(
+    draft.agents?.planner && draft.agents.executor && draft.agents.reviewer
+      ? draft.agents
+      : defaultAgents
+  )
   const [repo, setRepo] = useState(typeof draft.repo === 'string' ? draft.repo : '')
   const [title, setTitle] = useState(typeof draft.title === 'string' ? draft.title : '')
   const [instructions, setInstructions] = useState(
@@ -123,8 +131,13 @@ export default function App() {
     typeof draft.acceptance === 'string' ? draft.acceptance : ''
   )
   useEffect(() => {
-    localStorage.setItem('arl.draft', JSON.stringify({ repo, title, instructions, acceptance }))
-  }, [repo, title, instructions, acceptance])
+    localStorage.setItem(
+      'arl.draft',
+      JSON.stringify({ repo, title, instructions, acceptance, agents })
+    )
+  }, [repo, title, instructions, acceptance, agents])
+  const [changesError, setChangesError] = useState('')
+  const [changesLoading, setChangesLoading] = useState(false)
   const [changes, setChanges] = useState<{ patch: string; truncated: boolean }>()
   const [job, setJob] = useState<ReviewStatus>()
   const [review, setReview] = useState<Review>()
@@ -169,6 +182,8 @@ export default function App() {
     setPlanJob(undefined)
     setPlanResult(undefined)
     setChangesOpen(true)
+    setDiffRequest(0)
+    setChangesError('')
     setExecution(undefined)
     try {
       const selected = await api.context(id)
@@ -251,6 +266,10 @@ export default function App() {
     }
   }, [planJobId])
   const selectedTaskId = context?.task_id
+  const planAttempts = new Set([
+    ...(context?.activity || []).filter((row) => row.kind === 'plan').map((row) => row.id),
+    ...(planJob ? [planJob.job_id] : [])
+  ]).size
   const reviewAttempts = new Set([
     ...(context?.activity || []).filter((row) => row.kind === 'review').map((row) => row.id),
     ...(job ? [job.job_id] : [])
@@ -335,6 +354,7 @@ export default function App() {
     setBusy(true)
     await protect(async () => {
       const data = {
+        agents,
         repo: repo.trim(),
         title: title.trim() || instructions.trim().split('\n')[0].slice(0, 80),
         instructions: instructions.trim(),
@@ -351,16 +371,18 @@ export default function App() {
   }
   async function showChanges() {
     setChangesOpen(true)
-    setChanges(undefined)
     if (!api || !context) return
     const seq = generation.current
-    await protect(async () => {
+    setChangesLoading(true)
+    setChangesError('')
+    try {
       const result = await api.changes(context.task_id)
-      if (seq === generation.current) {
-        setChanges(result)
-        await refreshTask()
-      }
-    })
+      if (seq === generation.current) setChanges(result)
+    } catch (e) {
+      if (seq === generation.current) setChangesError(errorText(e))
+    } finally {
+      if (seq === generation.current) setChangesLoading(false)
+    }
   }
   async function startReview() {
     if (!api || !context) return
@@ -433,10 +455,12 @@ export default function App() {
       seq = generation.current
     setBusy(true)
     await protect(async () => {
-      const status = await api.workbuddyStatus()
-      setWorkbuddy(status)
-      if (!status.connected)
-        throw Error('WorkBuddy 本地通道未连接。打开“Agent 连接”检查或启动 WorkBuddy。')
+      if ((context.agents || defaultAgents).executor === 'workbuddy') {
+        const status = await api.workbuddyStatus()
+        setWorkbuddy(status)
+        if (!status.connected)
+          throw Error('WorkBuddy 本地通道未连接。打开“Agent 连接”检查或启动 WorkBuddy。')
+      }
       if (executionRequest.current.task !== id)
         executionRequest.current = { task: id, id: crypto.randomUUID() }
       const started = await api.startExecution(id, executionRequest.current.id)
@@ -497,8 +521,22 @@ export default function App() {
   )
   const difference = (
     <div className="pane-body">
-      {!changes ? (
-        <p className="loading-text">正在读取改动…</p>
+      {changesError ? (
+        <div className="loading-text" role="alert">
+          改动读取失败：{changesError}
+          <Button variant="outline" size="sm" onClick={showChanges}>
+            重新读取改动
+          </Button>
+        </div>
+      ) : !changes ? (
+        <div className="loading-text">
+          {changesLoading ? '正在读取改动…' : '点击读取工作区改动'}
+          {!changesLoading && (
+            <Button variant="outline" size="sm" onClick={showChanges}>
+              读取改动
+            </Button>
+          )}
+        </div>
       ) : !changes.patch ? (
         <Empty>
           <EmptyHeader>
@@ -521,22 +559,24 @@ export default function App() {
       )}
     </div>
   )
+  const reviewerName = agentName((context?.agents || defaultAgents).reviewer)
+  const plannerName = agentName((context?.agents || defaultAgents).planner)
   const reviewPanel = (
     <div className="review-body">
       <div className="review-intro">
         <ShieldCheck />
-        <h2>Codex 代码审查</h2>
+        <h2>{reviewerName} 代码审查</h2>
       </div>
       {!job ? (
         <>
           <p>代码准备完成后停止编辑，再审查一次固定快照。</p>
           <div className="quota-note">
-            <span>使用本机 Codex 账号额度</span>
+            <span>使用所选审查 Agent 的账号额度</span>
             <span>每项任务最多两次</span>
           </div>
           <Button disabled={busy} onClick={startReview}>
             <ShieldCheck />
-            发起 Codex 审查
+            发起 {reviewerName} 审查
           </Button>
         </>
       ) : (
@@ -860,6 +900,7 @@ export default function App() {
                     aria-label="怎样算完成？"
                   />
                 </Field>
+                <AgentPicker value={agents} onChange={setAgents} />
                 <details className="task-settings">
                   <summary>
                     <MoreHorizontal />
@@ -879,7 +920,7 @@ export default function App() {
               </FieldGroup>
               <div className="form-footnote">
                 <span>准备任务不消耗模型额度。</span>
-                <span>计划就绪后，可交给 WorkBuddy 执行</span>
+                <span>计划就绪后，交给所选执行 Agent</span>
               </div>
             </form>
           </div>
@@ -909,6 +950,8 @@ export default function App() {
                   onAction={taskAction}
                   planContent={
                     <PlanPanel
+                      agentName={plannerName}
+                      attempts={planAttempts}
                       job={planJob}
                       result={planResult}
                       busy={busy || Boolean(job && !terminal.has(job.status))}
@@ -939,7 +982,7 @@ export default function App() {
                     execution={execution}
                     difference={difference}
                     showDiff={diffRequest}
-                    onDiff={() => protect(refreshTask)}
+                    onDiff={showChanges}
                     onClose={() => setChangesOpen(false)}
                     refreshKey={`${execution?.status}:${execution?.phase}:${context.task.status}`}
                   />

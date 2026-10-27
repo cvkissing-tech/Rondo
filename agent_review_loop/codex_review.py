@@ -2,6 +2,7 @@
 
 import json
 import math
+import sqlite3
 from pathlib import Path
 import time
 
@@ -29,7 +30,7 @@ def review_schema(snapshot_id):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
-def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel_check=None):
+def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel_check=None, agent='codex'):
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 180:
         raise ValueError('Review timeout must be positive and at most 180 seconds')
     manifest = verify_package(package_dir)
@@ -65,7 +66,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
         raise SnapshotError('REVIEW_LIMIT', 'Review request metadata exceeds 64 KiB')
     record = run_inline_json(prompt, review_schema(manifest['snapshot_id']), manifest.get('repository', package_dir), output,
                              executable, timeout=timeout, cancel_check=cancel_check,
-                             session_name='Rondo · 审查 · ' + manifest['task'].get('title', '代码审查'))
+                             session_name='Rondo · 审查 · ' + manifest['task'].get('title', '代码审查'), agent=agent)
     data = record.pop('data', None)
     record['snapshot_id'] = manifest['snapshot_id']
     if record['status'] == 'completed':
@@ -86,10 +87,14 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
 
 def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, cancel_check=None,
                     instructions='Use native Skills and tools when useful. Do not modify project files during planning or review. Output valid structured JSON. Never invent test results.',
-                    session_name='Rondo · 任务会话'):
+                    session_name='Rondo · 任务会话', agent='codex'):
     """One bounded structured turn, shared by review and planning; no model retries."""
-    if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 180:
-        raise ValueError('Turn timeout must be positive and at most 180 seconds')
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 900:
+        raise ValueError('Turn timeout must be positive and at most 900 seconds')
+    if agent.startswith('acp:'):
+        from .acp import run_acp_json
+        return run_acp_json(prompt, schema, cwd, output, executable, agent=agent, timeout=timeout,
+                            cancel_check=cancel_check, instructions=instructions, session_name=session_name)
     if len(prompt.encode('utf-8')) > 64 * 1024:
         raise SnapshotError('CONTEXT_LIMIT', 'Inline generation is limited to 64 KiB of input')
     cwd, output = Path(cwd).resolve(), Path(output).resolve()
@@ -98,6 +103,13 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
     record = {'status': 'failed', 'turns_started': 0,
               'usage': None, 'cost': None, 'protocol': 'Codex App Server turn/start + outputSchema'}
     started, thread_id, turn_id = time.monotonic(), None, None
+    client = None
+    def publish():
+        try:
+            write_state(output, state)
+        except (OSError, sqlite3.Error) as error:
+            # A display cache is not the turn's result or raw evidence journal.
+            record['projection_error'] = f'{type(error).__name__}: {error}'[:1000]
     try:
         if cancel_check and cancel_check():
             raise ReviewCancelled('Review cancelled before server startup')
@@ -127,12 +139,13 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
                 raise RpcError('Server started in the wrong working directory')
             record['instruction_sources'] = thread.get('instructionSources', [])
             state.update({key: value for key, value in record.items() if key != 'data'})
-            write_state(output, state)
+            publish()
             turn = client.request('turn/start', {'threadId': thread_id,
                                    'input': [{'type': 'text', 'text': instructions + '\n\n' + prompt}],
                                    'outputSchema': schema})
             turn_id = turn['turn']['id']
             record.update(turn_id=turn_id, turns_started=1)
+            state['status'] = 'running'
             final_text = None
             try:
                 with (output / 'events.ndjson').open('xb') as events:
@@ -146,8 +159,8 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
                         if method == 'thread/tokenUsage/updated':
                             record['usage'] = params.get('tokenUsage')
                         item = params.get('item', {})
-                        project_event(state, event)
-                        write_state(output, state)
+                        if project_event(state, event):
+                            publish()
                         if method == 'item/completed' and item.get('type') == 'agentMessage':
                             final_text = item.get('text')
                         if method == 'turn/completed' and params.get('turn', {}).get('id') == turn_id:
@@ -174,10 +187,12 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
         record.update(status='cancelled', process_tree_closed=True, error_type=type(error).__name__, error=str(error))
     except Exception as error:
         record.update(status='failed', error_type=type(error).__name__, error=str(error)[:2000])
+    if client is not None:
+        record['process_tree_closed'] = getattr(client, 'cleanup_verified', False)
     if 'state' in locals():
         state.pop('pending', None)
         state['status'] = record['status']
-        write_state(output, state)
+        publish()
     record['elapsed_seconds'] = round(time.monotonic() - started, 3)
     (output / 'result.json').write_text(json.dumps({key: value for key, value in record.items() if key != 'data'}, ensure_ascii=False, indent=2), encoding='utf-8')
     return record

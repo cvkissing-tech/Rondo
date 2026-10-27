@@ -81,6 +81,9 @@ try {
   assert.notEqual(context.workspace, repo)
   assert.equal(await readFile(join(context.workspace, 'sample.py'), 'utf8'), 'print(1)\n')
   await page.getByText('工作区就绪，等待规划', { exact: true }).waitFor()
+  await page.getByRole('tab', { name: '改动', exact: true }).click()
+  await page.getByText('尚无代码改动', { exact: true }).waitFor()
+  await page.getByRole('tab', { name: '文件', exact: true }).click()
   await page
     .locator('[data-upstream="t3code/UserTimelineRow"]')
     .getByText('将 sample.py 的输出改为 2，新增 README 说明。', { exact: true })
@@ -250,7 +253,7 @@ try {
     .waitFor()
   assert.match(
     await page.locator('.session-title').innerText(),
-    /Codex 规划与审查 \/ WorkBuddy 执行/
+    /Codex 规划 \/ WorkBuddy 执行 \/ Codex 审查/
   )
   await page.getByRole('tab', { name: '文件', exact: true }).click()
   await page.getByRole('button', { name: '刷新文件', exact: true }).click()

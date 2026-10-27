@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .snapshots import _git, canonical, current_tree, digest, prepare_workspace, repository_root, SnapshotError
 from .store import StoreError, TaskStore, _text
+from .agents import normalize_agents
 
 
 class TaskLauncher:
@@ -15,7 +16,8 @@ class TaskLauncher:
         self.root = (Path(root).resolve() if root else
                      Path.home() / '.agent-review-loop/tasks' / digest(str(store.path).encode())[:16])
 
-    def start(self, repo, title, instructions, acceptance, request_id, base_ref='HEAD', new_project=False):
+    def start(self, repo, title, instructions, acceptance, request_id, base_ref='HEAD', new_project=False, agents=None):
+        selected = normalize_agents(agents)
         for value, name, limit in ((repo, 'repo', 4096), (title, 'title', 160),
                                    (instructions, 'instructions', 8000), (acceptance, 'acceptance', 4000),
                                    (request_id, 'request_id', 128), (base_ref, 'base_ref', 200)):
@@ -29,6 +31,8 @@ class TaskLauncher:
         parameters = [repo, title, instructions, acceptance, base_ref]
         if new_project:
             parameters.append({'new_project': True})  # Keep old request fingerprints compatible.
+        if agents is not None:
+            parameters.append({'agents': selected})
         fingerprint = digest(canonical(parameters))
         # ponytail: serialize local task setup with SQLite; a job queue is unnecessary for one user.
         with self.store._connection(write=True) as db:
@@ -68,6 +72,7 @@ class TaskLauncher:
                 workspace = prepare_workspace(Path(repo), directory, base_ref)
                 task_id = self.store._create_task(db, title, instructions, acceptance)['task_id']
                 context = {**workspace, 'task_id': task_id, 'request_id': request_id,
+                           'agents': selected,
                            'handoff_file': str(directory / 'task.json')}
                 (directory / 'task.json').write_bytes(canonical({**context,
                     'title': title, 'instructions': instructions, 'acceptance': acceptance}) + b'\n')

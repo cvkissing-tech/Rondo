@@ -18,11 +18,11 @@ delegated: 用户已接受Electron、React、TypeScript桌面模板和现有Pyth
 
 ## Product Purpose
 
-用户在自己的产品中选择Git项目、提出需求；后台由Codex拆解和审查，WorkBuddy执行和修改。产品负责调度与结果展示，用户不在两个应用之间复制任务。
+用户在自己的产品中选择Git项目、提出需求；分别由用户选择的规划、执行和审查Agent处理；Codex/WorkBuddy是可选组合。产品负责调度与结果展示，用户不在两个应用之间复制任务。
 
 ## Operating Context
 
-本机项目、独立Git工作目录、持久任务、检查与代码审查。可从空文件夹直接开始；普通保存目录已有文件时自动新建项目子文件夹，保留原文件，无新/已有项目模式选择。已有Git项目仍使用其提交基线。新建任务草稿在本机恢复。当前24个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
+本机项目、独立Git工作目录、持久任务、检查与代码审查。可从空文件夹直接开始；普通保存目录已有文件时自动新建项目子文件夹，保留原文件，无新/已有项目模式选择。已有Git项目仍使用其提交基线。新建任务草稿在本机恢复。当前25个MCP工具，支持任务创建、恢复、计划、原生执行与审查。WorkBuddy 5.9.2 使用本机 RPC 创建专用会话，通过既有 MCP 提交结果，无需第三方 Open API 应用。Codex 与 WorkBuddy 各自消耗额度；准备和刷新任务不调用模型。
 
 ## Capabilities and Constraints
 
@@ -51,3 +51,12 @@ Rondo为产品名；agent-review-loop保留为包、仓库目录及MCP连接名�
 Codex App Server从实际任务工作区启动，继承本机账号、模型、推理强度、MCP、Skills与执行/审批配置，不再覆盖baseInstructions或关闭MCP。新会话持久保存并命名。规划/审查通过任务指令要求不修改项目，且结束后核对Git tree；这不是文件系统只读沙箱。原生command/file审批与用户问题可在Rondo答复；其他客户端动态工具、权限扩展与MCP elicitation尚未实现，遇到会停止并说明，不伪造答复。Codex桌面专属连接器不等同于CLI环境。旧版本临时会话无法追补保存。
 
 真实原生接入验收发现153个启用Skills与4项启用MCP配置，使用gpt-6.1-sol/high，读取ponytail并运行Get-Location；Codex原生读回同一持久会话及命令记录。此验收不代表4项MCP全部在线，也不代表桌面专属连接器接入。WorkBuddy会话get接口确认用户任务#3会话与工作区存在；其原生状态terminated表示该回合已结束，不表示当前仍在运行。
+
+
+## 0.15.0 通用Agent与稳定性
+
+创建任务时分别选择planner/executor/reviewer，绑定随任务持久化，历史任务默认为Codex/WorkBuddy/Codex。Codex原生可用于三个角色；WorkBuddy5.9.2实验通道用于执行；其他本地Agent复用acpx@0.21.0官方ACP runtime与registry，三个角色都可使用ACP，不要求安装Codex或WorkBuddy。安装检测不调用模型、不自动下载，也不代表已经登录；角色所需程序未安装会在付费运行前停止。Skills/MCP和默认模型由各Agent自身决定，不宣称Codex能力跨Agent通用。
+
+实时投影改用每次作业独立SQLite WAL。原始事件、作业结果与显示缓存分别保存，缓存写入异常不再中断模型；仅投影相关事件更新缓存。旧JSON缓存只用于历史读取。修复差异标签未发起读取的问题，读取失败提供重试。HTML预览改用绑定127.0.0.1的标准库HTTP服务，支持相对ES module；不自动启动任意项目脚本，关闭Rondo时关闭预览服务。
+
+源码运行入口为npm run setup和npm start，前提Node22.13+/Python3.11+/Git与用户自备Agent账号。目前尚未把Python后端打入独立安装包，也未配置Git远端或推送GitHub。ACP实际协议、权限、文件回调、三角色闭环均以明示离线fixture验证，不把它当成所有商业账号验收；本机真实Codex重新生成用户任务#4计划已成功且current，原生会话与工具记录保存。

@@ -26,6 +26,7 @@ class FakeRpc:
         return self
 
     def __exit__(self, *args):
+        self.cleanup_verified = not self.close_error
         if self.close_error:
             raise RuntimeError('synthetic cleanup error')
 

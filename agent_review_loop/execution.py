@@ -114,12 +114,13 @@ class ExecutionJobs(ReviewJobs):
         super().__init__(store, root or reviews.root, runner=runner,
                          executable=executable or os.environ.get('ARL_NODE') or shutil.which('node'), backend='workbuddy-native')
         self.tasks, self.plans, self.reviews = tasks, plans, reviews
+        self.native_routing = runner is native_run
 
     @staticmethod
     def _public(row):
         result = ReviewJobs._public(row)
         details = json.loads(row['result_json']) if row['result_json'] else {}
-        return {**result, **{key: details.get(key) for key in
+        return {**result, **{key: details.get(key, result.get(key)) for key in
                             ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model',
                              'mode', 'source_review_job_id', 'repair_job_id', 'repair_error')}}
 
@@ -144,7 +145,7 @@ class ExecutionJobs(ReviewJobs):
         plan = self.plans.read_plan(plan_id)
         if plan['freshness'] != 'current':
             raise StoreError('PLAN_STALE', 'Code changed after planning; update the plan first')
-        if self.runner is native_run:
+        if self.runner is native_run and self.selected_agent(task_id) == 'workbuddy':
             connection = workbuddy_connection(self.root)
             if not connection.get('connected'):
                 raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
@@ -167,7 +168,7 @@ class ExecutionJobs(ReviewJobs):
         # Validate before connecting, then repeat under the reservation transaction.
         with self.store._connection() as db:
             repair_context(db, source['task_id'], source_review_job_id, context['workspace'])
-        if self.runner is native_run:
+        if self.runner is native_run and self.selected_agent(source['task_id']) == 'workbuddy':
             connection = workbuddy_connection(self.root)
             if not connection.get('connected'):
                 raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
@@ -225,6 +226,47 @@ class ExecutionJobs(ReviewJobs):
             db.execute('UPDATE execution_jobs SET result_json=?,updated_at=? WHERE id=?',
                        (json.dumps(details, ensure_ascii=False), time.time(), job_id))
 
+    def _managed_turn(self, job_id, task, repo, directory, executable, agent, plan, owner, details):
+        from .codex_review import run_inline_json
+        current = self.store.get_task(task['task_id'])
+        claim = self.store.claim_task(task['task_id'], owner, current['version'], 900)
+        schema = {'type': 'object', 'properties': {'summary': {'type': 'string'}},
+                  'required': ['summary'], 'additionalProperties': False}
+        prompt = ('Implement this task in the current isolated workspace. Read project rules and use your own '
+                  'Skills/tools. Run relevant checks and report exact outcomes and remaining limitations. '
+                  'Do not commit, publish, send messages, call Rondo task-control tools, or edit other projects. '
+                  'If this is a repair, limit changes to allowed_files and address the fixed findings. '
+                  'Return JSON with summary <=4000 characters.\n' + canonical({
+                      'task': {k: task[k] for k in ('title', 'instructions', 'acceptance')},
+                      'plan': plan['plan'], 'mode': details['mode']}).decode())
+        with self.store._connection(write=True) as db:
+            db.execute("UPDATE execution_jobs SET state='running' WHERE id=?", (job_id,))
+        details['phase'] = 'running'
+        self._save_details(job_id, details)
+        try:
+            result = run_inline_json(prompt, schema, repo, directory/'runtime', executable,
+                                     timeout=900, cancel_check=lambda: self._cancelled(job_id), agent=agent,
+                                     instructions='You are the implementation agent. The user authorizes coding and relevant local checks in this task workspace. Follow project conventions; report observed evidence.',
+                                     session_name='Rondo · 执行 · '+task['title'])
+            details.update({k:v for k,v in result.items() if k in ('model','thread_id','session_id','persistent','environment','agent_session_id')})
+            if result.get('thread_id'):
+                details['session_id'] = result['thread_id']
+            if result.get('process_tree_closed') is not True:
+                raise StoreError('CLEANUP_UNVERIFIED', 'Agent进程退出未确认，请检查本次记录')
+            if result['status'] == 'cancelled':
+                return {'event':'cancelled'}
+            if result['status'] != 'completed':
+                raise StoreError('AGENT_EXECUTION_FAILED', result.get('error','Agent执行失败'))
+            summary = result.get('data', {}).get('summary')
+            if not isinstance(summary, str) or not 0 < len(summary.strip()) <= 4000:
+                raise StoreError('INVALID_REPORT', 'Agent返回的执行报告无效，原始记录已保留')
+            self.store.submit_result(task['task_id'], claim['attempt_id'], claim['claim_token'], claim['version'], summary, job_id)
+            return {'event':'turn_ended'}
+        finally:
+            # This owned runner is stopped before returning; do not strand its claim.
+            with self.store._connection(write=True) as db:
+                db.execute("UPDATE attempts SET state='expired' WHERE id=? AND state='active'", (claim['attempt_id'],))
+
     def _work(self, job_id, task, repo, base_ref, directory, executable, lock):
         with self.store._connection() as db:
             details = json.loads(self._row(db, job_id)['result_json'] or '{}')
@@ -244,7 +286,9 @@ class ExecutionJobs(ReviewJobs):
                     raise StoreError('PLAN_STALE', 'Plan changed before dispatch')
             details.update(plan_id=plan['plan_id'], input_tree=current_tree(repo))
             self._save_details(job_id, details)  # Save identity BEFORE any native request.
-            owner = 'rondo-workbuddy-' + job_id
+            agent = self.selected_agent(task['task_id']) if self.native_routing else 'workbuddy'
+            owner = ('rondo-workbuddy-' if agent == 'workbuddy' else 'rondo-agent-') + job_id
+            details['agent'] = agent
             repair_instruction = (
                 '这是唯一一轮返修。下面 plan 是固定的审查问题，不是新的需求。先检查触发条件并尽量复现，'
                 '只修复 allowed_files 内列出的文件，保留原验收要求，不删改测试以掩盖失败。'
@@ -264,33 +308,36 @@ class ExecutionJobs(ReviewJobs):
                 + canonical({'title': task['title'], 'instructions': task['instructions'],
                              'acceptance': task['acceptance'], 'plan': plan['plan']}).decode('utf-8')
             )
-            payload = {'command': 'run', 'session_id': details['session_id'], 'wake_id': details['wake_id'],
-                       'workspace': str(repo), 'title': ('返修 · ' if repairing else '') + task['title'], 'prompt': prompt}
-            model = os.environ.get('ARL_WORKBUDDY_MODEL')
-            if model:
-                payload['model'] = model
-            (directory / 'input.json').write_bytes(canonical(payload) + b'\n')
+            if agent != 'workbuddy' and self.native_routing:
+                result = self._managed_turn(job_id, task, repo, directory, executable, agent, plan, owner, details)
+            else:
+                payload = {'command': 'run', 'session_id': details['session_id'], 'wake_id': details['wake_id'],
+                           'workspace': str(repo), 'title': ('返修 · ' if repairing else '') + task['title'], 'prompt': prompt}
+                model = os.environ.get('ARL_WORKBUDDY_MODEL')
+                if model:
+                    payload['model'] = model
+                (directory / 'input.json').write_bytes(canonical(payload) + b'\n')
 
-            def event(value):
-                phase = value['event']
-                if phase == 'state':
-                    phase = 'waiting_input' if value.get('state') == 'waiting_input' else 'running'
-                details['phase'] = phase
-                if value['event'] == 'dispatched' and value.get('model'):
-                    details['model'] = value['model']
-                self._save_details(job_id, details)
-                if value['event'] == 'session_created' and os.name == 'nt' and self.runner is native_run:
-                    # Adapted from Kxiandaoyan's activate_via_deeplink: open ONLY our new session.
-                    try:
-                        os.startfile('workbuddy://chat/' + details['session_id'])
-                    except OSError:
-                        details['activation_notice'] = 'Open the dedicated session in WorkBuddy to inspect its progress'
-                if value['event'] == 'dispatched':
-                    with self.store._connection(write=True) as db:
-                        db.execute("UPDATE execution_jobs SET state='running' WHERE id=? AND state='preparing'", (job_id,))
+                def event(value):
+                    phase = value['event']
+                    if phase == 'state':
+                        phase = 'waiting_input' if value.get('state') == 'waiting_input' else 'running'
+                    details['phase'] = phase
+                    if value['event'] == 'dispatched' and value.get('model'):
+                        details['model'] = value['model']
+                    self._save_details(job_id, details)
+                    if value['event'] == 'session_created' and os.name == 'nt' and self.runner is native_run:
+                        # Adapted from Kxiandaoyan's activate_via_deeplink: open ONLY our new session.
+                        try:
+                            os.startfile('workbuddy://chat/' + details['session_id'])
+                        except OSError:
+                            details['activation_notice'] = 'Open the dedicated session in WorkBuddy to inspect its progress'
+                    if value['event'] == 'dispatched':
+                        with self.store._connection(write=True) as db:
+                            db.execute("UPDATE execution_jobs SET state='running' WHERE id=? AND state='preparing'", (job_id,))
 
-            result = self.runner(payload, directory / 'runtime', executable,
-                                 cancel_check=lambda: self._cancelled(job_id), on_event=event)
+                result = self.runner(payload, directory / 'runtime', executable,
+                                     cancel_check=lambda: self._cancelled(job_id), on_event=event)
             if result.get('event') == 'cancelled':
                 details['phase'] = 'cancelled'
                 self._finish(job_id, 'cancelled', details)
