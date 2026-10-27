@@ -2,10 +2,16 @@
 import readline from "node:readline";
 const send = (value) =>
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\n");
-let cwd, promptId, schema, stage;
+let cwd, promptId, schema, stage, userText;
 function finish() {
   const properties = schema.properties;
-  const value = properties.context_id
+  const plan = properties.plan?.anyOf[0]?.properties;
+  const value = properties.reply
+    ? { reply: userText.includes('为什么') ? '离线替身解释：不需要服务器，可以先验证玩法。' : '离线替身修订：移除联网功能，增加本地排行榜。',
+        plan: userText.includes('为什么') ? null : {
+          context_id: plan.context_id.enum[0], summary: '离线替身计划 V2：离线玩法与本地排行榜。',
+          steps: [{title: '实现离线玩法', details: '无需服务器，使用本地存储保存排行榜。', files: ['fixture.txt'], verification: ['检查本地文件']}], assumptions: [] } }
+    : properties.context_id
     ? {
         context_id: properties.context_id.enum[0],
         summary: "ACP fixture plan",
@@ -55,6 +61,8 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   } else if (message.method === "session/prompt") {
     promptId = message.id;
     const text = message.params.prompt.map((x) => x.text || "").join("");
+    // The prompt embeds current message as structured context, before the output schema.
+    userText = text.match(/"user_message"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1] || '';
     schema = JSON.parse(text.slice(text.lastIndexOf("schema:\n") + 8));
     if (
       schema.properties.summary &&

@@ -7,6 +7,7 @@ import {
   Files,
   FolderOpen,
   GitBranch,
+  ListChecks,
   MessagesSquare,
   Play,
   RefreshCw,
@@ -23,7 +24,8 @@ export function WorkspaceInspector({
   review,
   execution,
   difference,
-  showDiff,
+  planContent,
+  request,
   onDiff,
   onClose,
   refreshKey
@@ -33,15 +35,16 @@ export function WorkspaceInspector({
   review?: ReviewStatus
   execution?: ExecutionStatus
   difference: ReactNode
-  showDiff: number
+  planContent: ReactNode
+  request: { seq: number; tab: string }
   onDiff: () => void
   onClose: () => void
   refreshKey: string
 }) {
-  const [view, setView] = useState({ request: showDiff, tab: showDiff ? 'diff' : 'files' })
-  if (view.request !== showDiff) setView({ request: showDiff, tab: 'diff' })
+  const [view, setView] = useState({ request: request.seq, tab: request.tab })
+  if (view.request !== request.seq) setView({ request: request.seq, tab: request.tab })
   const tab = view.tab
-  const setTab = (value: string) => setView({ request: showDiff, tab: value })
+  const setTab = (value: string) => setView({ request: request.seq, tab: value })
   const [files, setFiles] = useState<WorkspaceFiles>()
   const [selected, setSelected] = useState('')
   const [source, setSource] = useState<string>()
@@ -128,6 +131,7 @@ export function WorkspaceInspector({
         onKeyDown={handleTabKeys}
       >
         {[
+          ['plan', '计划', ListChecks],
           ['files', '文件', Files],
           ['diff', '改动', GitBranch],
           ['sessions', '会话', MessagesSquare]
@@ -157,6 +161,11 @@ export function WorkspaceInspector({
         <p className="inspector-error" role="alert">
           {error}
         </p>
+      )}
+      {tab === 'plan' && (
+        <div className="inspector-plan" role="tabpanel" aria-label="任务计划">
+          {planContent}
+        </div>
       )}
       {tab === 'files' && (
         <div className="inspector-files" role="tabpanel" aria-label="工作区文件">

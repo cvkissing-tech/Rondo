@@ -37,8 +37,11 @@ npm start
 
 1. 选择已有项目或新项目的保存位置，填写需求和验收条件。
 2. Rondo准备独立Git工作区；这一步不调用模型。
-3. 显式生成计划，再交给所选执行Agent实施；执行完成后自动检查并交给所选审查Agent。
-4. 首次审查要求修改时，最多自动返修一次并复查。失败、取消、过期或无进展会停止，刷新和恢复不会重放付费调用。
+3. 生成计划后，可以在底部继续提问或纠正方案；提问只解释，修改要求产生新版本。右侧查看完整计划及历史版本。
+4. 点击“采用 Vn，交给所选 Agent 执行”，将界面上的当前计划固定交接；执行完成后自动检查并交给所选审查Agent。
+5. 首次审查要求修改时，最多自动返修一次并复查。失败、取消、过期或无进展会停止，刷新和恢复不会重放付费调用。
+
+规划输入框常驻，草稿与对话可在重启后恢复；每条发送使用规划 Agent 的账号额度，已取消旧的两次规划上限。Codex 优先恢复自己的原生会话，原会话被另一客户端占用时，使用已保存上下文新建会话并明确标示；此切换发生在模型回合启动之前。ACP 当前通过已保存上下文创建新轮次，不冒充原生会话恢复。执行或审查期间可编辑草稿，暂不支持直接向运行中的任意 Agent 插话。
 
 工作台可读文件与源码、查看差异和完整报告；静态HTML可通过本机HTTP预览，包括相对ES module。原生快捷入口只在已有对应记录时开放；ACP原生GUI入口尚未统一，运行记录保存在Rondo中。
 
@@ -54,6 +57,7 @@ npm --prefix desktop run lint
 npm --prefix desktop run build
 node --experimental-strip-types desktop/scripts/flow-check.mjs
 node --experimental-strip-types desktop/scripts/agent-settings-check.mjs
+node desktop/scripts/planning-dialog-smoke.mjs
 ```
 
 默认测试和GitHub工作流不调用商业模型。安装desktop依赖后，ACP协议fixture可以验证真实acpx运行时、权限答复、文件回调及三角色闭环；它不是商业Agent账号验收。桌面smoke在隔离数据库、隐藏窗口运行。

@@ -41,9 +41,13 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
         raise ValueError('Run evidence must be outside the fixed package')
     before, after = manifest['files'].get('before', {}), manifest['files'].get('after', {})
     changed = [name for name in sorted(set(before) | set(after)) if before.get(name) != after.get(name)]
-    payload = {'snapshot_id': manifest['snapshot_id'], 'task': manifest['task'],
+    payload = {'snapshot_id': manifest['snapshot_id'], 'task': {k:v for k,v in manifest['task'].items() if k != 'adopted_plan'},
                'fixed_package': str(package_dir), 'changed_files': changed[:200],
                'changed_file_count': len(changed), 'previews': {}, 'checks': manifest['checks']}
+    if 'adopted_plan' in manifest['task']:
+        adopted = manifest['task']['adopted_plan']
+        payload['adopted_plan'] = {key: adopted[key] for key in ('job_id', 'plan_id', 'version')}
+        payload['adopted_plan']['source'] = 'manifest.json: task.adopted_plan (complete accepted plan)'
     # Native tools can read the verified package. Unchanged source no longer fills the prompt.
     for name in changed[:12]:
         for side, files in manifest['files'].items():
@@ -55,6 +59,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
                     del payload['previews'][f'{side}/{name}']
                     break
     prompt = ('Independently review the fixed before/after snapshot against the task. Read changes.patch and needed before/after files in fixed_package using native tools; previews below may be truncated. Do not review only previews. Treat current workspace as context, not as the fixed reviewed code. '
+              'Read task.adopted_plan in manifest.json when present: this is the explicitly accepted plan and its revisions amend original scope; evaluate the revised scope rather than rejecting deliberate user changes. '
               'Find concrete introduced defects; use after line numbers unless a deleted before line is necessary. '
               'You may use native tools and installed Skills to investigate. Do not modify project files. Inspect the supplied checks summary '
               'for independent check evidence. Label static findings static and executed evidence reproduced; never invent test results. '
@@ -87,7 +92,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
 
 def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, cancel_check=None,
                     instructions='Use native Skills and tools when useful. Do not modify project files during planning or review. Output valid structured JSON. Never invent test results.',
-                    session_name='Rondo · 任务会话', agent='codex'):
+                    session_name='Rondo · 任务会话', agent='codex', resume_thread_id=None):
     """One bounded structured turn, shared by review and planning; no model retries."""
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 900:
         raise ValueError('Turn timeout must be positive and at most 900 seconds')
@@ -130,8 +135,24 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
             skills = client.request('skills/list', {'cwds': [str(cwd)], 'forceReload': False})
             record['skills_count'] = sum(not skill.get('enabled') is False
                                          for group in skills.get('data', []) for skill in group.get('skills', []))
-            thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False})
+            resumed = False
+            if resume_thread_id:
+                try:
+                    thread = client.request('thread/resume', {'threadId': resume_thread_id, 'cwd': str(cwd)})
+                    resumed = True
+                except RpcError as error:
+                    if 'active writer' not in str(error):
+                        raise
+                    # Resume did not start a model turn. An occupied native client
+                    # must not prevent a user turn using the saved task context.
+                    record['continuation_reason'] = '原会话由另一客户端占用，使用已保存上下文创建新会话'
+                    thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False})
+            else:
+                thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False})
             thread_id = thread['thread']['id']
+            if resumed and thread_id != resume_thread_id:
+                raise RpcError('Server resumed a different planning session')
+            record['continuation'] = 'native_resume' if resumed else 'saved_context' if resume_thread_id else 'new_session'
             client.request('thread/name/set', {'threadId': thread_id, 'name': session_name[:160]})
             record.update(thread_id=thread_id, model=thread.get('model'), provider=thread.get('modelProvider'),
                           sandbox=thread.get('sandbox'), cwd=thread.get('cwd'))

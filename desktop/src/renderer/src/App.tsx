@@ -46,7 +46,8 @@ import type {
   ReviewStatus,
   StartInput,
   Task,
-  WorkBuddyConnection
+  WorkBuddyConnection,
+  PlanningConversation
 } from '../../shared/types'
 import { defaultAgents, agentName } from '../../shared/types'
 import type { AgentAssignments } from '../../shared/types'
@@ -103,7 +104,18 @@ export default function App() {
   const [next, setNext] = useState<number | null>(null)
   const [context, setContext] = useState<Context>()
   const [changesOpen, setChangesOpen] = useState(true)
-  const [diffRequest, setDiffRequest] = useState(0)
+  useEffect(() => {
+    const narrow = matchMedia('(max-width: 1100px)')
+    const collapse = () => {
+      if (narrow.matches) setChangesOpen(false)
+    }
+    collapse()
+    narrow.addEventListener('change', collapse)
+    return () => narrow.removeEventListener('change', collapse)
+  }, [])
+  const [inspectorRequest, setInspectorRequest] = useState({ seq: 0, tab: 'plan' })
+  const [conversation, setConversation] = useState<PlanningConversation>()
+  const [historicalPlan, setHistoricalPlan] = useState<PlanResult>()
   const [error, setError] = useState(
     api ? '' : '请通过桌面应用打开工作台，浏览器预览无法调用本地服务。'
   )
@@ -171,14 +183,33 @@ export default function App() {
     setReview(undefined)
     setPlanJob(undefined)
     setPlanResult(undefined)
-    setChangesOpen(true)
-    setDiffRequest(0)
+    setConversation(undefined)
+    setHistoricalPlan(undefined)
+    setChangesOpen(window.innerWidth > 1100)
+    setInspectorRequest({ seq: 0, tab: 'plan' })
     setChangesError('')
     setExecution(undefined)
     try {
       const selected = await api.context(id)
       if (seq !== generation.current) return
       setContext(selected)
+      const messages = await api.planningConversation(id)
+      if (seq !== generation.current) return
+      setConversation(messages)
+      const lastPlan = [...messages.items].reverse().find((turn) => turn.status === 'succeeded')
+      if (lastPlan) {
+        const saved = await api.readPlan(lastPlan.job_id)
+        if (seq !== generation.current) return
+        setPlanResult(saved)
+      }
+      setInspectorRequest({
+        seq: 0,
+        tab: selected.latest_review_job_id
+          ? 'diff'
+          : selected.latest_execution_job_id
+            ? 'files'
+            : 'plan'
+      })
       localStorage.setItem('arl.task', String(id))
       if (selected.latest_execution_job_id) {
         const status = await api.executionStatus(selected.latest_execution_job_id)
@@ -232,6 +263,7 @@ export default function App() {
     }
   }, [jobId])
   const planJobId = planJob?.job_id
+  const selectedTaskId = context?.task_id
   useEffect(() => {
     if (!api || !planJobId) return
     let active = true
@@ -241,6 +273,9 @@ export default function App() {
         const status = await api.planStatus(planJobId)
         if (!active) return
         setPlanJob(status)
+        const messages = await api.planningConversation(selectedTaskId!)
+        if (!active) return
+        setConversation(messages)
         if (status.status === 'succeeded') {
           const result = await api.readPlan(planJobId)
           if (active) setPlanResult(result)
@@ -254,12 +289,7 @@ export default function App() {
       active = false
       clearTimeout(timer)
     }
-  }, [planJobId])
-  const selectedTaskId = context?.task_id
-  const planAttempts = new Set([
-    ...(context?.activity || []).filter((row) => row.kind === 'plan').map((row) => row.id),
-    ...(planJob ? [planJob.job_id] : [])
-  ]).size
+  }, [planJobId, selectedTaskId])
   const reviewAttempts = new Set([
     ...(context?.activity || []).filter((row) => row.kind === 'review').map((row) => row.id),
     ...(job ? [job.job_id] : [])
@@ -276,6 +306,9 @@ export default function App() {
         const updated = await api.context(selectedTaskId)
         if (!active) return
         setContext(updated)
+        const messages = await api.planningConversation(selectedTaskId)
+        if (!active) return
+        setConversation(messages)
         if (updated.latest_execution_job_id) {
           const state = await api.executionStatus(updated.latest_execution_job_id)
           if (!active) return
@@ -289,7 +322,6 @@ export default function App() {
         if (updated.latest_plan_job_id && updated.latest_plan_job_id !== planJobId) {
           const state = await api.planStatus(updated.latest_plan_job_id)
           if (!active) return
-          setPlanResult(undefined)
           setPlanJob(state)
         }
         if (updated.latest_review_job_id && updated.latest_review_job_id !== jobId) {
@@ -320,6 +352,46 @@ export default function App() {
       if (seq === generation.current) setPlanResult(result)
     }
   }
+  function openInspector(tab: string) {
+    setChangesOpen(true)
+    setInspectorRequest((previous) => ({ seq: previous.seq + 1, tab }))
+  }
+  async function viewPlan(id?: string) {
+    const seq = generation.current
+    if (id && api) {
+      const result = await api.readPlan(id)
+      if (seq !== generation.current) return
+      setHistoricalPlan(result.job_id === planResult?.job_id ? undefined : result)
+    } else setHistoricalPlan(undefined)
+    openInspector('plan')
+  }
+  async function sendPlanning(message: string, request: string) {
+    if (!api || !context) throw Error('本地服务尚未连接')
+    const seq = generation.current
+    setBusy(true)
+    try {
+      const status = await api.sendPlanningMessage(context.task_id, request, message)
+      if (seq === generation.current) {
+        setPlanJob(status)
+        setHistoricalPlan(undefined)
+        setConversation((previous) => ({
+          items: [
+            ...(previous?.items || []).filter((turn) => turn.job_id !== status.job_id),
+            status
+          ],
+          truncated: previous?.truncated || false
+        }))
+      }
+    } finally {
+      if (seq === generation.current) setBusy(false)
+    }
+  }
+  async function stopPlan() {
+    if (!api || !planJob) return
+    const seq = generation.current
+    const status = await api.cancelPlan(planJob.job_id)
+    if (seq === generation.current) setPlanJob(status)
+  }
   async function startPlan(fresh = false) {
     if (!api || !context) return
     const id = context.task_id,
@@ -333,6 +405,7 @@ export default function App() {
       pendingPlanRequest.current = false
       if (seq === generation.current) {
         setPlanResult(undefined)
+        setHistoricalPlan(undefined)
         setPlanJob(status)
       }
     })
@@ -400,6 +473,9 @@ export default function App() {
       updated = await api.context(context.task_id)
     if (seq !== generation.current) return
     setContext(updated)
+    const messages = await api.planningConversation(context.task_id)
+    if (seq !== generation.current) return
+    setConversation(messages)
     if (updated.latest_execution_job_id) {
       const state = await api.executionStatus(updated.latest_execution_job_id)
       if (seq !== generation.current) return
@@ -447,8 +523,17 @@ export default function App() {
       }
       if (executionRequest.current.task !== id)
         executionRequest.current = { task: id, id: crypto.randomUUID() }
-      const started = await api.startExecution(id, executionRequest.current.id)
-      if (seq === generation.current) setExecution(started)
+      if (!planResult) throw Error('请先读取当前计划')
+      const started = await api.startExecution(
+        id,
+        executionRequest.current.id,
+        planResult.job_id,
+        planResult.plan_id
+      )
+      if (seq === generation.current) {
+        setExecution(started)
+        openInspector('files')
+      }
     })
     if (seq === generation.current) setBusy(false)
   }
@@ -469,6 +554,8 @@ export default function App() {
     setReview(undefined)
     setPlanJob(undefined)
     setPlanResult(undefined)
+    setHistoricalPlan(undefined)
+    setConversation(undefined)
     setChanges(undefined)
     setError('')
     setBusy(false)
@@ -691,7 +778,7 @@ export default function App() {
                   variant="ghost"
                   aria-label="查看代码改动"
                   onClick={() => {
-                    setDiffRequest((n) => n + 1)
+                    openInspector('diff')
                     showChanges()
                   }}
                 >
@@ -890,24 +977,12 @@ export default function App() {
                   workspaceActions={workspaceActions}
                   onRefresh={() => protect(refreshTask)}
                   onAction={taskAction}
-                  planContent={
-                    <PlanPanel
-                      agentName={plannerName}
-                      attempts={planAttempts}
-                      job={planJob}
-                      result={planResult}
-                      busy={busy || Boolean(job && !terminal.has(job.status))}
-                      onStart={startPlan}
-                      onRefresh={() => protect(refreshPlan)}
-                      onCancel={() =>
-                        protect(async () => {
-                          const seq = generation.current
-                          const status = await api!.cancelPlan(planJob!.job_id)
-                          if (seq === generation.current) setPlanJob(status)
-                        })
-                      }
-                    />
-                  }
+                  conversation={conversation}
+                  dark={dark}
+                  onSend={sendPlanning}
+                  onStopPlan={() => protect(stopPlan)}
+                  onViewPlan={(id) => protect(() => viewPlan(id))}
+                  onViewFiles={() => openInspector('files')}
                   reviewContent={reviewPanel}
                 />
               </div>
@@ -923,9 +998,53 @@ export default function App() {
                     review={job}
                     execution={execution}
                     difference={difference}
-                    showDiff={diffRequest}
+                    request={inspectorRequest}
+                    planContent={
+                      <>
+                        {historicalPlan && (
+                          <div className="historical-plan-note">
+                            正在查看历史计划 V{historicalPlan.version || 1}
+                            ；执行按钮始终使用当前版本。
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setHistoricalPlan(undefined)}
+                            >
+                              返回当前计划
+                            </Button>
+                          </div>
+                        )}
+                        <PlanPanel
+                          agentName={plannerName}
+                          job={
+                            historicalPlan
+                              ? conversation?.items.find(
+                                  (turn) => turn.job_id === historicalPlan.job_id
+                                )
+                              : planJob
+                          }
+                          result={historicalPlan || planResult}
+                          busy={
+                            busy ||
+                            Boolean(job && !terminal.has(job.status)) ||
+                            Boolean(planJob && !terminal.has(planJob.status)) ||
+                            Boolean(execution && !terminal.has(execution.status))
+                          }
+                          onStart={startPlan}
+                          onRefresh={() => protect(refreshPlan)}
+                          onCancel={() => protect(stopPlan)}
+                        />
+                      </>
+                    }
                     onDiff={showChanges}
-                    onClose={() => setChangesOpen(false)}
+                    onClose={() => {
+                      setChangesOpen(false)
+                      requestAnimationFrame(() =>
+                        document
+                          .querySelector<HTMLTextAreaElement>('[aria-label="讨论或修改方案"]')
+                          ?.focus()
+                      )
+                    }}
                     refreshKey={`${execution?.status}:${execution?.phase}:${context.task.status}`}
                   />
                 </ResizablePanel>

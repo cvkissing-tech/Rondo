@@ -69,6 +69,7 @@ export interface Context {
   activity_truncated: boolean
 }
 export interface PlanResult {
+  version?: number
   usage?: { total?: { totalTokens?: number; inputTokens?: number; outputTokens?: number } } | null
   cost?: number | null
   job_id: string
@@ -113,12 +114,27 @@ export interface ReviewStatus {
     }
   }
 }
+export interface PlanningTurn extends ReviewStatus {
+  user_message?: string
+  reply?: string
+  version?: number
+  plan_job_id?: string
+  source_plan_job_id?: string
+  continuation?: string
+}
+export interface PlanningConversation {
+  items: PlanningTurn[]
+  truncated: boolean
+}
 export interface WorkspaceFiles {
   files: { path: string; size: number }[]
   truncated: boolean
   preview?: string
 }
 export interface ExecutionStatus extends ReviewStatus {
+  plan_id?: string
+  plan_job_id?: string
+  plan_version?: number
   mode?: 'implementation' | 'repair' | null
   source_review_job_id?: string | null
   repair_job_id?: string | null
@@ -185,8 +201,15 @@ export interface DesktopAPI {
   planStatus(id: string): Promise<ReviewStatus>
   readPlan(id: string): Promise<PlanResult>
   cancelPlan(id: string): Promise<ReviewStatus>
+  sendPlanningMessage(id: number, request: string, message: string): Promise<PlanningTurn>
+  planningConversation(id: number): Promise<PlanningConversation>
   workbuddyStatus(launch?: boolean): Promise<WorkBuddyConnection>
-  startExecution(id: number, request: string): Promise<ExecutionStatus>
+  startExecution(
+    id: number,
+    request: string,
+    planJob?: string,
+    planId?: string
+  ): Promise<ExecutionStatus>
   startRepair(sourceReviewId: string): Promise<ExecutionStatus>
   executionStatus(id: string): Promise<ExecutionStatus>
   cancelExecution(id: string): Promise<ExecutionStatus>

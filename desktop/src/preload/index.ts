@@ -23,8 +23,11 @@ const api: DesktopAPI = {
   planStatus: (id) => invoke('plan-status', id),
   readPlan: (id) => invoke('read-plan', id),
   cancelPlan: (id) => invoke('cancel-plan', id),
+  sendPlanningMessage: (id, request, message) => invoke('planning-message', id, request, message),
+  planningConversation: (id) => invoke('planning-conversation', id),
   workbuddyStatus: (launch = false) => invoke('workbuddy-status', launch),
-  startExecution: (id, request) => invoke('start-execution', id, request),
+  startExecution: (id, request, planJob, planId) =>
+    invoke('start-execution', id, request, planJob, planId),
   startRepair: (id) => invoke('start-repair', id),
   executionStatus: (id) => invoke('execution-status', id),
   cancelExecution: (id) => invoke('cancel-execution', id),

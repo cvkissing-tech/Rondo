@@ -20,7 +20,6 @@ const labels: Record<string, string> = {
 }
 export default function PlanPanel({
   agentName = 'Codex',
-  attempts = 0,
   job,
   result,
   busy,
@@ -28,7 +27,6 @@ export default function PlanPanel({
   onCancel,
   onRefresh
 }: {
-  attempts?: number
   agentName?: string
   job?: ReviewStatus
   result?: PlanResult
@@ -42,20 +40,21 @@ export default function PlanPanel({
     <section className="plan-body vibe-plan-surface" aria-label={`${agentName} 执行计划`}>
       <ChatEntryContainer
         variant="plan"
-        title={`${agentName} 执行计划`}
+        title={`计划${result ? ` V${result.version || 1}` : ''}`}
         expanded
-        headerRight={job && <Badge variant="secondary">{labels[job.status] ?? job.status}</Badge>}
+        headerRight={
+          job && (
+            <Badge variant="secondary">
+              {result && terminal.has(job.status) ? '已保存' : (labels[job.status] ?? job.status)}
+            </Badge>
+          )
+        }
         actions={
           job &&
           terminal.has(job.status) &&
           (job.status !== 'succeeded' || result) && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || attempts >= 2}
-              onClick={() => onStart(true)}
-            >
-              {attempts >= 2 ? '规划次数已用完（2/2）' : '重新生成计划（消耗额度）'}
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => onStart(true)}>
+              重新规划（消耗额度）
             </Button>
           )
         }
@@ -67,7 +66,7 @@ export default function PlanPanel({
                 依据所选 Agent 的能力与本机配置读取项目，生成交给执行方的实施步骤。
               </p>
               <p className="supporting">
-                生成一次计划会消耗所选 Agent 的账号额度；每项任务最多两次，失败或取消也计入。
+                生成或发送一条规划消息会使用所选 Agent 的账号额度。也可以在底部输入框补充需求。
               </p>
               <Button disabled={busy} onClick={() => onStart()}>
                 <ListChecks />
@@ -173,7 +172,7 @@ export default function PlanPanel({
           )}
           <div className="next-step">
             <Unplug />
-            <p>计划就绪后，可在任务主动作中交给所选 Agent 执行。生成计划本身不会修改代码。</p>
+            <p>有疑问或修改意见，直接在会话底部提出；确认方案后，采用当前计划并交给执行者。</p>
           </div>
         </div>
       </ChatEntryContainer>

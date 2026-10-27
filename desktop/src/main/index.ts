@@ -72,9 +72,18 @@ function handlers(): void {
     'plan-status': (id: string) => backend.call('get_plan_status', { job_id: id }),
     'read-plan': (id: string) => backend.call('read_plan', { job_id: id }),
     'cancel-plan': (id: string) => backend.call('cancel_plan', { job_id: id }),
+    'planning-message': (id: number, request: string, message: string) =>
+      backend.call('send_planning_message', { task_id: id, request_id: request, message }),
+    'planning-conversation': (id: number) =>
+      backend.call('read_planning_conversation', { task_id: id }),
     'workbuddy-status': (launch = false) => backend.call('workbuddy_status', { launch }),
-    'start-execution': (id: number, request: string) =>
-      backend.call('start_task_execution', { task_id: id, request_id: request }),
+    'start-execution': (id: number, request: string, planJob?: string, planId?: string) =>
+      backend.call('start_task_execution', {
+        task_id: id,
+        request_id: request,
+        ...(planJob ? { plan_job_id: planJob } : {}),
+        ...(planId ? { expected_plan_id: planId } : {})
+      }),
     'start-repair': (id: string) => backend.call('start_task_repair', { source_review_job_id: id }),
     'execution-status': (id: string) => backend.call('get_execution_status', { job_id: id }),
     'cancel-execution': (id: string) => backend.call('cancel_execution', { job_id: id }),

@@ -55,6 +55,7 @@ class _OwnerLock:
 class ReviewJobs:
     table = 'review_jobs'
     error_prefix = 'REVIEW'
+    attempt_limit = 2
 
     def __init__(self, store: TaskStore, root=None, *, runner=run_codex_review, executable=None, backend='codex', check_config=None):
         self.store = store
@@ -139,8 +140,16 @@ class ReviewJobs:
                 row = db.execute(f'SELECT * FROM {table} WHERE id=?', (row['id'],)).fetchone()
         return row
 
-    def start_review(self, task_id, repo, base_ref, request_id):
+    def start_review(self, task_id, repo, base_ref, request_id, *, input_data=None):
         task = self.store.get_task(task_id)
+        if self.table == 'review_jobs':
+            with self.store._connection() as db:
+                execution = db.execute("SELECT result_json FROM execution_jobs WHERE task_id=? AND json_extract(result_json,'$.mode')='implementation' ORDER BY created_at DESC LIMIT 1", (task_id,)).fetchone()
+            adopted = json.loads(execution['result_json'] or '{}').get('adopted_plan') if execution else None
+            if adopted:
+                task['adopted_plan'] = adopted
+        if input_data is not None:
+            task['_request'] = input_data
         _text(repo, 'repo', 4096)
         _text(base_ref, 'base_ref', 200)
         _text(request_id, 'request_id', 128)
@@ -149,6 +158,10 @@ class ReviewJobs:
             raise StoreError('INVALID_ARGUMENT', 'repo must be an existing absolute directory')
         repo = str(path.resolve())
         parameters = [repo, base_ref, {key: task[key] for key in ('title', 'instructions', 'acceptance')}]
+        if 'adopted_plan' in task:
+            parameters.append({'adopted_plan': task['adopted_plan']})
+        if input_data is not None:
+            parameters.append(input_data)
         if self.check_config is not None:
             parameters.append({'check_config': self.check_config})
         fingerprint = digest(canonical(parameters))
@@ -165,7 +178,7 @@ class ReviewJobs:
                     for row in db.execute(f"SELECT * FROM {table} WHERE state IN ('preparing','running','cancelling')").fetchall():
                         if self._reconcile(db, row, table)['state'] in ACTIVE:
                             raise StoreError(f'{self.error_prefix}_BUSY', 'One Codex job is active; read its state before starting another')
-                if db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= 2:
+                if self.attempt_limit is not None and db.execute(f'SELECT count(*) FROM {self.table} WHERE task_id=?', (task_id,)).fetchone()[0] >= self.attempt_limit:
                     raise StoreError(f'{self.error_prefix}_BUDGET_EXHAUSTED', 'This task has used its two attempts for this operation; no automatic reset')
                 backend = self.selected_agent(task_id) if self.native_routing else self.backend
                 if self.native_routing:

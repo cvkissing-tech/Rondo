@@ -256,6 +256,10 @@ def create_review_package(repo, base_ref, task, output_dir):
     repo = repository_root(repo)
     base = _commit(repo, base_ref)
     bound_task = {key: task.get(key) for key in ('task_id', 'title', 'instructions', 'acceptance')}
+    if 'adopted_plan' in task:
+        if not isinstance(task['adopted_plan'], dict) or len(canonical(task['adopted_plan'])) > 64 * 1024:
+            raise SnapshotError('INVALID_ARGUMENT', 'Invalid adopted plan')
+        bound_task['adopted_plan'] = task['adopted_plan']
     if type(bound_task['task_id']) is not int or bound_task['task_id'] < 1:
         raise SnapshotError('INVALID_ARGUMENT', 'task_id must be a positive integer')
     for key, maximum in (('title', 160), ('instructions', 8000), ('acceptance', 4000)):

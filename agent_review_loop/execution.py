@@ -128,9 +128,9 @@ class ExecutionJobs(ReviewJobs):
         details = json.loads(row['result_json']) if row['result_json'] else {}
         return {**result, **{key: details.get(key, result.get(key)) for key in
                             ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model',
-                             'mode', 'source_review_job_id', 'repair_job_id', 'repair_error')}}
+                             'mode', 'source_review_job_id', 'repair_job_id', 'repair_error', 'plan_id', 'plan_job_id', 'plan_version')}}
 
-    def start_execution(self, task_id, request_id):
+    def start_execution(self, task_id, request_id, plan_job_id=None, expected_plan_id=None):
         context = self.tasks.context(task_id)
         _text(request_id, 'request_id', 128)
         if request_id.startswith('repair-'):
@@ -140,6 +140,10 @@ class ExecutionJobs(ReviewJobs):
                                   (task_id, request_id)).fetchone()
             exists = db.execute('SELECT 1 FROM execution_jobs WHERE task_id=? LIMIT 1', (task_id,)).fetchone()
         if previous:
+            saved = json.loads(previous['result_json'] or '{}')
+            if ((plan_job_id and saved.get('plan_job_id') != plan_job_id) or
+                    (expected_plan_id and saved.get('plan_id') != expected_plan_id)):
+                raise StoreError('IDEMPOTENCY_CONFLICT', '这个执行请求已绑定另一份计划')
             return self.status(previous['id'])
         if exists:
             raise StoreError('EXECUTION_EXISTS', 'This task already has an execution receipt; inspect it rather than dispatch again')
@@ -148,7 +152,14 @@ class ExecutionJobs(ReviewJobs):
         plan_id = context['latest_plan_job_id']
         if not plan_id:
             raise StoreError('PLAN_REQUIRED', 'Generate a plan before dispatching WorkBuddy')
-        plan = self.plans.read_plan(plan_id)
+        with self.store._connection() as db:
+            saved = db.execute("SELECT id FROM plan_jobs WHERE task_id=? AND state='succeeded' ORDER BY created_at DESC,id DESC LIMIT 1", (task_id,)).fetchone()
+        if not saved:
+            raise StoreError('PLAN_REQUIRED', '尚无可采用的计划，请先生成或修订方案')
+        plan = self.plans.read_plan(saved['id'])
+        if ((plan_job_id and plan['job_id'] != plan_job_id) or
+                (expected_plan_id and plan['plan_id'] != expected_plan_id)):
+            raise StoreError('PLAN_SELECTION_CHANGED', '计划已经更新；请查看当前版本后再执行')
         if plan['freshness'] != 'current':
             raise StoreError('PLAN_STALE', 'Code changed after planning; update the plan first')
         if self.runner is native_run and self.selected_agent(task_id) == 'workbuddy':
@@ -157,7 +168,11 @@ class ExecutionJobs(ReviewJobs):
                 raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
         if not self.executable:
             self.executable = str(node_executable())
-        return self.start_review(task_id, context['workspace'], context['base_commit'], request_id)
+        return self.start_review(task_id, context['workspace'], context['base_commit'], request_id,
+                                 input_data={'plan_job_id': plan['job_id'], 'plan_id': plan['plan_id'],
+                                             'plan_version': plan.get('version', 1), 'latest_plan_job_id': plan_id,
+                                             'adopted_plan': {'job_id': plan['job_id'], 'plan_id': plan['plan_id'],
+                                                              'version': plan.get('version', 1), 'plan': plan['plan']}})
 
     def start_repair(self, source_review_job_id):
         if not isinstance(source_review_job_id, str) or not re.fullmatch('[a-f0-9]{32}', source_review_job_id):
@@ -190,7 +205,12 @@ class ExecutionJobs(ReviewJobs):
                                 (task['task_id'], self.store.clock())).fetchone()
             if row['state'] != 'ready' or active:
                 raise StoreError('TASK_NOT_READY', 'Task is already claimed or submitted')
-            return {'mode': 'implementation'}
+            selection = task.get('_request', {})
+            latest = db.execute('SELECT id FROM plan_jobs WHERE task_id=? ORDER BY created_at DESC LIMIT 1',
+                                (task['task_id'],)).fetchone()
+            if selection and (not latest or latest['id'] != selection['latest_plan_job_id']):
+                raise StoreError('PLAN_SELECTION_CHANGED', '计划已经更新；请重新查看后执行')
+            return {'mode': 'implementation', **selection}
         prior = db.execute("SELECT 1 FROM execution_jobs WHERE task_id=? AND request_id LIKE 'repair-%'",
                            (task['task_id'],)).fetchone()
         if prior:
@@ -287,7 +307,9 @@ class ExecutionJobs(ReviewJobs):
                     raise StoreError('REPAIR_SOURCE_STALE', 'Code changed after repair reservation; no prompt sent')
                 plan = {'plan_id': inputs['review_id'], 'plan': inputs}
             else:
-                plan = self.plans.read_plan(context['latest_plan_job_id'])
+                plan = self.plans.read_plan(details.get('plan_job_id') or context['latest_plan_job_id'])
+                if details.get('plan_id') and plan['plan_id'] != details['plan_id']:
+                    raise StoreError('PLAN_SELECTION_CHANGED', '采用的计划已变化；未发送执行请求')
                 if plan['freshness'] != 'current':
                     raise StoreError('PLAN_STALE', 'Plan changed before dispatch')
             details.update(plan_id=plan['plan_id'], input_tree=current_tree(repo))

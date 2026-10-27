@@ -46,12 +46,13 @@ class ExecutionTests(unittest.TestCase):
                        VALUES(?,?,?,?,'succeeded',?,?,?,?,?,?)''',
                        (plan_id, self.task_id, 'fixture', 'fixture', str(self.workspace), self.context['base_commit'], str(self.root), 'fixture', 1, 1))
         self.plans = SimpleNamespace(read_plan=lambda _: {
-            'plan_id': 'offline-plan', 'freshness': 'current' if current_tree(self.workspace) == self.tree else 'stale',
+            'job_id': plan_id, 'version': 2, 'plan_id': 'offline-plan', 'freshness': 'current' if current_tree(self.workspace) == self.tree else 'stale',
             'plan': {'summary': 'Offline fixture plan', 'steps': []}})
 
         def review(package, output, executable, *, cancel_check):
             self.review_calls += 1
             manifest = verify_package(package)
+            self.reviewed_plan = manifest['task'].get('adopted_plan')
             receipt = save_review(package, {'snapshot_id': manifest['snapshot_id'], 'verdict': 'approved',
                                            'summary': 'Offline fixture review, no model', 'findings': []})
             return {'status': 'review_saved', 'process_tree_closed': True, **receipt}
@@ -61,6 +62,24 @@ class ExecutionTests(unittest.TestCase):
                                        runner=self.native, executable=sys.executable)
         self.addCleanup(self.reviews.close)
         self.addCleanup(self.execution.close)
+
+    def test_adoption_rejects_wrong_plan_without_native_dispatch(self):
+        with self.assertRaises(StoreError) as caught:
+            self.execution.start_execution(self.task_id, 'adopt', '2' * 32, 'wrong-plan')
+        self.assertEqual(caught.exception.code, 'PLAN_SELECTION_CHANGED')
+        self.assertEqual(self.calls, 0)
+
+    def test_failed_discussion_does_not_discard_last_adoptable_plan(self):
+        self.mode = 'missing'
+        with self.store._connection(write=True) as db:
+            db.execute('''INSERT INTO plan_jobs(id,task_id,request_id,fingerprint,state,repo,base_ref,directory,backend,created_at,updated_at)
+                       VALUES(?,?,?,?,'failed',?,?,?,?,?,?)''',
+                       ('2' * 32, self.task_id, 'failed-discussion', 'fixture', str(self.workspace), self.context['base_commit'], str(self.root), 'fixture', 2, 2))
+        job = self.execution.start_execution(self.task_id, 'adopt-after-failure', '1' * 32, 'offline-plan')
+        result = self.wait(job, 'failed')  # Fixture deliberately ends without a result submission.
+        self.assertEqual(result['plan_job_id'], '1' * 32)
+        self.assertEqual(result['plan_version'], 2)
+        self.assertEqual(self.calls, 1)
 
     def native(self, payload, directory, executable, *, cancel_check, on_event):
         self.calls += 1
@@ -127,6 +146,8 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(self.tasks.context(self.task_id)['latest_execution_job_id'], job['job_id'])
         self.assertEqual(self.execution.start_execution(self.task_id, 'once')['job_id'], job['job_id'])
         self.assertEqual((self.calls, self.review_calls), (1, 1))
+        self.assertEqual(self.reviewed_plan['plan_id'], 'offline-plan')
+        self.assertEqual(self.reviewed_plan['version'], 2)
         with self.assertRaises(StoreError) as caught:
             self.execution.start_execution(self.task_id, 'new')
         self.assertEqual(caught.exception.code, 'EXECUTION_EXISTS')

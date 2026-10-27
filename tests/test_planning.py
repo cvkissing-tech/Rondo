@@ -27,6 +27,10 @@ def fixture_plan(context_id):
 
 class PlanRpc(FakeRpc):
     def request(self, method, params, **kwargs):
+        if method == 'thread/resume':
+            type(self).calls.append(method)
+            type(self).requests.append((method, params))
+            return {'thread': {'id': params['threadId']}, 'cwd': params['cwd'], 'model': 'synthetic-model'}
         if method != 'turn/start':
             return super().request(method, params, **kwargs)
         type(self).calls.append(method)
@@ -113,7 +117,7 @@ class PlanningTests(unittest.TestCase):
             self.second.read_plan(job['job_id'])
         self.assertEqual(caught.exception.code, 'PLAN_CHANGED')
 
-    def test_cancel_and_budget_do_not_restart_generation(self):
+    def test_cancel_is_idempotent_and_explicit_turns_are_not_limited_to_two(self):
         job = self.start()
         self.assertTrue(self.started.wait(5))
         self.second.cancel(job['job_id'])
@@ -122,10 +126,53 @@ class PlanningTests(unittest.TestCase):
         self.release.set()
         second = self.start('two')
         self.wait(second, 'succeeded')
-        with self.assertRaises(StoreError) as caught:
-            self.start('three')
-        self.assertEqual(caught.exception.code, 'PLAN_BUDGET_EXHAUSTED')
-        self.assertEqual(self.calls, 2)
+        third = self.start('three')
+        self.wait(third, 'succeeded')
+        self.assertEqual(self.calls, 3)
+
+    def test_discussion_revision_history_and_native_resume(self):
+        self.first.runner = run_codex_plan
+        self.first.backend = 'codex'
+        calls = []
+        def inline(prompt, schema, cwd, output, executable, **options):
+            output.mkdir()
+            calls.append(options)
+            fields = schema['properties']
+            if 'reply' not in fields:
+                data = fixture_plan(fields['context_id']['enum'][0])
+            elif len(calls) == 2:
+                data = {'reply': '这里使用离线方案，因为无需服务器。', 'plan': None}
+            else:
+                plan = fixture_plan(fields['plan']['anyOf'][0]['properties']['context_id']['enum'][0])
+                plan['summary'] = '先做离线版，增加本地排行榜。'
+                data = {'reply': '已移除联网步骤并增加本地排行榜。', 'plan': plan}
+            return {'status': 'completed', 'data': data, 'thread_id': 'own-thread', 'process_tree_closed': True}
+        with patch('agent_review_loop.planning.run_inline_json', side_effect=inline):
+            initial = self.start()
+            self.wait(initial, 'succeeded')
+            v1 = self.first.read_plan(initial['job_id'])
+            question = self.first.start_message(self.context['task_id'], str(self.workspace), self.context['base_commit'], 'question', '为什么选择这个方案？')
+            self.wait(question, 'succeeded')
+            self.assertEqual(self.first.read_plan(question['job_id'])['plan_id'], v1['plan_id'])
+            self.assertEqual(calls[1]['resume_thread_id'], 'own-thread')
+            revision = self.first.start_message(self.context['task_id'], str(self.workspace), self.context['base_commit'], 'revision', '先做离线版，增加本地排行榜')
+            self.wait(revision, 'succeeded')
+            v2 = self.second.read_plan(revision['job_id'])
+            self.assertEqual(v2['version'], 2)
+            self.assertNotEqual(v2['plan_id'], v1['plan_id'])
+            self.assertEqual(self.first.start_message(self.context['task_id'], str(self.workspace), self.context['base_commit'], 'revision', '先做离线版，增加本地排行榜')['job_id'], revision['job_id'])
+            self.assertEqual(len(calls), 3)
+            with self.assertRaises(StoreError) as caught:
+                self.first.start_message(self.context['task_id'], str(self.workspace), self.context['base_commit'], 'revision', '不同的意见')
+            self.assertEqual(caught.exception.code, 'IDEMPOTENCY_CONFLICT')
+        restored = PlanJobs(TaskStore(self.store.path), self.root / 'runs')
+        self.addCleanup(restored.close)
+        history = restored.conversation(self.context['task_id'])['items']
+        self.assertEqual(len(history), 3)
+        self.assertEqual(history[1]['user_message'], '为什么选择这个方案？')
+        self.assertEqual(history[1]['reply'], '这里使用离线方案，因为无需服务器。')
+        self.assertEqual(history[2]['plan_job_id'], revision['job_id'])
+        self.assertEqual(self.second.read_plan(initial['job_id'])['plan_id'], v1['plan_id'])
 
     def inputs(self):
         payload = prepare_context(self.context['task'], self.workspace, self.context['base_commit'])
@@ -141,6 +188,35 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(result['status'], 'plan_saved')
         self.assertTrue(result['process_tree_closed'])
         self.assertEqual(PlanRpc.calls.count('turn/start'), 1)
+
+    def test_transport_resumes_exact_thread_without_creating_another(self):
+        from agent_review_loop.codex_review import run_inline_json
+        from agent_review_loop.planning import plan_schema
+        with patch('agent_review_loop.codex_review.CodexRpc', PlanRpc):
+            result = run_inline_json('fixture', plan_schema('a' * 64), self.workspace, self.root / 'resume',
+                                     sys.executable, resume_thread_id='thread-1')
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['continuation'], 'native_resume')
+        self.assertEqual(PlanRpc.calls.count('thread/resume'), 1)
+        self.assertNotIn('thread/start', PlanRpc.calls)
+        self.assertEqual(PlanRpc.calls.count('turn/start'), 1)
+
+    def test_occupied_native_session_falls_back_before_any_model_turn(self):
+        from agent_review_loop.codex_review import run_inline_json
+        from agent_review_loop.codex_rpc import RpcError
+        from agent_review_loop.planning import plan_schema
+        class BusyResume(PlanRpc):
+            def request(self, method, params, **options):
+                if method == 'thread/resume':
+                    raise RpcError('thread already has an active writer')
+                return super().request(method, params, **options)
+        with patch('agent_review_loop.codex_review.CodexRpc', BusyResume):
+            result = run_inline_json('saved context fixture', plan_schema('a' * 64), self.workspace,
+                                     self.root / 'occupied', sys.executable, resume_thread_id='thread-busy')
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['continuation'], 'saved_context')
+        self.assertEqual(BusyResume.calls.count('turn/start'), 1)
+        self.assertEqual(BusyResume.calls.count('thread/start'), 1)
 
     def test_invalid_plan_is_not_saved_or_retried(self):
         inputs = self.inputs()

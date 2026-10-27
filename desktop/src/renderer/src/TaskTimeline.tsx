@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   Code2,
@@ -11,10 +11,18 @@ import {
 } from 'lucide-react'
 import { Button } from '@jean/components/ui/button'
 import { agentName, defaultAgents } from '../../shared/types'
-import type { Context, ExecutionStatus, PlanResult, Review, ReviewStatus } from '../../shared/types'
+import type {
+  Context,
+  ExecutionStatus,
+  PlanResult,
+  Review,
+  ReviewStatus,
+  PlanningConversation
+} from '../../shared/types'
 import { taskFlow, terminal, type TaskAction } from './taskFlow'
 import { ChatWorkspace, UserMessage } from './vendor/t3code/ChatWorkspace'
 import { TimelineSystemDivider } from './vendor/t3code/TimelineSystemDivider'
+import { PlanningComposer } from './PlanningComposer'
 
 function NativeEvents({
   job,
@@ -57,7 +65,7 @@ function NativeEvents({
         </p>
       )}
       {!!job?.events?.length && (
-        <details className="native-events" open={!terminal.has(job.status)}>
+        <details className="native-events">
           <summary>工具与会话记录 · {job.events.length} 项</summary>
           {job.events.map((entry, index) => (
             <details key={`${entry.id}:${index}`} className="tool-event">
@@ -172,7 +180,12 @@ export function TaskTimeline({
   reviewJob,
   review,
   patch,
-  planContent,
+  conversation,
+  dark,
+  onSend,
+  onStopPlan,
+  onViewPlan,
+  onViewFiles,
   reviewContent,
   workspaceActions,
   busy,
@@ -188,7 +201,12 @@ export function TaskTimeline({
   reviewJob?: ReviewStatus
   review?: Review
   patch?: string
-  planContent: ReactNode
+  conversation?: PlanningConversation
+  dark: boolean
+  onSend: (message: string, request: string) => Promise<void>
+  onStopPlan: () => void
+  onViewPlan: (job?: string) => void
+  onViewFiles: () => void
   reviewContent: ReactNode
   workspaceActions: ReactNode
   busy: boolean
@@ -203,9 +221,13 @@ export function TaskTimeline({
   const planRef = useRef<HTMLElement>(null)
   const executionRef = useRef<HTMLElement>(null)
   const reviewRef = useRef<HTMLElement>(null)
+  const endRef = useRef<HTMLDivElement>(null)
+  const follow = useRef(true)
+  useEffect(() => {
+    if (follow.current) endRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
+  }, [conversation?.items.length, planJob?.status, execution?.phase, reviewJob?.status])
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const flow = taskFlow(context, planJob, plan, reviewJob, review, patch, execution)
-  const planOpen = expanded.plan ?? Boolean(planJob && !execution && !reviewJob)
   const reviewOpen = expanded.review ?? Boolean(reviewJob)
   const executionOpen = expanded.execution ?? Boolean(execution || context.task.result)
   const executionSummary = execution?.summary || context.task.result?.summary
@@ -217,15 +239,19 @@ export function TaskTimeline({
       ...(current ? [current.job_id] : [])
     ]).size
   function action(value: TaskAction) {
+    if (value === 'plan-record') {
+      onViewPlan()
+      return
+    }
     const showExecution =
       value === 'execute' || value === 'repair' || (value === 'refresh' && execution && !reviewJob)
     if (showExecution) setExpanded((p) => ({ ...p, execution: true }))
-    if (value === 'plan-record' || value === 'plan') setExpanded((p) => ({ ...p, plan: true }))
+    if (value === 'plan') setExpanded((p) => ({ ...p, plan: true }))
     if (value === 'review-record' || value === 'review')
       setExpanded((p) => ({ ...p, review: true }))
     const destination = showExecution
       ? executionRef
-      : value === 'plan-record' || value === 'plan'
+      : value === 'plan'
         ? planRef
         : value === 'review-record' || value === 'review'
           ? reviewRef
@@ -237,6 +263,16 @@ export function TaskTimeline({
       })
     onAction(value)
   }
+  const turns = [...(conversation?.items || [])]
+  if (planJob && !turns.some((turn) => turn.job_id === planJob.job_id)) turns.push(planJob)
+  const planning = Boolean(planJob && !terminal.has(planJob.status))
+  const blocked = busy
+    ? '正在处理请求，草稿会保留。'
+    : execution && !terminal.has(execution.status)
+      ? `${executor} 正在执行；请先停止或等待本轮结束，再调整方案。`
+      : reviewJob && !terminal.has(reviewJob.status)
+        ? `${reviewer} 正在审查，草稿会保留。`
+        : undefined
   const rowHeading = (
     key: string,
     title: string,
@@ -257,7 +293,15 @@ export function TaskTimeline({
     </button>
   )
   return (
-    <section className="task-conversation" aria-label="任务工作记录">
+    <section
+      className="task-conversation"
+      aria-label="任务工作记录"
+      onScrollCapture={(event) => {
+        const element = event.target as HTMLElement
+        if (element.classList.contains('session-scroll'))
+          follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100
+      }}
+    >
       <ChatWorkspace
         header={
           <>
@@ -277,14 +321,31 @@ export function TaskTimeline({
             <div className="dock-context">
               <span className="status-dot" />
               <span role="status">{flow.label}</span>
-              <span>本机 Agent · 独立工作区</span>
+              <button type="button" onClick={onViewFiles}>
+                查看文件与产出
+              </button>
             </div>
             <div className="dock-action">
-              <p>{flow.detail}</p>
-              <Button disabled={busy} onClick={() => action(flow.action)}>
-                {flow.button}
+              <p>{flow.action === 'execute' ? '自动检查与审查，最多返修一次。' : flow.detail}</p>
+              <Button size="sm" disabled={busy} onClick={() => action(flow.action)}>
+                {flow.action === 'execute'
+                  ? `采用 V${plan?.version || 1}，交给 ${executor} 执行`
+                  : flow.button}
               </Button>
             </div>
+            <PlanningComposer
+              task={context.task_id}
+              planner={planner}
+              version={plan?.version}
+              dark={dark}
+              blocked={blocked}
+              running={planning}
+              onSend={async (message, request) => {
+                follow.current = true
+                await onSend(message, request)
+              }}
+              onStop={onStopPlan}
+            />
           </>
         }
       >
@@ -313,121 +374,182 @@ export function TaskTimeline({
           </div>
         )}
         <TimelineSystemDivider label="规划 → 执行 → 审查" detail="本机 Agent 协作" />
-        <article className="agent-message" ref={planRef}>
-          {rowHeading(
-            'plan',
-            `${planner} · 执行计划`,
-            planOpen,
-            <ListChecks className="size-4" />,
-            planJob ? (planJob.status === 'succeeded' ? '已生成' : planJob.status) : '待开始'
-          )}
-          <NativeEvents job={planJob} kind="plan" onRefresh={onRefresh} />
-          {planOpen ? (
-            planContent
-          ) : (
-            <p className="message-preview">
-              {plan && plan.freshness !== 'current' && '原计划基于旧代码，查看时请核对当前改动。 '}
-              {plan?.plan.summary.slice(0, 180) ||
-                '从需求与项目源码拆解实施步骤，交给所选执行 Agent。'}
+        <section ref={planRef} aria-label="规划讨论记录">
+          {turns.map((saved) => {
+            const turn = saved.job_id === planJob?.job_id ? { ...saved, ...planJob } : saved
+            const reply =
+              turn.reply ||
+              (turn.plan_job_id === plan?.job_id || turn.job_id === plan?.job_id
+                ? plan?.plan.summary
+                : undefined)
+            return (
+              <div key={turn.job_id} className="planning-turn">
+                {turn.user_message && (
+                  <UserMessage>
+                    <p className="preserve">{turn.user_message}</p>
+                  </UserMessage>
+                )}
+                <article className="agent-message">
+                  <div className="planning-author">
+                    <ListChecks className="size-4" />
+                    <strong>{planner} · 规划</strong>
+                    <span>
+                      {turn.status === 'succeeded'
+                        ? '已回复'
+                        : turn.status === 'failed'
+                          ? '回答失败'
+                          : turn.status === 'cancelled'
+                            ? '已停止'
+                            : turn.status === 'interrupted'
+                              ? '已中断'
+                              : '正在回答…'}
+                    </span>
+                  </div>
+                  {reply && <p className="preserve planning-reply">{reply}</p>}
+                  {turn.continuation === 'saved_context' && (
+                    <p className="supporting">使用已保存上下文继续；本轮为新的 Agent 会话。</p>
+                  )}
+                  {turn.error_code && (
+                    <p className="composer-error" role="alert">
+                      {turn.error_message || turn.error_code}。本条请求未自动重发。
+                    </p>
+                  )}
+                  {turn.status === 'succeeded' && (turn.plan_job_id || !turn.user_message) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onViewPlan(turn.plan_job_id || turn.job_id)}
+                    >
+                      <ListChecks />
+                      查看计划 V{turn.version || 1}
+                    </Button>
+                  )}
+                  <NativeEvents job={turn} kind="plan" onRefresh={onRefresh} />
+                </article>
+              </div>
+            )
+          })}
+          {!turns.length && (
+            <p className="planning-empty">
+              可以直接补充需求，或生成第一份计划；方案确定后再交给执行者。
             </p>
           )}
-        </article>
-        <article className="agent-message" ref={executionRef}>
-          {rowHeading(
-            'execution',
-            context.task.status === 'submitted'
-              ? execution?.mode === 'repair'
-                ? '返修结果已提交'
-                : '执行结果已提交'
-              : `${executor} · 执行`,
-            executionOpen,
-            <Code2 className="size-4" />,
-            execution
-              ? execution.status === 'succeeded'
-                ? '已返回'
-                : execution.phase || execution.status
-              : '待派发'
+          {conversation?.truncated && (
+            <p className="supporting">显示最近 100 轮；更早的原始记录仍保存在本机。</p>
           )}
-          <NativeEvents job={execution} kind="execution" onRefresh={onRefresh} />
-          {executionOpen && (
-            <div className="execution-message">
-              <p className="preserve">
-                {executionSummary || '计划就绪后，在下方交给所选 Agent 执行。结果将返回这里审查。'}
-              </p>
-              {execution?.session_id && (
-                <p className="supporting">
-                  原生会话 {execution.session_id}
-                  {execution.model && ` · ${execution.model}`}
+        </section>
+        {(execution || context.task.result) && (
+          <>
+            <article className="agent-message" ref={executionRef}>
+              {rowHeading(
+                'execution',
+                context.task.status === 'submitted'
+                  ? execution?.mode === 'repair'
+                    ? '返修结果已提交'
+                    : '执行结果已提交'
+                  : `${executor} · 执行`,
+                executionOpen,
+                <Code2 className="size-4" />,
+                execution
+                  ? execution.status === 'succeeded'
+                    ? '已返回'
+                    : execution.phase || execution.status
+                  : '待派发'
+              )}
+              <NativeEvents job={execution} kind="execution" onRefresh={onRefresh} />
+              {executionOpen && (
+                <div className="execution-message">
+                  <p className="preserve">
+                    {executionSummary ||
+                      '计划就绪后，在下方交给所选 Agent 执行。结果将返回这里审查。'}
+                  </p>
+                  {execution?.plan_version && (
+                    <p className="supporting">本轮执行采用计划 V{execution.plan_version}</p>
+                  )}
+                  <Button size="sm" variant="outline" onClick={onViewFiles}>
+                    <FolderGit2 />
+                    查看文件与产出
+                  </Button>
+                  {execution?.session_id && (
+                    <p className="supporting">
+                      原生会话 {execution.session_id}
+                      {execution.model && ` · ${execution.model}`}
+                    </p>
+                  )}
+                  {execution?.session_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selected.executor.startsWith('acp:')}
+                      onClick={() =>
+                        window
+                          .workbench!.openSession(context.task_id, 'workbuddy')
+                          .catch((e) => setSessionError(String(e)))
+                      }
+                    >
+                      <ExternalLink />
+                      打开 {executor} 会话
+                    </Button>
+                  )}
+                  {sessionError && <p role="alert">{sessionError}</p>}
+                  {execution?.review_error && (
+                    <p role="alert">自动审查未启动：{execution.review_error}</p>
+                  )}
+                  {execution?.repair_error && (
+                    <p role="alert">自动交接已停止：{execution.repair_error}</p>
+                  )}
+                  {execution?.source_review_job_id && (
+                    <p className="supporting">
+                      返修依据 {execution.source_review_job_id} · 最多一次返修
+                    </p>
+                  )}
+                  {execution && !terminal.has(execution.status) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={execution.status === 'cancelling'}
+                      onClick={onCancelExecution}
+                    >
+                      停止 {executor} 执行
+                    </Button>
+                  )}
+                </div>
+              )}
+              {!executionOpen && executionSummary && (
+                <p className="message-preview">{executionSummary.slice(0, 180)}</p>
+              )}
+            </article>
+          </>
+        )}
+        {(reviewJob || review) && (
+          <>
+            <article className="agent-message" ref={reviewRef}>
+              {rowHeading(
+                'review',
+                `${reviewer} · 代码审查`,
+                reviewOpen,
+                <ShieldCheck className="size-4" />,
+                review
+                  ? review.verdict === 'approved'
+                    ? '已通过'
+                    : '需修改'
+                  : reviewJob?.status || '待开始'
+              )}
+              <NativeEvents job={reviewJob} kind="review" onRefresh={onRefresh} />
+              {reviewOpen ? (
+                reviewContent
+              ) : (
+                <p className="message-preview">
+                  {review?.summary || '执行提交后，对固定快照进行独立审查。'}
                 </p>
               )}
-              {execution?.session_id && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={selected.executor.startsWith('acp:')}
-                  onClick={() =>
-                    window
-                      .workbench!.openSession(context.task_id, 'workbuddy')
-                      .catch((e) => setSessionError(String(e)))
-                  }
-                >
-                  <ExternalLink />
-                  打开 {executor} 会话
-                </Button>
-              )}
-              {sessionError && <p role="alert">{sessionError}</p>}
-              {execution?.review_error && (
-                <p role="alert">自动审查未启动：{execution.review_error}</p>
-              )}
-              {execution?.repair_error && (
-                <p role="alert">自动交接已停止：{execution.repair_error}</p>
-              )}
-              {execution?.source_review_job_id && (
-                <p className="supporting">
-                  返修依据 {execution.source_review_job_id} · 最多一次返修
-                </p>
-              )}
-              {execution && !terminal.has(execution.status) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={execution.status === 'cancelling'}
-                  onClick={onCancelExecution}
-                >
-                  停止 {executor} 执行
-                </Button>
-              )}
-            </div>
-          )}
-          {!executionOpen && executionSummary && (
-            <p className="message-preview">{executionSummary.slice(0, 180)}</p>
-          )}
-        </article>
-        <article className="agent-message" ref={reviewRef}>
-          {rowHeading(
-            'review',
-            `${reviewer} · 代码审查`,
-            reviewOpen,
-            <ShieldCheck className="size-4" />,
-            review
-              ? review.verdict === 'approved'
-                ? '已通过'
-                : '需修改'
-              : reviewJob?.status || '待开始'
-          )}
-          <NativeEvents job={reviewJob} kind="review" onRefresh={onRefresh} />
-          {reviewOpen ? (
-            reviewContent
-          ) : (
-            <p className="message-preview">
-              {review?.summary || '执行提交后，对固定快照进行独立审查。'}
-            </p>
-          )}
-        </article>
+            </article>
+          </>
+        )}
         <details className="job-history">
           <summary>
-            已保存作业记录 · 计划 {count('plan', planJob)}/2 · 执行/返修{' '}
-            {count('execution', execution)}/2 · 审查 {count('review', reviewJob)}/2
+            已保存作业记录 · 规划对话 {conversation?.items.length || count('plan', planJob)} 轮 ·
+            执行/返修 {count('execution', execution)}/2 · 审查 {count('review', reviewJob)}/2
           </summary>
           {context.activity.map((row) => (
             <div className="history-row" key={`${row.kind}:${row.id}`}>
@@ -437,9 +559,12 @@ export function TaskTimeline({
               <time>{new Date(row.updated_at * 1000).toLocaleString('zh-CN')}</time>
             </div>
           ))}
-          <p className="supporting">失败、取消也计入；刷新和恢复只读记录。</p>
+          <p className="supporting">
+            执行与审查的失败、取消也计入次数；规划消息逐条发送，刷新和恢复只读记录。
+          </p>
         </details>
         {workbuddyConnected && <p className="supporting">WorkBuddy 本机通道已连接</p>}
+        <div ref={endRef} />
       </ChatWorkspace>
     </section>
   )

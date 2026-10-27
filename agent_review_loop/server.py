@@ -115,9 +115,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     async def start_task_execution(
         task_id: TaskId,
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+        plan_job_id: JobId | None = None,
+        expected_plan_id: str | None = None,
     ) -> dict[str, Any]:
         """Run a saved current plan in native WorkBuddy, then Codex review; changes_requested may trigger ONE repair and final review. At most two native turns and two reviews, using both quotas. Never replay unknown dispatches."""
-        return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id)
+        return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id, plan_job_id, expected_plan_id)
 
     @server.tool(structured_output=True)
     def get_execution_status(job_id: JobId) -> dict[str, Any]:
@@ -139,9 +141,22 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         task_id: TaskId,
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
     ) -> dict[str, Any]:
-        """Generate ONE bounded Codex plan for a saved workspace. Consumes quota. Same request_id retries reuse it; max two attempts per task."""
+        """Generate ONE bounded plan for a saved workspace. Explicitly consumes quota; same request_id reuses it. No automatic retry."""
         context = _invoke(tasks.context, task_id)
         return await asyncio.to_thread(_invoke, plans.start_review, task_id, context['workspace'], context['base_commit'], request_id)
+
+    @server.tool(structured_output=True)
+    async def send_planning_message(task_id: TaskId,
+                                    request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+                                    message: Annotated[str, Field(strict=True, min_length=1, max_length=4000)]) -> dict[str, Any]:
+        """Explicit paid planning turn: answer a question or revise the plan. Never starts execution. Same request_id/content reuses the turn."""
+        context = _invoke(tasks.context, task_id)
+        return await asyncio.to_thread(_invoke, plans.start_message, task_id, context['workspace'], context['base_commit'], request_id, message)
+
+    @server.tool(structured_output=True)
+    def read_planning_conversation(task_id: TaskId) -> dict[str, Any]:
+        """Read up to 100 persisted planning turns, including failed user messages and plan version references. No model call."""
+        return _invoke(plans.conversation, task_id)
 
     @server.tool(structured_output=True)
     def get_plan_status(job_id: JobId) -> dict[str, Any]:
