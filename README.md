@@ -44,11 +44,13 @@ npm start
 
 ## 开发与验证
 
+先激活 setup 创建的虚拟环境：Windows PowerShell 使用 `.\.venv\Scripts\Activate.ps1`；macOS/Linux 使用 `source .venv/bin/activate`。然后运行：
+
 ```sh
 python -m unittest discover -s tests -v
 npm --prefix desktop run lint
 npm --prefix desktop run build
-node desktop/scripts/flow-check.mjs
+node --experimental-strip-types desktop/scripts/flow-check.mjs
 ```
 
 默认测试和GitHub工作流不调用商业模型。安装desktop依赖后，ACP协议fixture可以验证真实acpx运行时、权限答复、文件回调及三角色闭环；它不是商业Agent账号验收。桌面smoke在隔离数据库、隐藏窗口运行。

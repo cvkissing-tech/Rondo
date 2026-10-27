@@ -63,5 +63,6 @@ createAgentRegistry、installed inspect、会话保存、启动、ACP框架、�
 - 零模型Electron检查覆盖三种角色选择/保存、动态名称、差异标签、960px与深色；实际任务#4备份检查确认最新计划succeeded/current、工具记录存在、规划2/2禁用，未再调用模型。
 - 本机任务#4恢复额外调用一次真实Codex，使用原153Skills/4项MCP配置；不是全部商业ACP账号兼容测试。
 - 静态HTTP预览检查验证返回HTML、JS MIME、隐藏.git拒绝和服务随应用退出。常规构建/typecheck/lint通过。
+- 干净源码副本不带原有.venv、node_modules或项目个人配置，npm run setup与check:setup均成功；使用副本自己的Electron/Python启动，连接副本数据库、发现25个MCP工具、加载三个角色选择与29个目录条目，无渲染错误、无模型调用。这证明当前Windows源码安装路径可用，不等于独立安装包或29个商业Agent均已验收。
 
 建议先读agents.py与TaskLauncher的绑定，再看AgentPicker的选择如何传到start_task；随后读acp.py与runtime.mjs的事件/权限/完成信号，最后回到ExecutionJobs._managed_turn如何在真正完成后提交和审查。原始日志、投影、结果、检查与审查各自有自己的职责。
