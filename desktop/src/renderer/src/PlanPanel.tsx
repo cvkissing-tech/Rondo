@@ -172,9 +172,7 @@ export default function PlanPanel({
           )}
           <div className="next-step">
             <Unplug />
-            <p>
-              有疑问或修改意见，直接在会话底部提出；确认方案后，从顶部采用计划并执行，启动自动流程。
-            </p>
+            <p>有疑问或修改意见，直接在会话底部提出；确认方案后，在底部采用计划并执行。</p>
           </div>
         </div>
       </ChatEntryContainer>

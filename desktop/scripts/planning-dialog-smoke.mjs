@@ -91,6 +91,7 @@ try {
   await page.reload()
   await page.getByRole('textbox', { name: '讨论或修改方案' }).waitFor()
   await page
+    .locator('.task-conversation')
     .getByRole('button', { name: '采用 V1，交给 rondo-fixture 执行', exact: true })
     .waitFor()
   await page.getByRole('textbox', { name: '讨论或修改方案' }).fill('为什么选择这个方案？')
@@ -108,6 +109,7 @@ try {
   await page.getByRole('button', { name: '发送给规划 Agent', exact: true }).click()
   await waitTurn(3)
   await page
+    .locator('.task-conversation')
     .getByRole('button', { name: '采用 V2，交给 rondo-fixture 执行', exact: true })
     .waitFor({ timeout: 15000 })
   await page.getByText('离线替身修订：移除联网功能，增加本地排行榜。', { exact: true }).waitFor()
@@ -119,6 +121,7 @@ try {
   await page.getByRole('button', { name: '查看计划 V1', exact: true }).first().click()
   await page.getByText(/正在查看历史计划 V1/).waitFor()
   await page
+    .locator('.task-conversation')
     .getByRole('button', { name: '采用 V2，交给 rondo-fixture 执行', exact: true })
     .waitFor()
   await shot('historical-plan')
@@ -158,7 +161,10 @@ try {
   )
   assert.equal((await saved()).items.length, 3)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
-  await page.getByRole('button', { name: '采用 V2，交给 rondo-fixture 执行', exact: true }).click()
+  await page
+    .locator('.task-conversation')
+    .getByRole('button', { name: '采用 V2，交给 rondo-fixture 执行', exact: true })
+    .click()
   await page
     .getByRole('button', { name: 'Allow fixture write once', exact: true })
     .waitFor({ timeout: 45000 })

@@ -188,6 +188,7 @@ export function TaskTimeline({
   onViewFiles,
   reviewContent,
   workspaceActions,
+  planAction,
   busy,
   onAction,
   onRefresh
@@ -209,6 +210,7 @@ export function TaskTimeline({
   onViewFiles: () => void
   reviewContent: ReactNode
   workspaceActions: ReactNode
+  planAction: ReactNode
   busy: boolean
   onAction: (action: TaskAction) => void
   onRefresh: () => void
@@ -325,6 +327,7 @@ export function TaskTimeline({
                 查看文件与产出
               </button>
             </div>
+            {planAction}
             {flow.action !== 'execute' && (
               <div className="dock-action">
                 <p>{flow.detail}</p>

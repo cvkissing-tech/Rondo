@@ -17,7 +17,7 @@ const sourceDatabase = process.argv[3]
   ? resolve(process.argv[3])
   : join(root, '.agent-review-loop/workbuddy.sqlite3')
 const evidence = await mkdtemp(join(root, '.agent-review-loop/workflow-entry-'))
-const captures = join(root, '.impeccable/review/workflow-entry')
+const captures = join(root, '.impeccable/review/adoption-placement')
 await mkdir(captures, { recursive: true })
 execFileSync(join(root, '.venv/Scripts/python.exe'), [
   '-c',
@@ -54,10 +54,18 @@ try {
     localStorage.setItem('arl.theme', 'light')
   }, task)
   await page.reload()
-  const start = page.getByRole('button', { name: /^采用 V1，交给 .* 执行$/ })
+  const chatStart = page
+    .locator('.session-dock')
+    .getByRole('button', { name: /^采用 V1，交给 .* 执行$/ })
+  const start = page
+    .locator('.workspace-inspector')
+    .getByRole('button', { name: /^采用 V1，交给 .* 执行$/ })
   await start.waitFor({ timeout: 30000 })
   assert.equal(await start.isEnabled(), true)
-  assert.equal(await start.evaluate((el) => !!el.closest('[data-panel-id]')), false)
+  assert.equal(await page.locator('.workflow-strip button').count(), 0)
+  const chatButton = await chatStart.boundingBox(),
+    input = await page.getByRole('textbox', { name: '讨论或修改方案' }).boundingBox()
+  assert.ok(chatButton && input && chatButton.y + chatButton.height <= input.y)
   await capture(app, page, { path: join(captures, 'desktop.png') })
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(960, 760))
   await page.getByRole('tab', { name: '计划', exact: true }).waitFor({ state: 'hidden' })
@@ -66,23 +74,24 @@ try {
   assert.equal(await page.getByRole('textbox', { name: '讨论或修改方案' }).isVisible(), false)
   assert.equal(await start.isVisible(), true)
   assert.equal(await start.isEnabled(), true)
-  const bar = await page.locator('.workflow-strip').boundingBox(),
-    button = await start.boundingBox(),
+  const button = await start.boundingBox(),
     panel = await page.locator('.workspace-inspector').boundingBox()
   assert.ok(
-    bar &&
-      button &&
+    button &&
       panel &&
-      bar.y + bar.height <= panel.y + 1 &&
-      button.y >= bar.y &&
-      button.y + button.height <= bar.y + bar.height
+      button.y > panel.y + panel.height - 130 &&
+      button.y + button.height <= panel.y + panel.height
   )
+  await page.locator('.inspector-plan').evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  assert.equal((await start.boundingBox()).y, button.y)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   await capture(app, page, { path: join(captures, 'compact-plan.png') })
   await page.getByRole('button', { name: '切换深色', exact: true }).click()
   await capture(app, page, { path: join(captures, 'compact-plan-dark.png') })
   await page.getByRole('button', { name: '收起工作区面板', exact: true }).click()
-  assert.equal(await start.isVisible(), true)
+  assert.equal(await chatStart.isVisible(), true)
   const after = await page.evaluate((id) => window.workbench.context(id), task)
   assert.equal(after.latest_execution_job_id, null)
   assert.equal(after.latest_plan_job_id, before.context.latest_plan_job_id)
@@ -99,9 +108,9 @@ try {
         captures,
         assertions: [
           'current plan has enabled entry',
-          'entry outside both panels',
+          'chat entry above composer; no top entry',
           'compact plan keeps entry visible',
-          'workflow and plan do not overlap',
+          'plan entry fixed at panel bottom during scroll',
           'close keeps entry',
           'no execution created'
         ]

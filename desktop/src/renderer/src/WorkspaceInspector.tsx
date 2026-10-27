@@ -25,6 +25,7 @@ export function WorkspaceInspector({
   execution,
   difference,
   planContent,
+  planAction,
   request,
   onDiff,
   onClose,
@@ -36,6 +37,7 @@ export function WorkspaceInspector({
   execution?: ExecutionStatus
   difference: ReactNode
   planContent: ReactNode
+  planAction: ReactNode
   request: { seq: number; tab: string }
   onDiff: () => void
   onClose: () => void
@@ -163,8 +165,9 @@ export function WorkspaceInspector({
         </p>
       )}
       {tab === 'plan' && (
-        <div className="inspector-plan" role="tabpanel" aria-label="任务计划">
-          {planContent}
+        <div className="inspector-plan-view" role="tabpanel" aria-label="任务计划">
+          <div className="inspector-plan">{planContent}</div>
+          {planAction && <div className="plan-adoption-footer">{planAction}</div>}
         </div>
       )}
       {tab === 'files' && (

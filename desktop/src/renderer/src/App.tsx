@@ -59,7 +59,7 @@ import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
 import { WorkspaceInspector } from './WorkspaceInspector'
 import { taskFlow, type TaskAction } from './taskFlow'
-import { WorkflowBar } from './WorkflowBar'
+import { WorkflowBar, PlanAdoption } from './WorkflowBar'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -633,6 +633,17 @@ export default function App() {
   )
   const reviewerName = agentName((context?.agents || defaultAgents).reviewer)
   const plannerName = agentName((context?.agents || defaultAgents).planner)
+  const flow =
+    context && taskFlow(context, planJob, planResult, job, review, changes?.patch, execution)
+  const planAction =
+    flow?.action === 'execute' && planResult ? (
+      <PlanAdoption
+        plan={planResult}
+        executor={agentName((context?.agents || defaultAgents).executor)}
+        busy={busy}
+        onExecute={startExecution}
+      />
+    ) : null
   const reviewPanel = (
     <div className="review-body">
       <div className="review-intro">
@@ -957,12 +968,9 @@ export default function App() {
         ) : (
           <div className="task-workbench">
             <WorkflowBar
-              flow={taskFlow(context, planJob, planResult, job, review, changes?.patch, execution)}
-              plan={planResult}
+              flow={flow!}
               executor={agentName((context.agents || defaultAgents).executor)}
               reviewer={reviewerName}
-              busy={busy}
-              onExecute={startExecution}
             />
             <ResizablePanelGroup direction="horizontal" className="task-panels">
               <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
@@ -985,6 +993,7 @@ export default function App() {
                     patch={changes?.patch}
                     busy={busy}
                     workspaceActions={workspaceActions}
+                    planAction={planAction}
                     onRefresh={() => protect(refreshTask)}
                     onAction={taskAction}
                     conversation={conversation}
@@ -1009,6 +1018,7 @@ export default function App() {
                       execution={execution}
                       difference={difference}
                       request={inspectorRequest}
+                      planAction={planAction}
                       planContent={
                         <>
                           {historicalPlan && (
