@@ -17,7 +17,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="MCP 中文 ")
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / "tasks.sqlite3"
+        self.db = Path(self.temp.name).resolve() / "tasks.sqlite3"
 
     def parameters(self):
         return StdioServerParameters(
@@ -90,7 +90,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         entry = json.loads(config.stdout)["mcpServers"]["agent-review-loop"]
         self.assertEqual(entry["args"][-1], str(self.db))
         self.assertFalse(self.db.exists())
-        checks = Path(self.temp.name) / 'checks.json'
+        checks = self.db.parent / 'checks.json'
         configured = subprocess.run(command + ['config', '--db', str(self.db), '--check-config', str(checks)],
                                     cwd=ROOT, capture_output=True, encoding='utf-8', timeout=15)
         self.assertEqual(configured.returncode, 0, configured.stderr)

@@ -12,7 +12,7 @@ class ProcessRunnerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="协作 空格 ")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.output = self.root / "run-1"
 
     def run_script(self, script, prompt="", timeout=10):

@@ -74,7 +74,7 @@ class CodexReviewTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='审查调用 ')
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.package = self.root / 'package'
         (self.package / 'after').mkdir(parents=True)
         (self.package / 'before').mkdir()
