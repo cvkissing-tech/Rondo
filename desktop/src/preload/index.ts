@@ -25,7 +25,8 @@ const api: DesktopAPI = {
   planStatus: (id) => invoke('plan-status', id),
   readPlan: (id) => invoke('read-plan', id),
   cancelPlan: (id) => invoke('cancel-plan', id),
-  sendPlanningMessage: (id, request, message) => invoke('planning-message', id, request, message),
+  sendPlanningMessage: (id, request, message, model) =>
+    invoke('planning-message', id, request, message, model),
   planningConversation: (id) => invoke('planning-conversation', id),
   workbuddyStatus: (launch = false) => invoke('workbuddy-status', launch),
   startExecution: (id, request, planJob, planId) =>

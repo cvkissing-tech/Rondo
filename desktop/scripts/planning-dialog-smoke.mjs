@@ -25,7 +25,13 @@ const config = join(evidence, 'agents.json')
 await writeFile(
   config,
   JSON.stringify({
-    agents: { 'rondo-fixture': [process.execPath, join(root, 'tests/fixtures/acp-agent.mjs')] }
+    agents: {
+      'rondo-fixture': [
+        process.execPath,
+        join(root, 'tests/fixtures/acp-agent.mjs'),
+        '--models-fixture'
+      ]
+    }
   })
 )
 const env = {
@@ -95,8 +101,18 @@ try {
     .getByRole('button', { name: '采用 V1，交给 rondo-fixture 执行', exact: true })
     .waitFor()
   await page.getByRole('textbox', { name: '讨论或修改方案' }).fill('为什么选择这个方案？')
+  await page.getByLabel('本次对话模型').selectOption('fixture-large')
   await page.getByRole('button', { name: '发送给规划 Agent', exact: true }).click()
   await waitTurn(2)
+  const selectedTurn = await page.evaluate(() => window.workbench.planningConversation(1))
+  assert.equal(
+    selectedTurn.items.find((item) => item.user_message === '为什么选择这个方案？')?.model,
+    'fixture-large'
+  )
+  assert.equal(
+    JSON.parse(await (await import('node:fs/promises')).readFile(config, 'utf8')).native_models,
+    undefined
+  )
   await page
     .getByText('离线替身解释：不需要服务器，可以先验证玩法。', { exact: true })
     .waitFor({ timeout: 15000 })

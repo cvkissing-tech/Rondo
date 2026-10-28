@@ -366,12 +366,16 @@ export default function App() {
     } else setHistoricalPlan(undefined)
     openInspector('plan')
   }
-  async function sendPlanning(message: string, request: string) {
+  async function sendPlanning(
+    message: string,
+    request: string,
+    model?: { model: string; effort?: string }
+  ) {
     if (!api || !context) throw Error('本地服务尚未连接')
     const seq = generation.current
     setBusy(true)
     try {
-      const status = await api.sendPlanningMessage(context.task_id, request, message)
+      const status = await api.sendPlanningMessage(context.task_id, request, message, model)
       if (seq === generation.current) {
         setPlanJob(status)
         setHistoricalPlan(undefined)

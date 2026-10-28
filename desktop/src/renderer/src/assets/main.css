@@ -881,6 +881,19 @@ textarea {
   color: var(--muted-foreground);
   margin-left: 6px;
 }
+.composer-recipient select {
+  max-width: 170px;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+.composer-recipient select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .composer-hint {
   font-size: 10px;
   line-height: 1.6;

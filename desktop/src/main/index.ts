@@ -91,8 +91,18 @@ function handlers(): void {
     'plan-status': (id: string) => backend.call('get_plan_status', { job_id: id }),
     'read-plan': (id: string) => backend.call('read_plan', { job_id: id }),
     'cancel-plan': (id: string) => backend.call('cancel_plan', { job_id: id }),
-    'planning-message': (id: number, request: string, message: string) =>
-      backend.call('send_planning_message', { task_id: id, request_id: request, message }),
+    'planning-message': (
+      id: number,
+      request: string,
+      message: string,
+      model_choice?: { model: string; effort?: string }
+    ) =>
+      backend.call('send_planning_message', {
+        task_id: id,
+        request_id: request,
+        message,
+        ...(model_choice ? { model_choice } : {})
+      }),
     'planning-conversation': (id: number) =>
       backend.call('read_planning_conversation', { task_id: id }),
     'workbuddy-status': (launch = false) => backend.call('workbuddy_status', { launch }),

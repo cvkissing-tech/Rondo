@@ -216,7 +216,12 @@ export interface DesktopAPI {
   planStatus(id: string): Promise<ReviewStatus>
   readPlan(id: string): Promise<PlanResult>
   cancelPlan(id: string): Promise<ReviewStatus>
-  sendPlanningMessage(id: number, request: string, message: string): Promise<PlanningTurn>
+  sendPlanningMessage(
+    id: number,
+    request: string,
+    message: string,
+    model?: { model: string; effort?: string }
+  ): Promise<PlanningTurn>
   planningConversation(id: number): Promise<PlanningConversation>
   workbuddyStatus(launch?: boolean): Promise<WorkBuddyConnection>
   startExecution(

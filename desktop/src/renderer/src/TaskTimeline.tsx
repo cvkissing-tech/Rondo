@@ -205,7 +205,11 @@ export function TaskTimeline({
   patch?: string
   conversation?: PlanningConversation
   dark: boolean
-  onSend: (message: string, request: string) => Promise<void>
+  onSend: (
+    message: string,
+    request: string,
+    model?: { model: string; effort?: string }
+  ) => Promise<void>
   onStopPlan: () => void
   onViewPlan: (job?: string) => void
   onViewFiles: () => void
@@ -341,13 +345,14 @@ export function TaskTimeline({
             <PlanningComposer
               task={context.task_id}
               planner={planner}
+              plannerId={selected.planner}
               version={plan?.version}
               dark={dark}
               blocked={blocked}
               running={planning}
-              onSend={async (message, request) => {
+              onSend={async (message, request, model) => {
                 follow.current = true
-                await onSend(message, request)
+                await onSend(message, request, model)
               }}
               onStop={onStopPlan}
             />

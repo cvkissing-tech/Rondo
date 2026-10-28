@@ -148,10 +148,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     @server.tool(structured_output=True)
     async def send_planning_message(task_id: TaskId,
                                     request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
-                                    message: Annotated[str, Field(strict=True, min_length=1, max_length=4000)]) -> dict[str, Any]:
+                                    message: Annotated[str, Field(strict=True, min_length=1, max_length=4000)],
+                                    model_choice: dict[str, str] | None = None) -> dict[str, Any]:
         """Explicit paid planning turn: answer a question or revise the plan. Never starts execution. Same request_id/content reuses the turn."""
         context = _invoke(tasks.context, task_id)
-        return await asyncio.to_thread(_invoke, plans.start_message, task_id, context['workspace'], context['base_commit'], request_id, message)
+        return await asyncio.to_thread(_invoke, plans.start_message, task_id, context['workspace'], context['base_commit'], request_id, message, model_choice)
 
     @server.tool(structured_output=True)
     def read_planning_conversation(task_id: TaskId) -> dict[str, Any]:
