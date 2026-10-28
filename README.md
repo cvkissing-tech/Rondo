@@ -2,8 +2,6 @@
 
 带着自己的 Agent 完成规划、编码和审查的本地工作台。
 
-Rondo 原创代码使用 MIT 许可证；第三方组件及恢复的界面资源遵循各自的许可证与来源说明，见各 `vendor` 和 `integrations` 目录中的 `LICENSE`、`NOTICE` 文件。根目录许可证不重新授权第三方内容。
-
 **0.15.0 · 源码运行版 · Windows 桌面已验证。** Rondo 组织任务、工作区、Agent 分工、提交、代码快照和审查记录；模型与账号由用户自己的 Agent 提供。
 
 ## 开始使用
@@ -28,7 +26,7 @@ npm start
 | 接入 | 角色 | 当前范围 |
 |---|---|---|
 | Codex App Server | 规划、执行、审查 | 沿用本机 CLI 配置、账号、Skills、MCP与默认模型；保存具名会话 |
-| acpx / ACP | 规划、执行、审查 | 复用官方运行时和适配器目录；可接Claude Code、Gemini CLI、Copilot、OpenCode、Qwen、Kimi等兼容实现及自定义ACP程序 |
+| ACP 兼容 Agent | 规划、执行、审查 | 可连接 Claude Code、Gemini CLI、Copilot、OpenCode、Qwen、Kimi 等兼容实现及自定义 ACP 程序 |
 | WorkBuddy native | 执行 | Windows WorkBuddy 实验适配，已在 5.9.3 验证会话与短消息；需单独配置本地通道与 MCP 信任 |
 
 不要求每个用户都安装 WorkBuddy；三个角色都使用 ACP 时也不要求安装 Codex。安装检测不会调用模型或自动下载 Agent，**已安装不等于已登录或已验证所有能力**。具体模型、Skills与MCP由各Agent自身决定；纯GUI且没有可调用接口的产品不能仅靠填一个名字接入。
@@ -76,13 +74,10 @@ node desktop/scripts/planning-dialog-smoke.mjs
 
 0.15修复了Windows下反复替换session.json导致原生回合中断的问题，实时投影改用SQLite WAL；缓存故障不再当成模型失败。差异标签现在真实触发读取，并提供失败重试。
 
-## 复用与贡献
+## 参与贡献
 
-- [acpx](https://github.com/openclaw/acpx)：固定0.21.0运行时、Agent registry、ACP会话、权限与文件/终端协议。具体边界见[integrations/acp/NOTICE.md](integrations/acp/NOTICE.md)。
-- [ACP Registry](https://github.com/agentclientprotocol/registry)：兼容实现的参考索引，不作为静默下载或自动执行源。
-- Jean、T3 Code、Vibe Kanban、Codex输入容器、Pierre Diffs：工作台结构及界面模块；各vendor目录保留来源、固定版本、哈希与必要适配。
-- [AionUi](https://github.com/iOfficeAI/AionUi)：Agent列表、可用性筛选和自定义编辑流程；[Goose](https://github.com/block/goose)：接入检查面板。已适配Rondo数据与IPC，来源、固定commit、原文件哈希、修改范围和许可证见对应vendor目录。
+欢迎提交问题反馈、Agent 接入适配和交互改进。连接新的 ACP Agent 通常只需配置本机启动程序与参数。新增协议适配时，请提供无需账号、无需调用模型的测试样例，并说明支持的系统与版本。
 
-新ACP Agent通常只需配置本机argv，不必修改Rondo源码。新增专有协议适配时，请提供无账号、无模型的协议fixture，并区分安装检测、真实执行与平台兼容证据。保留各组件许可证与NOTICE；项目许可证见 [LICENSE](LICENSE)。
+项目原创代码采用 [MIT 许可证](LICENSE)，第三方组件遵循各自目录中的许可证与版权声明。
 
 学习实现可从[会话工作台与原生环境](docs/learning/17-native-session-workspace.md)、[稳定状态与可选择Agent](docs/learning/18-agent-providers-stability.md)入手。更早的课程保留阶段性实现，当前行为以本README、PRODUCT.md与源码为准。
