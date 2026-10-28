@@ -4,6 +4,21 @@
 
 **0.15.0 · 源码运行版 · Windows 桌面已验证。** Rondo 组织任务、工作区、Agent 分工、提交、代码快照和审查记录；模型与账号由用户自己的 Agent 提供。
 
+## 技术栈
+
+| 层级 | 技术 | 用途 |
+|---|---|---|
+| 桌面应用 | Electron、Node.js | 管理本地窗口、文件访问、进程启动与系统入口 |
+| 用户界面 | React 19、TypeScript、Tailwind CSS 4 | 构建任务会话、模型选择、代码面板和浅深主题 |
+| 本地后端 | Python 3.11+ | 管理任务状态、Agent 调度、检查、审查与返修 |
+| 数据存储 | SQLite、WAL | 持久化任务及作业状态，保存执行过程与会话投影 |
+| 应用通信 | Electron IPC、MCP over stdio | 连接桌面界面、主进程与 Python 任务服务 |
+| Agent 接入 | Codex App Server、ACP、WorkBuddy 本地会话接口 | 调用用户已安装的 Agent，管理会话、模型与权限请求 |
+| 工作区与审查 | Git worktree、代码快照、SHA-256 | 隔离任务改动，固定审查版本，检测计划和审查是否过期 |
+| 构建与验证 | Vite、electron-vite、ESLint、Python unittest、Playwright、GitHub Actions | 构建桌面端，检查代码及协议行为，验证界面流程 |
+
+界面通过 Electron IPC 调用主进程，主进程通过 MCP 启动并连接本地 Python 服务；服务负责调度 Agent、保存 SQLite 记录，以及准备 Git 工作区和审查快照。模型推理由用户自己的 Agent 完成，Rondo 负责组织流程与展示结果。
+
 ## 开始使用
 
 需要 **Node.js 22.13+、Python 3.11+、Git**，以及至少一个自己已安装并登录的兼容 Agent。获取源码后，在仓库根目录运行：
