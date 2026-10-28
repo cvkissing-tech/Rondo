@@ -28,7 +28,15 @@ export interface AgentSettingsState {
   path: string
   revision: string
   agents: Record<string, string[]>
+  native_models?: Record<string, { model: string; effort?: string }>
   error?: string
+}
+export interface AgentModels {
+  agent: string
+  models: { id: string; name: string; efforts?: string[]; default_effort?: string }[]
+  default_model?: string
+  default_effort?: string
+  unsupported_reason?: string
 }
 export interface AgentCheck {
   agent: string
@@ -177,6 +185,13 @@ export interface StartInput {
   request_id: string
 }
 export interface DesktopAPI {
+  agentModels(agent: string): Promise<AgentModels>
+  saveModel(input: {
+    agent: string
+    model: string
+    effort?: string
+    revision: string
+  }): Promise<AgentSettingsState>
   agentSettings(): Promise<AgentSettingsState>
   saveAgent(input: {
     id: string

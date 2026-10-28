@@ -12,6 +12,7 @@ from .codex_rpc import ReviewCancelled
 from .native_session import interactive_request, project_event, write_state
 from .processes import ProcessTree
 from .snapshots import canonical
+from .model_settings import model_selection
 
 
 def structured_result(text, schema):
@@ -28,7 +29,7 @@ def structured_result(text, schema):
 
 
 def run_acp_json(prompt, schema, cwd, output, executable, *, agent, timeout=180, cancel_check=None,
-                 instructions='', session_name='Rondo'):
+                 instructions='', session_name='Rondo', model_choice=None):
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=False)
     (output / 'request.txt').write_text(prompt, encoding='utf-8')
@@ -45,6 +46,7 @@ def run_acp_json(prompt, schema, cwd, output, executable, *, agent, timeout=180,
                       error_type=type(error).__name__, error=str(error)[:2000])
     started = time.monotonic()
     try:
+        choice = model_selection(agent) if model_choice is None else model_choice
         with ProcessTree([str(executable), str(ROOT / 'integrations/acp/runtime.mjs')], cwd, output / 'stderr.log') as child:
             def read():
                 try:
@@ -56,6 +58,7 @@ def run_acp_json(prompt, schema, cwd, output, executable, *, agent, timeout=180,
                     with suppress(queue.Full): messages.put({'event':'error','error':str(error)}, timeout=.1)
             reader = threading.Thread(target=read, daemon=True); reader.start()
             payload = {'agent':agent, 'cwd':str(cwd), 'output':str(output), 'timeout':timeout,
+                       'model':choice.get('model'),
                        'session_key':output.parent.name, 'writable':set(schema['properties']) == {'summary'},
                        'prompt':instructions + '\n' + prompt + '\nReturn ONLY a JSON object matching this schema:\n' + canonical(schema).decode()}
             child.stdin.write(canonical(payload) + b'\n'); child.stdin.flush()
@@ -71,7 +74,7 @@ def run_acp_json(prompt, schema, cwd, output, executable, *, agent, timeout=180,
                         kind=event['event']
                         if kind == 'error': raise RuntimeError(event.get('error','ACP失败'))
                         if kind == 'session_created':
-                            record['session_id']=event['session_id']; state.update(record); state['status']='running'; publish()
+                            record.update(session_id=event['session_id'], model=event.get('model'), requested_model=choice.get('model')); state.update(record); state['status']='running'; publish()
                         elif kind == 'dispatched': record['turns_started']=1
                         elif kind == 'permission':
                             decision=interactive_request(output,state,{'method':'acp/permission','params':event['params']},cancel_check)

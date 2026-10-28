@@ -1,5 +1,8 @@
 // Deterministic ACP protocol fixture. No model, network, auth or real user files.
 import readline from "node:readline";
+import { appendFileSync } from 'node:fs';
+const modelFixture=process.argv.includes('--models-fixture'),traceIndex=process.argv.indexOf('--trace-file');
+let selectedModel='fixture-small';
 const send = (value) =>
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\n");
 let cwd, promptId, schema, stage, userText;
@@ -50,6 +53,7 @@ function finish() {
 }
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   const message = JSON.parse(line);
+  if(traceIndex>=0&&message.method)appendFileSync(process.argv[traceIndex+1],JSON.stringify({method:message.method,model:message.params?.modelId})+'\n');
   if (message.method === "initialize")
     send({
       id: message.id,
@@ -57,7 +61,11 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
     });
   else if (message.method === "session/new") {
     cwd = message.params.cwd;
-    send({ id: message.id, result: { sessionId: "fixture-session" } });
+    send({ id: message.id, result: { sessionId: "fixture-session", ...(modelFixture?{models:{currentModelId:selectedModel,availableModels:[{modelId:'fixture-small',name:'Small fixture'},{modelId:'fixture-large',name:'Large fixture'}]}}:{}) } });
+  } else if(message.method==='session/set_model'&&modelFixture){
+    if(!['fixture-small','fixture-large'].includes(message.params.modelId)){send({id:message.id,error:{code:-32602,message:'Unknown fixture model'}});return;}
+    selectedModel=message.params.modelId;
+    send({id:message.id,result:{}});
   } else if (message.method === "session/prompt") {
     promptId = message.id;
     const text = message.params.prompt.map((x) => x.text || "").join("");

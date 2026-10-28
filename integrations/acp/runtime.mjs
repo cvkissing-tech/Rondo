@@ -8,8 +8,12 @@ import readline from "node:readline";
 const require = createRequire(
   new URL("../../desktop/package.json", import.meta.url),
 );
-const { createAcpRuntime, createRuntimeStore, createAgentRegistry } =
-  await import(pathToFileURL(require.resolve("acpx/runtime")).href);
+const {
+  createAcpRuntime,
+  createRuntimeStore,
+  createAgentRegistry,
+  inspectAgentModels,
+} = await import(pathToFileURL(require.resolve("acpx/runtime")).href);
 const emit = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 async function registry() {
   let overrides = {};
@@ -54,16 +58,52 @@ if (process.argv.includes("--list")) {
       };
     }),
   });
+} else if (process.argv.includes("--models")) {
+  const id = process.argv[process.argv.indexOf("--models") + 1],
+    info = agents.inspect(id);
+  if (info?.launch.kind !== "installed")
+    throw Error("ACP adapter is not installed; no package was downloaded");
+  const state = await inspectAgentModels({
+    agentCommand: info.launch.argv,
+    cwd: process.cwd(),
+    timeoutMs: 20000,
+  });
+  emit({
+    agent: "acp:" + id,
+    models: (state?.availableModelIds || []).map((id) => ({
+      id,
+      name: state?.availableModels?.find((m) => m.modelId === id)?.name || id,
+    })),
+    default_model: state?.currentModelId,
+    ...(!state?.availableModelIds?.length
+      ? {
+          unsupported_reason:
+            "此 Agent 未通过 ACP 提供可选模型，请在原客户端配置模型。",
+        }
+      : {}),
+  });
 } else if (process.argv.includes("--probe")) {
   const id = process.argv[process.argv.indexOf("--probe") + 1];
-  if (!agents.list().includes(id) || agents.inspect(id)?.launch.kind !== "installed")
+  if (
+    !agents.list().includes(id) ||
+    agents.inspect(id)?.launch.kind !== "installed"
+  )
     throw Error("ACP adapter is not installed");
   const runtime = createAcpRuntime({
-    cwd: process.cwd(), agentRegistry: agents, probeAgent: id,
-    permissionMode: "approve-reads", permissionPolicy: { defaultAction: "deny" },
-    nonInteractivePermissions: "fail", fs: false, terminal: false,
+    cwd: process.cwd(),
+    agentRegistry: agents,
+    probeAgent: id,
+    permissionMode: "approve-reads",
+    permissionPolicy: { defaultAction: "deny" },
+    nonInteractivePermissions: "fail",
+    fs: false,
+    terminal: false,
   });
-  try { emit(await runtime.doctor()); } finally { await runtime.shutdown(); }
+  try {
+    emit(await runtime.doctor());
+  } finally {
+    await runtime.shutdown();
+  }
 } else {
   const lines = readline.createInterface({ input: process.stdin });
   let runtime, turn, input, handle;
@@ -124,11 +164,18 @@ if (process.argv.includes("--list")) {
       agent: id,
       mode: "persistent",
       cwd: input.cwd,
+      ...(input.model ? { sessionOptions: { model: input.model } } : {}),
     });
+    const configured = await runtime.getStatus({ handle });
+    if (input.model && configured.models?.currentModelId !== input.model)
+      throw Error(
+        "Agent did not confirm the requested model; no prompt was sent",
+      );
     emit({
       event: "session_created",
       session_id: handle.backendSessionId || handle.acpxRecordId,
       agent_session_id: handle.agentSessionId,
+      model: configured.models?.currentModelId,
     });
     turn = runtime.startTurn({
       handle,

@@ -1,5 +1,5 @@
 export const RENDERER_BRIDGE = String.raw`(async function(){
-  if(globalThis.__rondoNativeBridgeV1?.revision===6) return true;
+  if(globalThis.__rondoNativeBridgeV1?.revision===7) return true;
   globalThis.__rondoNativeBridgeV1?.close?.();
   const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map(), inputs=new Map();
   let sequence=0, openResolve, closed=false;
@@ -101,12 +101,13 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     if(state.state!=='idle'||outgoing.has(sid))return {accepted:false};
     // Lock before sending. Native sendMessage has no independent busy rejection.
     const operation={wakeId,error:undefined};outgoing.set(sid,operation);
-    try{if(model)await applyModel(sid,model);}catch(error){outgoing.delete(sid);return {accepted:false,error:error.message};}
+    let actualModel;
+    try{actualModel=model?(await applyModel(sid,model)).model:(await listModels(sid)).currentModel;}catch(error){outgoing.delete(sid);return {accepted:false,error:error.message};}
     const meta={'codebuddy.ai':{requestId:wakeId,userMessageId:wakeId,messageRequestId:wakeId,emitSyntheticUserPromptLive:true}};
     rpc('session:sendMessage',[sid,[{type:'text',text:prompt}],meta],0).then(()=>outgoing.delete(sid),error=>{operation.error=error.message;outgoing.delete(sid);});
     const deadline=Date.now()+8000;
     while(Date.now()<deadline){
-      if(markers.get(sid)?.has(wakeId))return {accepted:true,receipt:wakeId};
+      if(markers.get(sid)?.has(wakeId))return {accepted:true,receipt:wakeId,model:actualModel};
       if(operation.error)throw Error(operation.error);
       await new Promise(resolve=>setTimeout(resolve,100));
     }
@@ -143,6 +144,6 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     inputs.get(sid)?.clear();
   };
   const drainEvents=sid=>{const queue=progress.get(sid);if(!queue)return [];return queue.splice(0);};
-  globalThis.__rondoNativeBridgeV1={revision:6,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,permissionRequest,answerPermission,cancelWorker,close:()=>mc.port1.close()};
+  globalThis.__rondoNativeBridgeV1={revision:7,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,permissionRequest,answerPermission,cancelWorker,close:()=>mc.port1.close()};
   return true;
 })()`;

@@ -181,6 +181,12 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         return _invoke(plans.cancel, job_id)
 
     @server.tool(structured_output=True)
+    async def list_agent_models(agent: str) -> dict[str, Any]:
+        """Read native model choices via Agent handshake. No model turn or authentication change."""
+        from .model_settings import list_agent_models as read_models
+        return await asyncio.to_thread(_invoke, read_models, agent)
+
+    @server.tool(structured_output=True)
     async def start_task_review(
         task_id: TaskId,
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],

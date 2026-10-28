@@ -10,6 +10,7 @@ from .codex_rpc import CodexRpc, RpcError, ReviewCancelled
 from .native_session import interactive_request, project_event, write_state
 from .reviews import save_review
 from .snapshots import SnapshotError, canonical, verify_package, current_tree
+from .model_settings import model_selection, codex_models, validate_choice
 
 
 def review_schema(snapshot_id):
@@ -92,13 +93,13 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
 
 def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, cancel_check=None,
                     instructions='Use native Skills and tools when useful. Do not modify project files during planning or review. Output valid structured JSON. Never invent test results.',
-                    session_name='Rondo · 任务会话', agent='codex', resume_thread_id=None):
+                    session_name='Rondo · 任务会话', agent='codex', resume_thread_id=None, model_choice=None):
     """One bounded structured turn, shared by review and planning; no model retries."""
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 900:
         raise ValueError('Turn timeout must be positive and at most 900 seconds')
     if agent.startswith('acp:'):
         from .acp import run_acp_json
-        return run_acp_json(prompt, schema, cwd, output, executable, agent=agent, timeout=timeout,
+        return run_acp_json(prompt, schema, cwd, output, executable, agent=agent, timeout=timeout, model_choice=model_choice,
                             cancel_check=cancel_check, instructions=instructions, session_name=session_name)
     if len(prompt.encode('utf-8')) > 64 * 1024:
         raise SnapshotError('CONTEXT_LIMIT', 'Inline generation is limited to 64 KiB of input')
@@ -129,6 +130,12 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
             if account.get('requiresOpenaiAuth') and account.get('account') is None:
                 raise RpcError('Codex login is required; no generation was started')
             config = client.request('config/read', {'includeLayers': False}).get('config', {})
+            choice = model_selection('codex') if model_choice is None else model_choice
+            if choice.get('model'):
+                validate_choice(codex_models(client), choice)
+                record['requested_model'] = choice['model']
+            model_override = {'model': choice['model']} if choice.get('model') else {}
+            thread_options = {**model_override, **({'config': {'model_reasoning_effort': choice['effort']}} if choice.get('effort') else {})}
             record.update(environment='native', persistent=True, effort=config.get('model_reasoning_effort'),
                           mcp_servers=[name for name, value in (config.get('mcp_servers') or {}).items()
                                        if value.get('enabled', True)])
@@ -138,7 +145,7 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
             resumed = False
             if resume_thread_id:
                 try:
-                    thread = client.request('thread/resume', {'threadId': resume_thread_id, 'cwd': str(cwd)})
+                    thread = client.request('thread/resume', {'threadId': resume_thread_id, 'cwd': str(cwd), **thread_options})
                     resumed = True
                 except RpcError as error:
                     if 'active writer' not in str(error):
@@ -146,9 +153,9 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
                     # Resume did not start a model turn. An occupied native client
                     # must not prevent a user turn using the saved task context.
                     record['continuation_reason'] = '原会话由另一客户端占用，使用已保存上下文创建新会话'
-                    thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False})
+                    thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False, **thread_options})
             else:
-                thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False})
+                thread = client.request('thread/start', {'cwd': str(cwd), 'ephemeral': False, **thread_options})
             thread_id = thread['thread']['id']
             if resumed and thread_id != resume_thread_id:
                 raise RpcError('Server resumed a different planning session')
@@ -158,12 +165,19 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
                           sandbox=thread.get('sandbox'), cwd=thread.get('cwd'))
             if Path(thread['cwd']).resolve() != cwd:
                 raise RpcError('Server started in the wrong working directory')
+            if choice.get('model') and thread.get('model') != choice['model']:
+                raise RpcError('Codex 未确认所选模型；未发起生成，也未自动切换模型')
+            if choice.get('effort'):
+                if thread.get('reasoningEffort') != choice['effort']:
+                    raise RpcError('Codex 未确认所选思考强度；未发起生成')
+            record['effort'] = thread.get('reasoningEffort', record.get('effort'))
             record['instruction_sources'] = thread.get('instructionSources', [])
             state.update({key: value for key, value in record.items() if key != 'data'})
             publish()
             turn = client.request('turn/start', {'threadId': thread_id,
                                    'input': [{'type': 'text', 'text': instructions + '\n\n' + prompt}],
-                                   'outputSchema': schema})
+                                   'outputSchema': schema, **model_override,
+                                   **({'effort': choice['effort']} if choice.get('effort') else {})})
             turn_id = turn['turn']['id']
             record.update(turn_id=turn_id, turns_started=1)
             state['status'] = 'running'

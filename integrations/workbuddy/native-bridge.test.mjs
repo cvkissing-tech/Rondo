@@ -16,7 +16,7 @@ class Channel {
 async function fixture() {
   const requests = [], ports = [], sid = '11111111-1111-4111-8111-111111111111'
   const state = { cwd: 'C:/fixture', sessionId: sid, status: 'completed', model: 'fast' }
-  let active = [], emitReceipt = true, clock = 0
+  let active = [], emitReceipt = true, clock = 0, ignoreModel = false
   class Clock extends Date { static now() { return clock } }
   const window = { postMessage(message, target, transfer) {
     assert.equal(message.type, 'workbuddy:open-local-daemon-transport-port')
@@ -33,7 +33,7 @@ async function fixture() {
         case 'daemon:getActiveSessions': result = active; break
         case 'session:get': result = state; break
         case 'config:getProductConfiguration': result = { models: [{ id: 'fast' }, { id: 'deep' }], availableModels: ['fast','deep'] }; break
-        case 'session:updateConfig': Object.assign(state, request.args[1]); result = {}; break
+        case 'session:updateConfig': if(!ignoreModel)Object.assign(state, request.args[1]); result = {}; break
         case 'session:cancel': result = {}; break
         case 'session:sendMessage': {
           if (emitReceipt) port.postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid,
@@ -52,7 +52,7 @@ async function fixture() {
   return { bridge: vm.runInContext('globalThis.__rondoNativeBridgeV1', context), requests, state, sid,
     control: data => ports[0].postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid, result: { sessionId: sid, ...data } } }),
     update: update => ports[0].postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid, result: { sessionId: sid, update } } }),
-    busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false } }
+    busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false }, ignoreModel:()=>{ignoreModel=true} }
 }
 test('native workspace/session creation preserves identity and does not prompt', async () => {
   const f = await fixture()
@@ -62,10 +62,20 @@ test('native workspace/session creation preserves identity and does not prompt',
 })
 test('one receipt prevents duplicate prompts; model changes stay on the dedicated session', async () => {
   const f = await fixture(), wake = 'wake-run-22222222-2222-4222-8222-222222222222'
-  assert.equal((await f.bridge.wakeIdle(f.sid, wake, 'fixture', 'deep')).accepted, true)
+  const receipt=await f.bridge.wakeIdle(f.sid, wake, 'fixture', 'deep')
+  assert.equal(receipt.accepted, true)
+  assert.equal(receipt.model, 'deep')
   assert.equal(f.state.model, 'deep')
   assert.equal((await f.bridge.wakeIdle(f.sid, wake, 'fixture')).accepted, true)
   assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length, 1)
+})
+
+test('native model mismatch and unavailable model prevent sending the prompt', async () => {
+  const f=await fixture();f.ignoreModel()
+  const wake='wake-run-22222222-2222-4222-8222-222222222222'
+  assert.equal((await f.bridge.wakeIdle(f.sid,wake,'fixture','deep')).accepted,false)
+  assert.equal((await f.bridge.wakeIdle(f.sid,wake,'fixture','missing')).accepted,false)
+  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,0)
 })
 test('busy native sessions and pending permissions are not dispatched', async () => {
   const f = await fixture(); f.busy()

@@ -1307,7 +1307,8 @@ textarea {
   padding-left: 32px;
   background: var(--background);
 }
-.agent-directory-tools select {
+.agent-directory-tools select,
+.agent-editor select {
   height: 32px;
   padding: 0 8px;
   background: var(--background);
@@ -1470,7 +1471,8 @@ textarea {
   font-size: 11px;
 }
 .agent-list-row:focus-visible,
-.agent-directory-tools select:focus-visible {
+.agent-directory-tools select:focus-visible,
+.agent-editor select:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

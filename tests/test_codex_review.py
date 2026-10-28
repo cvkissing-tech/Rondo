@@ -40,6 +40,8 @@ class FakeRpc:
             return {'config': {'mcp_servers': {'fixture': {'enabled': self.enabled_mcp}}}}
         if method == 'skills/list':
             return {'data': [{'skills': [{'name': 'fixture', 'enabled': True}]}]}
+        if method == 'model/list':
+            return {'data': [{'model': name, 'supportedReasoningEfforts': [{'reasoningEffort': 'low'}, {'reasoningEffort': 'high'}], 'defaultReasoningEffort': 'low'} for name in ['synthetic-model', 'configured-model']]}
         if method == 'thread/name/set':
             return {}
         if method == 'thread/unsubscribe':
@@ -48,6 +50,7 @@ class FakeRpc:
             return {'requiresOpenaiAuth': True, 'account': {'type': 'chatgpt'}}
         if method == 'thread/start':
             return {'thread': {'id': 'thread-1'}, 'cwd': params['cwd'], 'model': 'synthetic-model',
+                    'reasoningEffort': params.get('config', {}).get('model_reasoning_effort'),
                     'modelProvider': 'fixture', 'sandbox': {'type': 'readOnly', 'networkAccess': False}}
         if method == 'turn/start':
             snapshot = params['outputSchema']['properties']['snapshot_id']['enum'][0]
@@ -81,6 +84,7 @@ class CodexReviewTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
         patch('agent_review_loop.codex_review.verify_package', return_value=self.manifest).start()
         patch('agent_review_loop.codex_review.CodexRpc', FakeRpc).start()
+        patch('agent_review_loop.codex_review.model_selection', return_value={}).start()
         self.save = patch('agent_review_loop.codex_review.save_review', return_value={'review_id': 'b' * 64}).start()
         FakeRpc.text, FakeRpc.status, FakeRpc.enabled_mcp, FakeRpc.calls, FakeRpc.close_error = None, 'completed', False, [], False
 
@@ -95,6 +99,32 @@ class CodexReviewTests(unittest.TestCase):
         self.assertEqual(FakeRpc.calls.count('thread/unsubscribe'), 1)
         self.assertTrue(result['native_session_released'])
         self.save.assert_called_once()
+
+    def test_selected_native_model_and_effort_reach_thread_and_turn(self):
+        FakeRpc.requests = []
+        with patch('agent_review_loop.codex_review.model_selection', return_value={'model':'synthetic-model','effort':'high'}):
+            result = self.run_review()
+        self.assertEqual(result['model'], 'synthetic-model')
+        self.assertEqual(result['effort'], 'high')
+        start = next(p for m,p in FakeRpc.requests if m=='thread/start')
+        turn = next(p for m,p in FakeRpc.requests if m=='turn/start')
+        self.assertEqual(start['config'], {'model_reasoning_effort':'high'})
+        self.assertEqual(start['model'], turn['model'])
+        self.assertEqual(turn['effort'], 'high')
+
+    def test_native_model_readback_mismatch_stops_before_generation(self):
+        with patch('agent_review_loop.codex_review.model_selection', return_value={'model':'configured-model'}):
+            result = self.run_review()
+        self.assertEqual(result['status'], 'failed')
+        self.assertNotIn('turn/start', FakeRpc.calls)
+        self.save.assert_not_called()
+
+    def test_unavailable_model_or_effort_never_starts_a_thread_or_turn(self):
+        with patch('agent_review_loop.codex_review.model_selection', return_value={'model':'synthetic-model','effort':'unsupported'}):
+            result = self.run_review()
+        self.assertEqual(result['status'], 'failed')
+        self.assertNotIn('thread/start', FakeRpc.calls)
+        self.assertNotIn('turn/start', FakeRpc.calls)
 
     def test_interrupted_turn_is_not_saved_or_retried(self):
         FakeRpc.status = 'interrupted'

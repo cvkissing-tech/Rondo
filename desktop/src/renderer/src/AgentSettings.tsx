@@ -12,6 +12,7 @@ import {
   type AgentAvailabilityFilter
 } from './vendor/aionui/agentFilters'
 import { AgentReadinessPanel } from './vendor/goose/AgentReadinessPanel'
+import { AgentModelSettings } from './AgentModelSettings'
 const api = window.workbench!
 export function AgentSettings({ onClose }: { onClose: () => void }) {
   const [catalog, setCatalog] = useState<AgentCatalog>()
@@ -356,7 +357,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                 </Button>
               </div>
               <p className="supporting">
-                保存只更新启动配置。登录、模型与 Skills 继续由这个 Agent
+                保存只更新启动配置。模型可在 Agent 详情中选择，登录与 Skills 由原 Agent
                 管理；不要把密钥填入启动参数。
               </p>
               <div className="agent-form-actions">
@@ -399,6 +400,14 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                     </dd>
                   </div>
                 </dl>
+                {config && !config.error && current.available && (
+                  <AgentModelSettings
+                    key={current.id}
+                    agent={current.id}
+                    config={config}
+                    onSaved={setConfig}
+                  />
+                )}
                 {current.requirements?.length ? (
                   <p className="supporting">
                     缺少依赖：{current.requirements.join('、')}
@@ -447,7 +456,7 @@ export function AgentSettings({ onClose }: { onClose: () => void }) {
                 {current.id === 'workbuddy' && (
                   <>
                     <p className="supporting">
-                      此通道仍为 Windows WorkBuddy 5.9.2 实验适配。需启动 WorkBuddy 并信任 Rondo
+                      此通道为 Windows WorkBuddy 本机实验适配。需启动 WorkBuddy 并信任 Rondo
                       MCP；检查不会自动发起开发任务。
                     </p>
                     <Button

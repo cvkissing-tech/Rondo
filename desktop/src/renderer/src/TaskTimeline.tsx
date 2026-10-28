@@ -462,6 +462,14 @@ export function TaskTimeline({
                   : '待派发'
               )}
               <NativeEvents job={execution} kind="execution" onRefresh={onRefresh} />
+              {execution?.model && selected.executor === 'workbuddy' && (
+                <p className="supporting">
+                  WorkBuddy 会话模型：{execution.model}
+                  {['fast-model', 'balanced-model', 'deep-model'].includes(execution.model)
+                    ? '（由 WorkBuddy 自动路由）'
+                    : ''}
+                </p>
+              )}
               {executionOpen && (
                 <div className="execution-message">
                   <p className="preserve">

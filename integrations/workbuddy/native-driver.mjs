@@ -99,7 +99,7 @@ async function main(input) {
     emit({ event: 'session_created', session_id: result.sessionId, workspace: result.workspace })
     const receipt = await client.call('wakeIdle', sid, input.wake_id, input.prompt, input.model || undefined)
     if (!receipt?.accepted) throw Error(receipt?.error || 'WorkBuddy session is busy or requires input; prompt was not dispatched')
-    emit({ event: 'dispatched', receipt: receipt.receipt, model: input.model || null })
+    emit({ event: 'dispatched', receipt: receipt.receipt, model: receipt.model || null })
     const commands = readline.createInterface({ input: process.stdin })
     let cancelling = false
     const presented = new Set()

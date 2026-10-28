@@ -21,7 +21,13 @@ export function readAgentSettings(path = agentConfigPath()) {
     throw Error('Agent 配置格式错误。请打开配置文件修复；原文件未被覆盖。')
   for (const [id, argv] of Object.entries(data.agents)) validate(id, argv)
   if (Object.keys(data.agents).length > 40) throw Error('最多配置 40 个自定义 Agent')
-  return { path, revision: revision(raw), agents: data.agents as Record<string, string[]>, data }
+  return {
+    path,
+    revision: revision(raw),
+    agents: data.agents as Record<string, string[]>,
+    native_models: data.native_models || {},
+    data
+  }
 }
 function validate(id: unknown, argv: unknown): asserts argv is string[] {
   if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,39}$/.test(id))
@@ -48,6 +54,43 @@ export function updateAgentSettings(
   if (input.argv === null) delete current.data.agents[input.id]
   else current.data.agents[input.id] = input.argv
   if (Object.keys(current.data.agents).length > 40) throw Error('最多配置 40 个自定义 Agent')
+  return save(current, path)
+}
+export function updateModelSettings(
+  input: { agent: string; model: string; effort?: string; revision: string },
+  path = agentConfigPath()
+) {
+  if (
+    !input ||
+    !(
+      typeof input.agent === 'string' &&
+      (['codex', 'workbuddy'].includes(input.agent) ||
+        /^acp:[a-z0-9][a-z0-9_-]{0,39}$/.test(input.agent))
+    ) ||
+    typeof input.model !== 'string' ||
+    !input.model.trim() ||
+    input.model.length > 200 ||
+    /[\0\r\n]/.test(input.model)
+  )
+    throw Error('请选择有效模型')
+  if (
+    input.effort &&
+    (input.agent !== 'codex' ||
+      typeof input.effort !== 'string' ||
+      input.effort.length > 80 ||
+      /[\0\r\n]/.test(input.effort))
+  )
+    throw Error('思考强度无效')
+  const current = readAgentSettings(path)
+  if (input.revision !== current.revision)
+    throw Error('配置已被其他窗口或程序更新。请读取最新配置后再保存。')
+  current.data.native_models = {
+    ...current.native_models,
+    [input.agent]: { model: input.model, ...(input.effort ? { effort: input.effort } : {}) }
+  }
+  return save(current, path)
+}
+function save(current: ReturnType<typeof readAgentSettings>, path: string) {
   mkdirSync(dirname(path), { recursive: true })
   const temp = path + '.' + randomUUID() + '.tmp'
   try {
@@ -57,5 +100,10 @@ export function updateAgentSettings(
     if (existsSync(temp)) unlinkSync(temp)
   }
   const saved = readAgentSettings(path)
-  return { path: saved.path, revision: saved.revision, agents: saved.agents }
+  return {
+    path: saved.path,
+    revision: saved.revision,
+    agents: saved.agents,
+    native_models: saved.native_models
+  }
 }

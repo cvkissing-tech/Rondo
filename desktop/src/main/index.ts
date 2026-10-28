@@ -4,13 +4,19 @@ import { readdir, realpath, readFile, stat } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
 import { previewHtml, closePreviews } from './preview'
-import { agentConfigPath, readAgentSettings, updateAgentSettings } from './agentSettings'
+import {
+  agentConfigPath,
+  readAgentSettings,
+  updateAgentSettings,
+  updateModelSettings
+} from './agentSettings'
 import type {
   Context,
   StartInput,
   WorkspaceFiles,
   ExecutionStatus,
-  ReviewStatus
+  ReviewStatus,
+  AgentModels
 } from '../shared/types'
 app.setName('Rondo')
 const root = process.env.ARL_PROJECT_ROOT ?? resolve(app.getAppPath(), '..')
@@ -35,12 +41,25 @@ function handlers(): void {
     'agent-settings': () => {
       try {
         const state = readAgentSettings()
-        return { path: state.path, revision: state.revision, agents: state.agents }
+        return {
+          path: state.path,
+          revision: state.revision,
+          agents: state.agents,
+          native_models: state.native_models
+        }
       } catch (error) {
         return { path: agentConfigPath(), agents: {}, revision: '', error: String(error) }
       }
     },
     'save-agent': (input: Parameters<typeof updateAgentSettings>[0]) => updateAgentSettings(input),
+    'agent-models': (agent: string) => backend.call('list_agent_models', { agent }),
+    'save-model': async (input: Parameters<typeof updateModelSettings>[0]) => {
+      const choices = await backend.call<AgentModels>('list_agent_models', { agent: input.agent })
+      const model = choices.models.find((m) => m.id === input.model)
+      if (!model || (input.effort && !model.efforts?.includes(input.effort)))
+        throw Error('所选模型或思考强度已不可用，请刷新模型列表')
+      return updateModelSettings(input)
+    },
     'choose-agent-program': async () =>
       (
         await dialog.showOpenDialog(window, {

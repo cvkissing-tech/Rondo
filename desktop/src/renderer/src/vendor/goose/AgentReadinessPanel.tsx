@@ -41,8 +41,8 @@ export function AgentReadinessPanel({
         </strong>
       </div>
       <p className="supporting">
-        检查会启动所选程序并完成握手，不发送任务、不调用模型。账号、额度与模型可用性需在 Agent
-        中确认。
+        检查会启动所选程序并完成握手，不发送任务、不调用模型。模型可在上方选择，账号与额度沿用原
+        Agent。
       </p>
       {result && (
         <div role="status" className={result.ok ? 'supporting' : 'agent-inline-error'}>

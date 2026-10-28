@@ -3,6 +3,8 @@ import type { DesktopAPI } from '../shared/types'
 const invoke = (name: string, ...args: unknown[]) =>
   ipcRenderer.invoke(`workbench:${name}`, ...args)
 const api: DesktopAPI = {
+  agentModels: (agent) => invoke('agent-models', agent),
+  saveModel: (input) => invoke('save-model', input),
   agentSettings: () => invoke('agent-settings'),
   saveAgent: (input) => invoke('save-agent', input),
   chooseAgentProgram: () => invoke('choose-agent-program'),

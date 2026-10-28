@@ -19,6 +19,7 @@ from .store import StoreError, _text, _timestamp
 from .native_session import write_state, interactive_request
 from .codex_rpc import ReviewCancelled
 from .workbuddy_progress import project_update, public_text
+from .model_settings import model_selection, validate_choice
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / 'integrations/workbuddy/native-driver.mjs'
@@ -174,14 +175,18 @@ class ExecutionJobs(ReviewJobs):
             raise StoreError('PLAN_SELECTION_CHANGED', '计划已经更新；请查看当前版本后再执行')
         if plan['freshness'] != 'current':
             raise StoreError('PLAN_STALE', 'Code changed after planning; update the plan first')
+        agent = self.selected_agent(task_id) if self.native_routing else 'workbuddy'
+        choice = model_selection(agent)
+        requested_model = choice.get('model') or (os.environ.get('ARL_WORKBUDDY_MODEL') if agent == 'workbuddy' else None)
         if self.runner is native_run and self.selected_agent(task_id) == 'workbuddy':
             connection = workbuddy_connection(self.root)
             if not connection.get('connected'):
                 raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
+            validate_choice(connection.get('models', []), {'model': requested_model})
         if not self.executable:
             self.executable = str(node_executable())
         return self.start_review(task_id, context['workspace'], context['base_commit'], request_id,
-                                 input_data={'plan_job_id': plan['job_id'], 'plan_id': plan['plan_id'],
+                                 input_data={'requested_model': requested_model, 'requested_effort':choice.get('effort'), 'plan_job_id': plan['job_id'], 'plan_id': plan['plan_id'],
                                              'plan_version': plan.get('version', 1), 'latest_plan_job_id': plan_id,
                                              'adopted_plan': {'job_id': plan['job_id'], 'plan_id': plan['plan_id'],
                                                               'version': plan.get('version', 1), 'plan': plan['plan']}})
@@ -232,7 +237,10 @@ class ExecutionJobs(ReviewJobs):
         inputs = repair_context(db, task['task_id'], request_id[7:], repo)
         db.execute("UPDATE tasks SET state='ready',version=version+1,updated_at=? WHERE id=?",
                    (_timestamp(self.store.clock()), task['task_id']))
-        return {'mode': 'repair', 'source_review_job_id': request_id[7:], 'repair_input': inputs}
+        initial = db.execute("SELECT result_json FROM execution_jobs WHERE task_id=? AND request_id NOT LIKE 'repair-%' ORDER BY created_at LIMIT 1", (task['task_id'],)).fetchone()
+        selection = json.loads(initial['result_json'] or '{}') if initial else {}
+        return {'mode': 'repair', 'source_review_job_id': request_id[7:], 'repair_input': inputs,
+                'requested_model': selection.get('requested_model'), 'requested_effort': selection.get('requested_effort')}
 
     def _continue_after_review(self, job_id, details):
         # Aider's bounded reflection rule: one repair only; never reset on refresh/restart.
@@ -284,6 +292,7 @@ class ExecutionJobs(ReviewJobs):
         try:
             result = run_inline_json(prompt, schema, repo, directory/'runtime', executable,
                                      timeout=900, cancel_check=lambda: self._cancelled(job_id), agent=agent,
+                                     model_choice={key:value for key,value in {'model':details.get('requested_model'),'effort':details.get('requested_effort')}.items() if value},
                                      instructions='You are the implementation agent. The user authorizes coding and relevant local checks in this task workspace. Follow project conventions; report observed evidence.',
                                      session_name='Rondo · 执行 · '+task['title'])
             details.update({k:v for k,v in result.items() if k in ('model','thread_id','session_id','persistent','environment','agent_session_id')})
@@ -353,7 +362,7 @@ class ExecutionJobs(ReviewJobs):
             else:
                 payload = {'command': 'run', 'session_id': details['session_id'], 'wake_id': details['wake_id'],
                            'workspace': str(repo), 'title': ('返修 · ' if repairing else '') + task['title'], 'prompt': prompt}
-                model = os.environ.get('ARL_WORKBUDDY_MODEL')
+                model = details.get('requested_model')
                 if model:
                     payload['model'] = model
                 (directory / 'input.json').write_bytes(canonical(payload) + b'\n')
