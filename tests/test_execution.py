@@ -132,6 +132,33 @@ class ExecutionTests(unittest.TestCase):
             job = self.execution.start_execution(self.task_id, 'cache-failure')
             self.wait(job, 'succeeded')
 
+    def test_workbuddy_permission_uses_existing_answer_entry_then_continues_review(self):
+        def runner(payload, directory, executable, *, cancel_check, on_event):
+            directory.mkdir(parents=True, exist_ok=True)
+            answer = on_event({'event': 'permission_request', 'request_id': 'native-request',
+                              'params': {'reason': 'Clean fixture', 'command': 'fixture-clean',
+                                         'options': [{'optionId': 'allow', 'kind': 'allow_once', 'name': 'Allow once'},
+                                                     {'optionId': 'reject', 'kind': 'reject_once', 'name': 'Reject'}]}})
+            self.assertEqual(answer, 'allow')
+            on_event({'event': 'permission_answered', 'request_id': 'native-request'})
+            return self.native(payload, directory, executable, cancel_check=cancel_check, on_event=on_event)
+        self.execution.runner = runner
+        job = self.execution.start_execution(self.task_id, 'permission')
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            state = self.execution.status(job['job_id'])
+            if state.get('pending'): break
+            time.sleep(.02)
+        self.assertEqual(state['phase'], 'waiting_input')
+        self.assertEqual(state['pending']['params']['command'], 'fixture-clean')
+        with self.assertRaises(StoreError):
+            self.execution.answer(job['job_id'], state['pending']['id'], 'allow_always')
+        self.execution.answer(job['job_id'], state['pending']['id'], 'allow')
+        final = self.wait(job, 'succeeded')
+        self.assertNotIn('pending', final)
+        self.assertEqual(self.calls, 1)
+
+
     def test_receipt_submission_and_automatic_fixed_review(self):
         job = self.execution.start_execution(self.task_id, 'once')
         state = self.wait(job, 'succeeded')

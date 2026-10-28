@@ -52,3 +52,29 @@ class WorkBuddyProgressTests(unittest.TestCase):
                 receipt = native_run({'command': 'run'}, root/'run', sys.executable, timeout=.02)
             self.assertEqual(receipt['event'], 'cancelled')
             self.assertEqual(receipt['stop_reason'], 'timeout')
+
+    def test_permission_answer_is_returned_to_same_helper_without_new_dispatch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); helper = root/'helper.py'
+            helper.write_text('import sys,json\nsys.stdin.readline()\n'
+                              'print(json.dumps({"event":"permission_request","request_id":"native-1","params":{}}),flush=True)\n'
+                              'answer=json.loads(sys.stdin.readline())\n'
+                              'assert answer=={"command":"answer_permission","request_id":"native-1","option_id":"allow"}\n'
+                              'print(json.dumps({"event":"turn_ended"}),flush=True)\n', encoding='utf-8')
+            with patch('agent_review_loop.execution.DRIVER', helper):
+                receipt = native_run({'command':'run'}, root/'run', sys.executable,
+                                     on_event=lambda e: 'allow' if e['event']=='permission_request' else None)
+            self.assertEqual(receipt['event'], 'turn_ended')
+
+    def test_unanswered_permission_cancels_native_turn_before_closing_helper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); helper = root/'helper.py'
+            helper.write_text('import sys,json\nsys.stdin.readline()\n'
+                              'print(json.dumps({"event":"permission_request","request_id":"native-1","params":{}}),flush=True)\n'
+                              'assert json.loads(sys.stdin.readline())=={"command":"cancel"}\n'
+                              'print(json.dumps({"event":"cancelled"}),flush=True)\n', encoding='utf-8')
+            def event(value):
+                if value['event']=='permission_request': raise TimeoutError('No user answer')
+            with patch('agent_review_loop.execution.DRIVER', helper):
+                receipt = native_run({'command':'run'}, root/'run', sys.executable, on_event=event)
+            self.assertEqual(receipt['stop_reason'], 'input_timeout')

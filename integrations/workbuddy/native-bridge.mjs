@@ -1,7 +1,7 @@
 export const RENDERER_BRIDGE = String.raw`(async function(){
-  if(globalThis.__rondoNativeBridgeV1?.revision===4) return true;
+  if(globalThis.__rondoNativeBridgeV1?.revision===6) return true;
   globalThis.__rondoNativeBridgeV1?.close?.();
-  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map();
+  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map(), inputs=new Map();
   let sequence=0, openResolve, closed=false;
   const opened=new Promise(resolve=>openResolve=resolve);
   const marker=(sid,id)=>{if(typeof id==='string'&&/^wake-run-[a-f0-9-]{36}$/.test(id)){if(!markers.has(sid))markers.set(sid,new Set());markers.get(sid).add(id);}};
@@ -13,6 +13,14 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     let message=frame.json;try{message??=JSON.parse(frame.text);}catch{return;}
     if(message.type==='event'&&typeof message.channel==='string'&&message.channel.startsWith('session:event:')){
       const data=message.result||{},update=data.update||{},sid=data.sessionId||message.channel.slice(14);
+      // WorkBuddy 5.9.2/5.9.3 emits control events outside update.sessionUpdate.
+      // Its session:get projection can hide pending inputs after stale history marks a turn terminal.
+      const controls=inputs.get(sid);
+      const inputId=data.requestId||data.toolCallId||data.elicitationId;
+      if(controls&&['permissionRequest','questionRequest','elicitationRequest'].includes(data.type)&&typeof inputId==='string'&&data.request){
+        controls.set(inputId,{type:data.type,requestId:inputId,request:data.request});
+      }
+      if(controls&&['permissionResolved','questionResolved','elicitationResolved'].includes(data.type))controls.delete(inputId);
       if(update.sessionUpdate==='user_message_chunk'){
         const meta=(data._meta||{})['codebuddy.ai']||{};
         for(const key of ['requestId','userMessageId','messageRequestId'])marker(sid,meta[key]);
@@ -48,7 +56,7 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     if(!Array.isArray(active))throw Error('Incompatible native activity response');
     const session=await rpc('session:get',[sid]);
     if(!session||!session.cwd)throw Error('Native worker session was not found');
-    const waiting=session.pendingInputKind||(session.pendingPermissions?.length)||(session.pendingQuestions?.length)||(session.pendingElicitations?.length);
+    const waiting=inputs.get(sid)?.size||session.pendingInputKind||(session.pendingPermissions?.length)||(session.pendingQuestions?.length)||(session.pendingElicitations?.length);
     if(waiting)return {state:'waiting_input',workspace:session.cwd,reason:'WorkBuddy requires native permission or input'};
     if(outgoing.has(sid)||active.some(s=>(s.sessionId||s.id)===sid||s.cwd===session.cwd)||session.isProcessing||session.stopRequested||session.hasActiveTeamMembers||session.hasActiveToolCalls)return {state:'busy',workspace:session.cwd,reason:'Native WorkBuddy session is active'};
     if(!['completed','failed','cancelled','idle','stopped','pending','terminated'].includes(String(session.status).toLowerCase()))return {state:'busy',workspace:session.cwd,reason:'Native state is not confirmed idle: '+String(session.status)};
@@ -106,14 +114,35 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
   };
   const createWorker=async(workspace,sessionId,title)=>{
     progress.set(sessionId,[]);
+    inputs.set(sessionId,new Map());
     const initialized=await rpc('workspace:initialize',[{cwd:workspace}]);
     if(!initialized?.success)throw Error(initialized?.error||'Native workspace initialization failed');
     const created=await rpc('session:create',[{cwd:workspace,sessionId,isPlayground:false}],45000);
     if(created?.sessionId!==sessionId||created?.cwd!==workspace)throw Error('Native session creation returned a different identity or workspace; do not replay');
     if(title)await rpc('session:rename',[sessionId,title]);
+    await rpc('session:notifyListenerReady',[sessionId]);
     return {sessionId:created.sessionId,workspace:created.cwd};
   };
+  const permissionRequest=sid=>{
+    const input=Array.from(inputs.get(sid)?.values()||[]).find(x=>x.type==='permissionRequest');
+    if(!input)return null;
+    const tool=input.request.toolCall||{};
+    const options=(input.request.options||[]).filter(x=>typeof x?.optionId==='string'&&typeof x?.kind==='string').map(x=>({optionId:x.optionId,kind:x.kind,name:x.name||x.optionId}));
+    return {requestId:input.requestId,params:{reason:tool.title||'WorkBuddy 等待权限确认',command:typeof tool.rawInput?.command==='string'?tool.rawInput.command:JSON.stringify(tool.rawInput||{}),options}};
+  };
+  const answerPermission=async(sid,requestId,optionId)=>{
+    const input=inputs.get(sid)?.get(requestId);
+    if(!input||!input.request.options?.some(x=>x.optionId===optionId))throw Error('Permission request expired or option is invalid');
+    const accepted=await rpc('session:resolvePermission',[sid,requestId,optionId]);
+    if(accepted!==true)throw Error('Native permission response was not accepted; refresh the session');
+    inputs.get(sid).delete(requestId);
+    return true;
+  };
+  const cancelWorker=async sid=>{
+    await rpc('session:cancel',[sid]);
+    inputs.get(sid)?.clear();
+  };
   const drainEvents=sid=>{const queue=progress.get(sid);if(!queue)return [];return queue.splice(0);};
-  globalThis.__rondoNativeBridgeV1={revision:4,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,close:()=>mc.port1.close()};
+  globalThis.__rondoNativeBridgeV1={revision:6,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,permissionRequest,answerPermission,cancelWorker,close:()=>mc.port1.close()};
   return true;
 })()`;

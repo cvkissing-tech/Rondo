@@ -71,7 +71,7 @@ export class NativeClient {
     })
   }
   call(method, ...args) {
-    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'drainEvents', 'rpc'].includes(method)) throw Error('Unsupported native operation')
+    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'drainEvents', 'permissionRequest', 'answerPermission', 'cancelWorker', 'rpc'].includes(method)) throw Error('Unsupported native operation')
     return this.evaluate(`globalThis.__rondoNativeBridgeV1[${JSON.stringify(method)}](...${JSON.stringify(args)})`, 55000)
   }
   close() { this.socket?.close() }
@@ -90,7 +90,7 @@ async function main(input) {
     if (typeof sid !== 'string' || !/^[a-f0-9-]{36}$/.test(sid)) throw Error('Invalid session identity')
     if (input.command === 'inspect') { emit({ event: 'state', ...await client.call('inspect', sid) }); return }
     if (input.command === 'cancel') {
-      await client.call('rpc', 'session:cancel', [sid])
+      await client.call('cancelWorker', sid)
       emit({ event: 'cancel_requested' }); return
     }
     if (input.command !== 'run' || !path.isAbsolute(input.workspace) || !existsSync(input.workspace) || typeof input.prompt !== 'string' || input.prompt.length > 80000)
@@ -102,18 +102,30 @@ async function main(input) {
     emit({ event: 'dispatched', receipt: receipt.receipt, model: input.model || null })
     const commands = readline.createInterface({ input: process.stdin })
     let cancelling = false
+    const presented = new Set()
     commands.on('line', line => {
       try {
-        if (JSON.parse(line).command === 'cancel' && !cancelling) {
+        const command = JSON.parse(line)
+        if (command.command === 'answer_permission' && !cancelling) {
+          client.call('answerPermission', sid, command.request_id, command.option_id)
+            .then(() => emit({ event: 'permission_answered', request_id: command.request_id }),
+              () => emit({ event: 'error', error: 'Native permission answer was not confirmed; no automatic retry' }))
+        }
+        if (command.command === 'cancel' && !cancelling) {
           cancelling = true
-          client.call('rpc', 'session:cancel', [sid]).then(() => emit({ event: 'cancel_requested' }), () => emit({ event: 'cancel_unknown' }))
+          client.call('cancelWorker', sid).then(() => emit({ event: 'cancel_requested' }), () => emit({ event: 'cancel_unknown' }))
         }
       } catch { /* Invalid input cannot start another prompt. */ }
     })
     for (;;) {
       const state = await client.call('inspect', sid)
       for (const update of await client.call('drainEvents', sid)) emit({ event: 'progress', update })
-      emit({ event: 'state', ...state })
+      const permission = await client.call('permissionRequest', sid)
+      emit({ event: 'state', ...state, in_product_permission: Boolean(permission?.params.options.length) })
+      if (!cancelling && permission && !presented.has(permission.requestId) && permission.params.options.length) {
+        presented.add(permission.requestId)
+        emit({ event: 'permission_request', request_id: permission.requestId, params: permission.params })
+      }
       if (state.state === 'idle') { emit({ event: cancelling ? 'cancelled' : 'turn_ended' }); break }
       await pause(1500)
     }

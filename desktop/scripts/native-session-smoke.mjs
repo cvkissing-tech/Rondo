@@ -1,4 +1,4 @@
-// Read-only copy of one active task; never launches a model or opens an external app.
+// Copied task database; optional permission UI fixture. Never invokes an Agent.
 import { _electron } from 'playwright'
 import { capture } from './capture.mjs'
 import { execFileSync } from 'node:child_process'
@@ -35,8 +35,57 @@ const app = await _electron.launch({
 try {
   const page = await app.firstWindow()
   await page.getByText('本地任务服务已连接', { exact: true }).waitFor({ timeout: 30000 })
+  if (process.argv.includes('--permission')) {
+    const status = await page.evaluate(async (id) => {
+      const context = await window.workbench.context(id)
+      return window.workbench.executionStatus(context.latest_execution_job_id)
+    }, task)
+    await app.evaluate(({ ipcMain }, status) => {
+      globalThis.permissionFixture = {
+        ...status,
+        status: 'running',
+        phase: 'waiting_input',
+        summary: null,
+        pending: {
+          id: 'a'.repeat(32),
+          method: 'acp/permission',
+          params: {
+            reason: '离线界面验收：WorkBuddy 请求确认工具操作',
+            command: 'fixture-clean (仅用于界面验收，不执行命令)',
+            options: [
+              { optionId: 'allow', kind: 'allow_once', name: '允许这一次' },
+              { optionId: 'reject', kind: 'reject_once', name: '拒绝' }
+            ]
+          }
+        }
+      }
+      globalThis.permissionAnswers = []
+      ipcMain.removeHandler('workbench:execution-status')
+      ipcMain.handle('workbench:execution-status', () => globalThis.permissionFixture)
+      ipcMain.removeHandler('workbench:answer-request')
+      ipcMain.handle('workbench:answer-request', (_e, ...args) => {
+        globalThis.permissionAnswers.push(args)
+        delete globalThis.permissionFixture.pending
+        return { answered: true }
+      })
+    }, status)
+  }
   await page.evaluate((id) => localStorage.setItem('arl.task', String(id)), task)
   await page.reload()
+  if (process.argv.includes('--permission')) {
+    const pending = page.getByRole('region', { name: 'WorkBuddy 等待你处理', exact: true })
+    await pending.waitFor()
+    assert.equal(
+      await pending.getByRole('button', { name: '允许这一次', exact: true }).isEnabled(),
+      true
+    )
+    await capture(app, page, { path: join(captures, 'permission.png') })
+    await pending.getByRole('button', { name: '允许这一次', exact: true }).click()
+    await pending.waitFor({ state: 'hidden' })
+    const answers = await app.evaluate(() => globalThis.permissionAnswers)
+    assert.equal(answers.length, 1)
+    assert.deepEqual(answers[0].slice(1), ['a'.repeat(32), 'allow', 'execution'])
+  }
   await page.getByRole('tab', { name: '会话', exact: true }).click()
   const worker = page
     .locator('.session-list section')
@@ -69,6 +118,7 @@ try {
       {
         passed: true,
         modelCalls: 0,
+        permissionFixture: process.argv.includes('--permission'),
         externalOpens: 0,
         interceptedNativeOpens: 1,
         task,

@@ -31,3 +31,20 @@ sessions are excluded. `terminated` is considered idle only after outgoing RPCs 
 active-session checks clear. Native activation moves from empty session creation to the
 first public progress event (or native input wait), avoiding the observed early history-read
 race. These are Rondo adaptations, not claims of an upstream patch or all-version support.
+
+2026-10-28: revision6 also tracks native permission/question/elicitation control events
+outside `update.sessionUpdate`. A terminal history projection can hide these requests
+in `session:get` while the backend still waits. Only owned sessions are tracked.
+Permission requests reuse Rondo's existing ACP permission projection and answer UI;
+the selected native option returns through `session:resolvePermission` to the exact
+request ID. No automatic permission grant, prompt replay or private history edit is used.
+`session:notifyListenerReady` replays pending inputs only, without loading full history.
+Questions/elicitation without an in-product handler still use the native input entry.
+Unanswered permissions cancel the native turn before helper cleanup; confirmed native
+cancellation clears the local input cache. Background progress does not open a window.
+
+Rechecked upstream on 2026-10-28: the pinned gateway source blob above is unchanged.
+Kxiandaoyan's live ACP sender explicitly avoids loading/replaying full history before
+prompting. The permission adaptation comes from Rondo's existing ACP answer flow and
+inspection of the installed WorkBuddy handlers; it is not represented as upstream code.
+The installed WorkBuddy 5.9.3 accepts the revision6 transport handshake (zero model turns).

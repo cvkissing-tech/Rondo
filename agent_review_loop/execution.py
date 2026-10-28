@@ -16,7 +16,8 @@ from .review_jobs import ReviewJobs
 from .repair import repair_context, unauthorized_changed_files
 from .snapshots import _git, canonical, current_tree
 from .store import StoreError, _text, _timestamp
-from .native_session import write_state
+from .native_session import write_state, interactive_request
+from .codex_rpc import ReviewCancelled
 from .workbuddy_progress import project_update, public_text
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,7 +82,18 @@ def native_run(payload, directory, executable, *, cancel_check=lambda: False, on
                 continue
             if event is None:
                 break
-            on_event(event)
+            try:
+                answer = on_event(event)
+            except (ReviewCancelled, TimeoutError) as error:
+                if event['event'] != 'permission_request': raise
+                cancelling, stop_at = True, time.monotonic() + 12
+                stop_reason = 'user_cancelled' if isinstance(error, ReviewCancelled) else 'input_timeout'
+                child.stdin.write(b'{"command":"cancel"}\n')
+                child.stdin.flush()
+                continue
+            if event['event'] == 'permission_request' and isinstance(answer, str):
+                child.stdin.write(canonical({'command': 'answer_permission', 'request_id': event['request_id'], 'option_id': answer}) + b'\n')
+                child.stdin.flush()
             if event['event'] == 'dispatched':
                 submitted = True
             if event['event'] == 'error':
@@ -357,6 +369,18 @@ class ExecutionJobs(ReviewJobs):
                     try: os.startfile('workbuddy://chat/' + details['session_id'])
                     except OSError: details['activation_notice'] = 'Open the dedicated session in WorkBuddy to inspect its progress'
                 def event(value):
+                    if value['event'] == 'permission_request':
+                        details['phase'] = 'waiting_input'
+                        self._save_details(job_id, details)
+                        params = value['params']
+                        params = {**params, 'reason': public_text(params.get('reason') or ''),
+                                  'command': public_text(params.get('command') or '', 8000)}
+                        return interactive_request(directory / 'runtime', progress,
+                            {'method': 'acp/permission', 'params': params}, lambda: self._cancelled(job_id))
+                    if value['event'] == 'permission_answered':
+                        details['phase'] = 'running'
+                        self._save_details(job_id, details)
+                        return
                     if value['event'] == 'progress':
                         if project_update(progress, value.get('update', {})):
                             try:
@@ -375,7 +399,7 @@ class ExecutionJobs(ReviewJobs):
                     if value['event'] == 'dispatched' and value.get('model'):
                         details['model'] = value['model']
                     self._save_details(job_id, details)
-                    if value['event'] == 'state' and value.get('state') == 'waiting_input': activate()
+                    if value['event'] == 'state' and value.get('state') == 'waiting_input' and not value.get('in_product_permission'): activate()
                     if value['event'] == 'dispatched':
                         with self.store._connection(write=True) as db:
                             db.execute("UPDATE execution_jobs SET state='running' WHERE id=? AND state='preparing'", (job_id,))
@@ -387,7 +411,8 @@ class ExecutionJobs(ReviewJobs):
                 details['stop_reason'] = result.get('stop_reason', 'user_cancelled')
                 details['summary'] = (
                     f"执行达到 {result.get('timeout_seconds', 3600) // 60} 分钟上限，已停止。"
-                    if details['stop_reason'] == 'timeout' else '执行已取消。'
+                    if details['stop_reason'] == 'timeout' else
+                    '等待权限答复超时，已停止。' if details['stop_reason'] == 'input_timeout' else '执行已取消。'
                 ) + '工作区改动和原生会话记录保留；尚未提交执行结果，也未完成审查。'
                 self._finish(job_id, 'cancelled', details)
                 return
