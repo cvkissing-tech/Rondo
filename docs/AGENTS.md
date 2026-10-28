@@ -62,7 +62,7 @@ ACP读操作可由runtime处理；Agent显式请求非读权限时，Rondo展示
 
 ## Codex原生接入
 
-先安装并登录Codex，确保 `codex` 可从PATH找到。Rondo沿用本机配置和环境，不覆盖模型、推理强度、Skills、MCP或权限配置；桌面应用独占连接器不等同于CLI能力。每个任务的规划、执行和审查保存独立具名会话。旧版本ephemeral会话不能补回。
+先安装并登录Codex，确保 `codex` 可从PATH找到。Rondo沿用本机账号、配置和环境，由Codex加载Skills、MCP及权限配置；任务级模型和推理强度选择不改原客户端的全局设置。桌面应用独占连接器不等同于CLI能力。每个任务的规划、执行和审查保存独立具名会话。旧版本ephemeral会话不能补回。
 
 ## WorkBuddy实验接入
 
