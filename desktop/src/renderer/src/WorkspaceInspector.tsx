@@ -16,6 +16,7 @@ import {
 import { Button } from '@jean/components/ui/button'
 import { handleTabKeys } from '@jean/lib/utils'
 import { agentName, defaultAgents } from '../../shared/types'
+import { nativeSessionNotice } from '../../shared/sessionAccess'
 import type { Context, ExecutionStatus, ReviewStatus, WorkspaceFiles } from '../../shared/types'
 
 export function WorkspaceInspector({
@@ -105,18 +106,21 @@ export function WorkspaceInspector({
       name: `${agentName(roles.planner)} · 规划`,
       agent: 'codex-plan' as const,
       job: plan,
+      notice: nativeSessionNotice(plan, roles.planner),
       id: plan?.thread_id || plan?.session_id
     },
     {
       name: `${agentName(roles.executor)} · 执行`,
       agent: 'workbuddy' as const,
       job: execution,
+      notice: nativeSessionNotice(execution, roles.executor),
       id: execution?.session_id
     },
     {
       name: `${agentName(roles.reviewer)} · 审查`,
       agent: 'codex-review' as const,
       job: review,
+      notice: nativeSessionNotice(review, roles.reviewer),
       id: review?.thread_id || review?.session_id
     }
   ]
@@ -299,6 +303,7 @@ export function WorkspaceInspector({
                 <ExternalLink />
                 打开原生会话
               </Button>
+              {session.notice && <p className="supporting">{session.notice}</p>}
             </section>
           ))}
           <p className="supporting">

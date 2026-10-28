@@ -42,6 +42,8 @@ class FakeRpc:
             return {'data': [{'skills': [{'name': 'fixture', 'enabled': True}]}]}
         if method == 'thread/name/set':
             return {}
+        if method == 'thread/unsubscribe':
+            return {'status': 'unsubscribed'}
         if method == 'account/read':
             return {'requiresOpenaiAuth': True, 'account': {'type': 'chatgpt'}}
         if method == 'thread/start':
@@ -90,6 +92,8 @@ class CodexReviewTests(unittest.TestCase):
         self.assertEqual(result['status'], 'review_saved')
         self.assertEqual(result['turns_started'], 1)
         self.assertEqual(FakeRpc.calls.count('turn/start'), 1)
+        self.assertEqual(FakeRpc.calls.count('thread/unsubscribe'), 1)
+        self.assertTrue(result['native_session_released'])
         self.save.assert_called_once()
 
     def test_interrupted_turn_is_not_saved_or_retried(self):

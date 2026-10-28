@@ -111,7 +111,10 @@ def save_plan(directory, plan, context_id):
 def run_codex_plan(context_dir, output_dir, executable, *, timeout=180, cancel_check=None, agent='codex'):
     payload = load_context(context_dir)
     discussion = payload.get('discussion')
-    prompt = ('Create an implementable coding plan for the task using this bounded repository context. '
+    prompt = ('Create a concise implementable coding plan for the task using this bounded repository context. '
+              'This turn only outlines development steps; UI design and implementation belong to the executor. '
+              'Do not initialize a design system, scaffold documentation, or run implementation workflows merely to produce this outline. '
+              'Use relevant native Skills proportionally; keep project requirements and safety checks. '
               'Return JSON only, in the language of the task. Use native tools and installed Skills when useful; do not modify project files. '
               'Use 1..8 ordered steps without numbers in titles; each title <=160 chars, details <=2000, files <=12 relative paths, '
               'verification 1..8 plain-language checks <=500 chars. Summary <=2000 chars. '
@@ -136,7 +139,7 @@ def run_codex_plan(context_dir, output_dir, executable, *, timeout=180, cancel_c
         options['resume_thread_id'] = discussion['resume_thread_id']
     result = run_inline_json(prompt, schema, payload['repository'], output_dir,
                              executable, timeout=timeout, cancel_check=cancel_check,
-                             instructions='Plan the task in the actual workspace using native configuration and available Skills. Do not modify project files. Follow workspace AGENTS instructions. Output structured JSON; report only observed evidence.',
+                             instructions='Provide a short read-only development outline in the actual workspace using native configuration and relevant Skills. This is not a UI-design or implementation task. Follow workspace AGENTS instructions. Do not modify project files or initialize design artifacts. Output structured JSON; report only observed evidence.',
                              session_name='Rondo · 规划 · ' + payload['task']['title'], agent=agent, **options)
     if discussion and 'resume_thread_id' not in options:
         result['continuation'] = 'saved_context'

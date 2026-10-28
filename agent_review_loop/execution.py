@@ -365,7 +365,8 @@ class ExecutionJobs(ReviewJobs):
                                     log.write(canonical({'event': 'progress', 'update': {**value['update'], 'text': public_text(value['update'].get('text') or '', 8000)}}) + b'\n')
                             except (OSError, sqlite3.Error) as error:
                                 details['projection_error'] = str(error)[:500]
-                            activate()
+                            # Background execution is not owned by WorkBuddy's visible
+                            # conversation view; opening it mid-turn can show stale cancellation.
                         return
                     phase = value['event']
                     if phase == 'state':

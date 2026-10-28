@@ -23,6 +23,7 @@ import { taskFlow, terminal, type TaskAction } from './taskFlow'
 import { ChatWorkspace, UserMessage } from './vendor/t3code/ChatWorkspace'
 import { TimelineSystemDivider } from './vendor/t3code/TimelineSystemDivider'
 import { PlanningComposer } from './PlanningComposer'
+import { nativeSessionNotice } from '../../shared/sessionAccess'
 
 function NativeEvents({
   job,
@@ -233,6 +234,7 @@ export function TaskTimeline({
   const reviewOpen = expanded.review ?? Boolean(reviewJob)
   const executionOpen = expanded.execution ?? Boolean(execution || context.task.result)
   const executionSummary = execution?.summary || context.task.result?.summary
+  const executionNativeNotice = nativeSessionNotice(execution, selected.executor)
   const toggle = (key: string, value: boolean) =>
     setExpanded((previous) => ({ ...previous, [key]: !value }))
   const count = (kind: 'plan' | 'review' | 'execution' | 'execution', current?: ReviewStatus) =>
@@ -463,8 +465,7 @@ export function TaskTimeline({
               {executionOpen && (
                 <div className="execution-message">
                   <p className="preserve">
-                    {executionSummary ||
-                      '计划就绪后，在下方交给所选 Agent 执行。结果将返回这里审查。'}
+                    {executionSummary || '执行尚未返回提交结果；请展开工具记录查看后台实际进展。'}
                   </p>
                   {execution?.plan_version && (
                     <p className="supporting">本轮执行采用计划 V{execution.plan_version}</p>
@@ -494,6 +495,7 @@ export function TaskTimeline({
                       打开 {executor} 会话
                     </Button>
                   )}
+                  {executionNativeNotice && <p className="supporting">{executionNativeNotice}</p>}
                   {sessionError && <p role="alert">{sessionError}</p>}
                   {execution?.review_error && (
                     <p role="alert">自动审查未启动：{execution.review_error}</p>

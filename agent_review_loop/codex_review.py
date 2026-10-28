@@ -203,6 +203,12 @@ def run_inline_json(prompt, schema, cwd, output, executable, *, timeout=180, can
             if cancel_check and cancel_check():
                 raise ReviewCancelled('Review cancelled before saving')
             record.update(status='completed', data=json.loads(final_text))
+            try:
+                released = client.request('thread/unsubscribe', {'threadId': thread_id}, timeout=5, ignore_cancel=True)
+                record['native_session_released'] = released.get('status') in ('unsubscribed', 'notLoaded', 'notSubscribed')
+            except Exception as error:
+                # A completed result remains valid; owned process cleanup still runs.
+                record['session_release_error'] = str(error)[:500]
         record['process_tree_closed'] = True
     except ReviewCancelled as error:
         record.update(status='cancelled', process_tree_closed=True, error_type=type(error).__name__, error=str(error))
