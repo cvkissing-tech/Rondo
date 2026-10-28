@@ -1,51 +1,158 @@
-import { GitBranch } from 'lucide-react'
 import { Button } from '@jean/components/ui/button'
 import type { PlanResult } from '../../shared/types'
-import type { taskFlow } from './taskFlow'
+import { useEffect, useState } from 'react'
+import type { AgentModels } from '../../shared/types'
 
-// Status stays task-wide; adoption lives beside the conversation or full plan.
-export function WorkflowBar({
-  flow,
-  executor,
-  reviewer
-}: {
-  flow: ReturnType<typeof taskFlow>
-  executor: string
-  reviewer: string
-}) {
-  return (
-    <section className="workflow-strip" aria-label="自动工作流">
-      <div className="workflow-description">
-        <div>
-          <GitBranch className="size-3.5" />
-          <strong>自动工作流</strong>
-          <span role="status">{flow.label}</span>
-        </div>
-        <p>
-          {executor} 执行 → 项目检查 → {reviewer} 审查 → 需要时返修一次并复查
-        </p>
-      </div>
-    </section>
-  )
+const modelLoads = new Map<string, Promise<AgentModels>>()
+function loadModels(agent: string) {
+  let pending = modelLoads.get(agent)
+  if (!pending) {
+    pending = window.workbench!.agentModels(agent).finally(() => modelLoads.delete(agent))
+    modelLoads.set(agent, pending)
+  }
+  return pending
 }
 
 export function PlanAdoption({
   plan,
   executor,
+  executorId,
+  reviewerId,
+  executionModel,
+  reviewModel,
+  onExecutionModel,
+  onReviewModel,
   busy,
   onExecute
 }: {
   plan: PlanResult
   executor: string
+  executorId: string
+  reviewerId: string
+  executionModel?: ModelChoice
+  reviewModel?: ModelChoice
+  onExecutionModel: (model?: ModelChoice) => void
+  onReviewModel: (model?: ModelChoice) => void
   busy: boolean
-  onExecute: () => void
+  onExecute: (model?: ModelChoice, reviewModel?: ModelChoice) => void
 }) {
   return (
     <div className="plan-adoption">
-      <Button size="sm" disabled={busy} onClick={onExecute}>
+      <ModelSelector
+        key={`execute-${executorId}`}
+        agent={executorId}
+        role="执行"
+        busy={busy}
+        value={executionModel}
+        onChange={onExecutionModel}
+      />
+      <ModelSelector
+        key={`review-${reviewerId}`}
+        agent={reviewerId}
+        role="审查"
+        busy={busy}
+        value={reviewModel}
+        onChange={onReviewModel}
+      />
+      <Button size="sm" disabled={busy} onClick={() => onExecute(executionModel, reviewModel)}>
         采用 V{plan.version || 1}，交给 {executor} 执行
       </Button>
-      <span>启动后自动接续检查与审查 · 使用各 Agent 账号额度</span>
+      <span>自动返修与复查沿用所选模型。</span>
+    </div>
+  )
+}
+
+export type ModelChoice = { model: string; effort?: string }
+export function ModelSelector({
+  agent,
+  role,
+  busy,
+  value,
+  onChange,
+  defaultLabel = '已保存的 Agent 配置'
+}: {
+  agent: string
+  role: string
+  busy: boolean
+  value?: ModelChoice
+  onChange: (model?: ModelChoice) => void
+  defaultLabel?: string
+}) {
+  const [catalog, setCatalog] = useState<AgentModels>()
+  const model = value?.model || ''
+  const effort = value?.effort || ''
+  const [notice, setNotice] = useState('正在读取模型…')
+  useEffect(() => {
+    let active = true
+    loadModels(agent)
+      .then((result) => {
+        if (active) {
+          setCatalog(result)
+          setNotice(result.unsupported_reason || '')
+        }
+      })
+      .catch(() => {
+        if (active) setNotice('无法读取模型列表，请在 Agent 设置检查连接。')
+      })
+    return () => {
+      active = false
+    }
+  }, [agent])
+  const selected = catalog?.models.find((item) => item.id === model)
+  const efforts = selected?.efforts || []
+  const chosenEffort = efforts.includes(effort) ? effort : selected?.default_effort || efforts[0]
+  return (
+    <div className="workflow-model-choice">
+      {Boolean(catalog?.models.length) && (
+        <label>
+          {role}模型{' '}
+          <select
+            aria-label={`本次${role}模型`}
+            value={model}
+            disabled={busy}
+            onChange={(event) => {
+              const nextModel = event.target.value
+              const item = catalog?.models.find((m) => m.id === nextModel)
+              const next = item?.default_effort || item?.efforts?.[0]
+              onChange(
+                nextModel
+                  ? { model: nextModel, ...(agent === 'codex' && next ? { effort: next } : {}) }
+                  : undefined
+              )
+            }}
+          >
+            <option value="">{defaultLabel}</option>
+            {model && !selected && (
+              <option value={model} disabled>
+                {model}（当前不可用）
+              </option>
+            )}
+            {catalog!.models.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {agent === 'codex' && efforts.length > 0 && (
+        <label>
+          思考强度{' '}
+          <select
+            aria-label={`本次${role}思考强度`}
+            value={chosenEffort}
+            disabled={busy}
+            onChange={(event) => onChange({ model, effort: event.target.value })}
+          >
+            {efforts.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {notice && <span role="status">{notice}</span>}
     </div>
   )
 }

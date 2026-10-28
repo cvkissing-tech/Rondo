@@ -9,6 +9,11 @@ import re
 from .store import StoreError
 
 
+def validate_model_choice(choice):
+    if choice is not None and (not isinstance(choice, dict) or set(choice) - {'model', 'effort'} or not isinstance(choice.get('model'), str) or not 0 < len(choice['model']) <= 200 or any(not isinstance(v, str) or not v or len(v) > 200 or any(c in v for c in '\0\r\n') for v in choice.values())):
+        raise StoreError('INVALID_ARGUMENT', '模型选择无效')
+
+
 def model_selection(agent):
     path = Path(os.environ.get('RONDO_AGENTS_CONFIG') or Path.home() / '.rondo/agents.json')
     data = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}

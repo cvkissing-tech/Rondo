@@ -19,7 +19,7 @@ from .store import StoreError, _text, _timestamp
 from .native_session import write_state, interactive_request
 from .codex_rpc import ReviewCancelled
 from .workbuddy_progress import project_update, public_text
-from .model_settings import model_selection, validate_choice
+from .model_settings import model_selection, validate_choice, validate_model_choice
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / 'integrations/workbuddy/native-driver.mjs'
@@ -143,9 +143,11 @@ class ExecutionJobs(ReviewJobs):
                             ('session_id', 'phase', 'review_job_id', 'review_error', 'summary', 'model',
                              'mode', 'source_review_job_id', 'repair_job_id', 'repair_error', 'plan_id', 'plan_job_id', 'plan_version')}}
 
-    def start_execution(self, task_id, request_id, plan_job_id=None, expected_plan_id=None):
+    def start_execution(self, task_id, request_id, plan_job_id=None, expected_plan_id=None, model_choice=None, review_model_choice=None):
         context = self.tasks.context(task_id)
         _text(request_id, 'request_id', 128)
+        validate_model_choice(model_choice)
+        validate_model_choice(review_model_choice)
         if request_id.startswith('repair-'):
             raise StoreError('INVALID_ARGUMENT', 'repair- request IDs are reserved for reviewed repairs')
         with self.store._connection() as db:
@@ -155,7 +157,9 @@ class ExecutionJobs(ReviewJobs):
         if previous:
             saved = json.loads(previous['result_json'] or '{}')
             if ((plan_job_id and saved.get('plan_job_id') != plan_job_id) or
-                    (expected_plan_id and saved.get('plan_id') != expected_plan_id)):
+                    (expected_plan_id and saved.get('plan_id') != expected_plan_id) or
+                    (model_choice is not None and (saved.get('requested_model') != model_choice.get('model') or saved.get('requested_effort') != model_choice.get('effort'))) or
+                    (review_model_choice is not None and saved.get('review_model_choice') != review_model_choice)):
                 raise StoreError('IDEMPOTENCY_CONFLICT', '这个执行请求已绑定另一份计划')
             return self.status(previous['id'])
         if exists:
@@ -176,7 +180,9 @@ class ExecutionJobs(ReviewJobs):
         if plan['freshness'] != 'current':
             raise StoreError('PLAN_STALE', 'Code changed after planning; update the plan first')
         agent = self.selected_agent(task_id) if self.native_routing else 'workbuddy'
-        choice = model_selection(agent)
+        choice = model_selection(agent) if model_choice is None else model_choice
+        reviewer = self.reviews.selected_agent(task_id) if self.native_routing else 'codex'
+        review_choice = model_selection(reviewer) if review_model_choice is None else review_model_choice
         requested_model = choice.get('model') or (os.environ.get('ARL_WORKBUDDY_MODEL') if agent == 'workbuddy' else None)
         if self.runner is native_run and self.selected_agent(task_id) == 'workbuddy':
             connection = workbuddy_connection(self.root)
@@ -186,12 +192,13 @@ class ExecutionJobs(ReviewJobs):
         if not self.executable:
             self.executable = str(node_executable())
         return self.start_review(task_id, context['workspace'], context['base_commit'], request_id,
-                                 input_data={'requested_model': requested_model, 'requested_effort':choice.get('effort'), 'plan_job_id': plan['job_id'], 'plan_id': plan['plan_id'],
+                                 input_data={'requested_model': requested_model, 'requested_effort':choice.get('effort'), 'review_model_choice': review_choice, 'plan_job_id': plan['job_id'], 'plan_id': plan['plan_id'],
                                              'plan_version': plan.get('version', 1), 'latest_plan_job_id': plan_id,
                                              'adopted_plan': {'job_id': plan['job_id'], 'plan_id': plan['plan_id'],
                                                               'version': plan.get('version', 1), 'plan': plan['plan']}})
 
-    def start_repair(self, source_review_job_id):
+    def start_repair(self, source_review_job_id, model_choice=None):
+        validate_model_choice(model_choice)
         if not isinstance(source_review_job_id, str) or not re.fullmatch('[a-f0-9]{32}', source_review_job_id):
             raise StoreError('INVALID_ARGUMENT', 'Expected a source review job ID')
         request_id = 'repair-' + source_review_job_id
@@ -199,6 +206,9 @@ class ExecutionJobs(ReviewJobs):
             previous = db.execute('SELECT * FROM execution_jobs WHERE request_id=?', (request_id,)).fetchone()
             source = db.execute('SELECT task_id FROM review_jobs WHERE id=?', (source_review_job_id,)).fetchone()
         if previous:
+            saved = json.loads(previous['result_json'] or '{}')
+            if model_choice is not None and (saved.get('requested_model') != model_choice['model'] or saved.get('requested_effort') != model_choice.get('effort')):
+                raise StoreError('IDEMPOTENCY_CONFLICT', '该返修已绑定其他模型，请查看已有记录')
             return self.status(previous['id'])
         if not source:
             raise StoreError('REVIEW_NOT_FOUND', 'Source review does not exist')
@@ -210,7 +220,10 @@ class ExecutionJobs(ReviewJobs):
             connection = workbuddy_connection(self.root)
             if not connection.get('connected'):
                 raise StoreError('WORKBUDDY_NOT_CONNECTED', connection.get('error', 'WorkBuddy is not connected'))
-        return self.start_review(source['task_id'], context['workspace'], context['base_commit'], request_id)
+            if model_choice:
+                validate_choice(connection.get('models', []), model_choice)
+        return self.start_review(source['task_id'], context['workspace'], context['base_commit'], request_id,
+                                 input_data={'model_choice': model_choice} if model_choice else None)
 
     def _prepare_start(self, db, task, repo, request_id):
         count = db.execute('SELECT count(*) FROM execution_jobs WHERE task_id=?', (task['task_id'],)).fetchone()[0]
@@ -239,8 +252,11 @@ class ExecutionJobs(ReviewJobs):
                    (_timestamp(self.store.clock()), task['task_id']))
         initial = db.execute("SELECT result_json FROM execution_jobs WHERE task_id=? AND request_id NOT LIKE 'repair-%' ORDER BY created_at LIMIT 1", (task['task_id'],)).fetchone()
         selection = json.loads(initial['result_json'] or '{}') if initial else {}
+        override = task.get('_request', {}).get('model_choice')
         return {'mode': 'repair', 'source_review_job_id': request_id[7:], 'repair_input': inputs,
-                'requested_model': selection.get('requested_model'), 'requested_effort': selection.get('requested_effort')}
+                'requested_model': override['model'] if override else selection.get('requested_model'),
+                'requested_effort': override.get('effort') if override else selection.get('requested_effort'),
+                'review_model_choice': selection.get('review_model_choice')}
 
     def _continue_after_review(self, job_id, details):
         # Aider's bounded reflection rule: one repair only; never reset on refresh/restart.
@@ -445,7 +461,9 @@ class ExecutionJobs(ReviewJobs):
             details.update(phase='submitted', summary=report['summary'], output_tree=output_tree)
             self._finish(job_id, 'succeeded', details)
             try:
-                review = self.reviews.start_review(task['task_id'], str(repo), base_ref, 'execution-' + job_id)
+                review_choice = details.get('review_model_choice')
+                review = self.reviews.start_review(task['task_id'], str(repo), base_ref, 'execution-' + job_id,
+                                                   input_data={'model_choice': review_choice} if review_choice else None)
                 details['review_job_id'] = review['job_id']
             except Exception as error:
                 details['review_error'] = getattr(error, 'code', 'AUTO_REVIEW_FAILED')

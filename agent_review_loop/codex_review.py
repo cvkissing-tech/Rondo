@@ -31,7 +31,7 @@ def review_schema(snapshot_id):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
-def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel_check=None, agent='codex'):
+def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel_check=None, agent='codex', model_choice=None):
     if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 180:
         raise ValueError('Review timeout must be positive and at most 180 seconds')
     manifest = verify_package(package_dir)
@@ -72,7 +72,7 @@ def run_codex_review(package_dir, output_dir, executable, *, timeout=180, cancel
         raise SnapshotError('REVIEW_LIMIT', 'Review request metadata exceeds 64 KiB')
     record = run_inline_json(prompt, review_schema(manifest['snapshot_id']), manifest.get('repository', package_dir), output,
                              executable, timeout=timeout, cancel_check=cancel_check,
-                             session_name='Rondo · 审查 · ' + manifest['task'].get('title', '代码审查'), agent=agent)
+                             session_name='Rondo · 审查 · ' + manifest['task'].get('title', '代码审查'), agent=agent, model_choice=model_choice)
     data = record.pop('data', None)
     record['snapshot_id'] = manifest['snapshot_id']
     if record['status'] == 'completed':

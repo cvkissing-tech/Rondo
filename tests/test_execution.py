@@ -69,6 +69,19 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'PLAN_SELECTION_CHANGED')
         self.assertEqual(self.calls, 0)
 
+    def test_execution_model_is_bound_to_this_request(self):
+        self.mode = 'wait'
+        job = self.execution.start_execution(self.task_id, 'model-choice', model_choice={'model': 'fixture-model'})
+        self.assertTrue(self.started.wait(5))
+        with self.store._connection() as db:
+            row = db.execute('SELECT result_json FROM execution_jobs WHERE id=?', (job['job_id'],)).fetchone()
+        import json
+        self.assertEqual(json.loads(row['result_json'])['requested_model'], 'fixture-model')
+        with self.assertRaises(StoreError) as caught:
+            self.execution.start_execution(self.task_id, 'model-choice', model_choice={'model': 'different-model'})
+        self.assertEqual(caught.exception.code, 'IDEMPOTENCY_CONFLICT')
+        self.release.set()
+
     def test_failed_discussion_does_not_discard_last_adoptable_plan(self):
         self.mode = 'missing'
         with self.store._connection(write=True) as db:

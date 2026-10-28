@@ -267,6 +267,8 @@ class ReviewJobs:
                 self._finish(job_id, 'cancelled')
                 return
             options = {'agent': self.selected_agent(task['task_id'])} if self.native_routing else {}
+            if self.native_routing and task.get('_request', {}).get('model_choice'):
+                options['model_choice'] = task['_request']['model_choice']
             result = self.runner(package, directory / 'runtime', executable, cancel_check=lambda: self._cancelled(job_id), **options)
             result['checks'] = manifest['checks']
             if result.get('process_tree_closed') is not True:

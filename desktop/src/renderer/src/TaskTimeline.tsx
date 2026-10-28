@@ -23,6 +23,8 @@ import { taskFlow, terminal, type TaskAction } from './taskFlow'
 import { ChatWorkspace, UserMessage } from './vendor/t3code/ChatWorkspace'
 import { TimelineSystemDivider } from './vendor/t3code/TimelineSystemDivider'
 import { PlanningComposer } from './PlanningComposer'
+import { ModelSelector } from './WorkflowBar'
+import type { ModelChoice } from './WorkflowBar'
 import { nativeSessionNotice } from '../../shared/sessionAccess'
 
 function NativeEvents({
@@ -217,7 +219,7 @@ export function TaskTimeline({
   workspaceActions: ReactNode
   planAction: ReactNode
   busy: boolean
-  onAction: (action: TaskAction) => void
+  onAction: (action: TaskAction, model?: ModelChoice) => void
   onRefresh: () => void
 }) {
   const selected = context.agents || defaultAgents
@@ -225,6 +227,33 @@ export function TaskTimeline({
     executor = agentName(selected.executor),
     reviewer = agentName(selected.reviewer)
   const [sessionError, setSessionError] = useState('')
+  const [repairModel, setRepairModel] = useState<ModelChoice>()
+  const [showPlanning, setShowPlanning] = useState(false)
+  const [pastReviews, setPastReviews] = useState<Record<string, Review>>({})
+  const completedReviewIds = context.activity
+    .filter((row) => row.kind === 'review' && row.status === 'succeeded')
+    .map((row) => row.id)
+    .join(',')
+  useEffect(() => {
+    let active = true
+    Promise.all(
+      completedReviewIds
+        .split(',')
+        .filter(Boolean)
+        .map(async (id) => {
+          try {
+            return [id, await window.workbench!.readReview(id)] as const
+          } catch {
+            return null
+          }
+        })
+    ).then((items) => {
+      if (active) setPastReviews(Object.fromEntries(items.filter((item) => item !== null)))
+    })
+    return () => {
+      active = false
+    }
+  }, [context.task_id, completedReviewIds])
   const planRef = useRef<HTMLElement>(null)
   const executionRef = useRef<HTMLElement>(null)
   const reviewRef = useRef<HTMLElement>(null)
@@ -269,11 +298,12 @@ export function TaskTimeline({
         destination.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
         destination.current?.querySelector('button')?.focus({ preventScroll: true })
       })
-    onAction(value)
+    onAction(value, value === 'repair' ? repairModel : undefined)
   }
   const turns = [...(conversation?.items || [])]
   if (planJob && !turns.some((turn) => turn.job_id === planJob.job_id)) turns.push(planJob)
   const planning = Boolean(planJob && !terminal.has(planJob.status))
+  const planningVisible = (!execution && !reviewJob) || planning || showPlanning
   const blocked = busy
     ? '正在处理请求，草稿会保留。'
     : execution && !terminal.has(execution.status)
@@ -336,26 +366,55 @@ export function TaskTimeline({
             {planAction}
             {flow.action !== 'execute' && (
               <div className="dock-action">
-                <p>{flow.detail}</p>
+                {(flow.action === 'changes' ||
+                  execution?.status === 'failed' ||
+                  execution?.status === 'interrupted') && <p>{flow.detail}</p>}
+                {flow.action === 'repair' && (
+                  <ModelSelector
+                    agent={selected.executor}
+                    role="返修"
+                    busy={busy}
+                    value={repairModel}
+                    onChange={setRepairModel}
+                    defaultLabel="沿用本次执行模型"
+                  />
+                )}
                 <Button size="sm" disabled={busy} onClick={() => action(flow.action)}>
                   {flow.button}
                 </Button>
               </div>
             )}
-            <PlanningComposer
-              task={context.task_id}
-              planner={planner}
-              plannerId={selected.planner}
-              version={plan?.version}
-              dark={dark}
-              blocked={blocked}
-              running={planning}
-              onSend={async (message, request, model) => {
-                follow.current = true
-                await onSend(message, request, model)
-              }}
-              onStop={onStopPlan}
-            />
+            {!planningVisible && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowPlanning(true)}>
+                与 {planner} 讨论计划
+              </Button>
+            )}
+            {showPlanning && (execution || reviewJob) && !planning && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowPlanning(false)}
+              >
+                收起计划讨论
+              </Button>
+            )}
+            {planningVisible && (
+              <PlanningComposer
+                task={context.task_id}
+                planner={planner}
+                plannerId={selected.planner}
+                version={plan?.version}
+                dark={dark}
+                blocked={blocked}
+                running={planning}
+                onSend={async (message, request, model) => {
+                  follow.current = true
+                  await onSend(message, request, model)
+                }}
+                onStop={onStopPlan}
+              />
+            )}
           </>
         }
       >
@@ -448,16 +507,84 @@ export function TaskTimeline({
             <p className="supporting">显示最近 100 轮；更早的原始记录仍保存在本机。</p>
           )}
         </section>
+        {context.activity.some((row) => row.kind === 'execution' || row.kind === 'review') && (
+          <section className="workflow-activity" aria-label="执行和审查进程">
+            <strong>执行与审查进程</strong>
+            <ol>
+              {context.activity
+                .filter((row) => row.kind === 'execution' || row.kind === 'review')
+                .map((row, index, rows) => {
+                  const isRepair =
+                    row.kind === 'execution' &&
+                    rows.slice(0, index).some((item) => item.kind === 'execution')
+                  const isReReview =
+                    row.kind === 'review' &&
+                    rows.slice(0, index).some((item) => item.kind === 'review')
+                  const latestReview = row.kind === 'review' && row.id === reviewJob?.job_id
+                  const savedReview = latestReview && review ? review : pastReviews[row.id]
+                  const status =
+                    row.status === 'succeeded'
+                      ? '已完成'
+                      : row.status === 'failed'
+                        ? '未完成'
+                        : row.status === 'cancelled'
+                          ? '已取消'
+                          : row.status === 'interrupted'
+                            ? '已中断'
+                            : '进行中'
+                  return (
+                    <li key={row.id}>
+                      <span>
+                        {row.kind === 'execution'
+                          ? `${executor} · ${isRepair ? '返修' : '执行'}`
+                          : `${reviewer} · ${isReReview ? '复查' : '审查'}`}
+                        ：{status}
+                      </span>
+                      {savedReview?.verdict === 'changes_requested' && (
+                        <details>
+                          <summary>审查要求修改 · 查看意见</summary>
+                          <p>{savedReview.summary}</p>
+                        </details>
+                      )}
+                      {savedReview?.verdict === 'approved' && <p>审查结论：通过。</p>}
+                      {row.kind === 'review' && row.status === 'succeeded' && !savedReview && (
+                        <p>审查记录暂不可读，请打开审查记录查看。</p>
+                      )}
+                      {row.kind === 'review' && row.status === 'failed' && (
+                        <p role="status">
+                          审查未完成，未交回修改：
+                          {latestReview && reviewJob?.error_message
+                            ? reviewJob.error_message
+                            : row.error_code || '请查看审查记录'}
+                          。
+                        </p>
+                      )}
+                      {isRepair && row.status === 'failed' && (
+                        <p role="status">
+                          {row.error_code === 'REPAIR_SCOPE_EXCEEDED'
+                            ? `返修修改了审查范围以外的文件，已停止复查；改动仍保留。${execution?.job_id === row.id && execution.summary ? ` ${execution.summary}` : ''}`
+                            : execution?.job_id === row.id && execution.summary
+                              ? execution.summary
+                              : `返修未完成：${row.error_code || '请查看执行记录'}。`}
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+            </ol>
+            {context.activity_truncated && <p>这里只显示最近的记录。</p>}
+          </section>
+        )}
         {(execution || context.task.result) && (
           <>
             <article className="agent-message" ref={executionRef}>
               {rowHeading(
                 'execution',
-                context.task.status === 'submitted'
+                execution?.status === 'succeeded' && context.task.status === 'submitted'
                   ? execution?.mode === 'repair'
                     ? '返修结果已提交'
                     : '执行结果已提交'
-                  : `${executor} · 执行`,
+                  : `${executor} · ${execution?.mode === 'repair' ? '返修' : '执行'}`,
                 executionOpen,
                 <Code2 className="size-4" />,
                 execution

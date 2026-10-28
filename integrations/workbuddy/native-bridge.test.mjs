@@ -14,9 +14,9 @@ class Channel {
   constructor() { this.port1 = new Port(); this.port2 = new Port(); this.port1.peer = this.port2; this.port2.peer = this.port1 }
 }
 async function fixture() {
-  const requests = [], ports = [], sid = '11111111-1111-4111-8111-111111111111'
+  const requests = [], sdkCalls = [], history = [], ports = [], sid = '11111111-1111-4111-8111-111111111111'
   const state = { cwd: 'C:/fixture', sessionId: sid, status: 'completed', model: 'fast' }
-  let active = [], emitReceipt = true, clock = 0, ignoreModel = false
+  let active = [], emitReceipt = true, clock = 0, ignoreModel = false, sdkPending = null
   class Clock extends Date { static now() { return clock } }
   const window = { postMessage(message, target, transfer) {
     assert.equal(message.type, 'workbuddy:open-local-daemon-transport-port')
@@ -46,48 +46,67 @@ async function fixture() {
     }
     port.postMessage({ kind: 'open' })
   } }
-  const context = vm.createContext({ window, MessageChannel: Channel, Date: Clock,
+  const invoke=async (channel,_opts,...args)=>{
+    sdkCalls.push({channel,args})
+    if(channel==='wb:conversations:create'){
+      const c=args[0];state.cwd=c.cwd;if(c.model&&!ignoreModel)state.model=c.model
+      return {info:{id:c.conversationId,state:'idle',space:{cwd:c.cwd}},configManager:{model:state.model}}
+    }
+    if(channel==='wb:conversations:get')return {info:{id:sid,state:'idle',space:{cwd:state.cwd}},configManager:{model:state.model}}
+    if(channel==='wb:conversations:requests')return {items:history}
+    if(channel==='wb:conversations:getPendingInfo')return sdkPending
+    if(channel==='wb:conversations:resolvePending'){sdkPending=null;return {}}
+    if(channel==='wb:conversations:cancel')return {}
+    if(channel==='wb:conversations:sendPrompt'){
+      const options=args[2];if(emitReceipt){history.push({id:options.clientRequestId});ports[0].postMessage({kind:'message',json:{type:'event',channel:'session:event:'+sid,result:{sessionId:sid,update:{sessionUpdate:'user_message_chunk'},_meta:{'codebuddy.ai':{requestId:options.clientRequestId}}}}})}
+      return {}
+    }
+    throw Error('Unexpected SDK channel '+channel)
+  }
+  const context = vm.createContext({ window, __wbInvoke:invoke, MessageChannel: Channel, Date: Clock,
     setTimeout: (fn, delay) => setTimeout(() => { if (delay === 100) clock += 100; fn() }, delay === 100 ? 0 : delay), clearTimeout })
   await vm.runInContext(RENDERER_BRIDGE, context)
-  return { bridge: vm.runInContext('globalThis.__rondoNativeBridgeV1', context), requests, state, sid,
+  return { bridge: vm.runInContext('globalThis.__rondoNativeBridgeV1', context), requests, sdkCalls, state, sid,
     control: data => ports[0].postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid, result: { sessionId: sid, ...data } } }),
     update: update => ports[0].postMessage({ kind: 'message', json: { type: 'event', channel: 'session:event:' + sid, result: { sessionId: sid, update } } }),
-    busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false }, ignoreModel:()=>{ignoreModel=true} }
+    busy: () => { active = [{ sessionId: sid }] }, noReceipt: () => { emitReceipt = false }, ignoreModel:()=>{ignoreModel=true},
+    history:(blocks)=>{history[0].assistantMessage={content:blocks}}, pending:(p)=>{sdkPending=p} }
 }
 test('native workspace/session creation preserves identity and does not prompt', async () => {
   const f = await fixture()
   const created = await f.bridge.createWorker('C:/fixture', f.sid, 'Rondo')
   assert.equal(created.sessionId, f.sid)
-  assert.deepEqual(f.requests.map(r=>r.channel), ['workspace:initialize','session:create','session:rename','session:notifyListenerReady'])
+  assert.deepEqual(f.sdkCalls.map(r=>r.channel), ['wb:conversations:create'])
 })
 test('one receipt prevents duplicate prompts; model changes stay on the dedicated session', async () => {
   const f = await fixture(), wake = 'wake-run-22222222-2222-4222-8222-222222222222'
+  await f.bridge.createWorker('C:/fixture', f.sid, 'Rondo', 'deep')
   const receipt=await f.bridge.wakeIdle(f.sid, wake, 'fixture', 'deep')
   assert.equal(receipt.accepted, true)
   assert.equal(receipt.model, 'deep')
   assert.equal(f.state.model, 'deep')
   assert.equal((await f.bridge.wakeIdle(f.sid, wake, 'fixture')).accepted, true)
-  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length, 1)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:sendPrompt').length, 1)
 })
 
 test('native model mismatch and unavailable model prevent sending the prompt', async () => {
   const f=await fixture();f.ignoreModel()
   const wake='wake-run-22222222-2222-4222-8222-222222222222'
-  assert.equal((await f.bridge.wakeIdle(f.sid,wake,'fixture','deep')).accepted,false)
-  assert.equal((await f.bridge.wakeIdle(f.sid,wake,'fixture','missing')).accepted,false)
-  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,0)
+  await assert.rejects(f.bridge.createWorker('C:/fixture',f.sid,'Rondo','deep'),/did not confirm/)
+  await assert.rejects(f.bridge.createWorker('C:/fixture',f.sid,'Rondo','missing'),/not available/)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:sendPrompt').length,0)
 })
 test('busy native sessions and pending permissions are not dispatched', async () => {
   const f = await fixture(); f.busy()
   assert.equal((await f.bridge.wakeIdle(f.sid,'wake-run-22222222-2222-4222-8222-222222222222','x')).accepted,false)
-  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,0)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:sendPrompt').length,0)
   const g=await fixture();g.state.pendingPermissions=[{}]
   assert.equal((await g.bridge.inspect(g.sid)).state,'waiting_input')
 })
 test('uncertain submission is an error and never triggers a second send', async () => {
   const f=await fixture();f.noReceipt()
   await assert.rejects(f.bridge.wakeIdle(f.sid,'wake-run-22222222-2222-4222-8222-222222222222','x'),/uncertain/)
-  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,1)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:sendPrompt').length,1)
 })
 
 test('terminated is idle only after native active sessions and outgoing calls clear', async () => {
@@ -121,16 +140,16 @@ test('native permission events remain actionable even when session:get hides pen
   f.control({type:'permissionRequest',requestId:'permission-1',request})
   await new Promise(resolve=>setImmediate(resolve))
   assert.equal((await f.bridge.inspect(f.sid)).state,'waiting_input')
-  assert.equal(f.bridge.permissionRequest(f.sid).params.command,'fixture-clean')
+  assert.equal((await f.bridge.permissionRequest(f.sid)).params.command,'fixture-clean')
   await assert.rejects(f.bridge.answerPermission(f.sid,'permission-1','allow_always'),/invalid/)
   assert.equal(f.requests.filter(r=>r.channel==='session:resolvePermission').length,0)
   assert.equal(await f.bridge.answerPermission(f.sid,'permission-1','allow'),true)
   const call=f.requests.find(r=>r.channel==='session:resolvePermission')
   assert.deepEqual(Array.from(call.args),[f.sid,'permission-1','allow'])
-  assert.equal(f.bridge.permissionRequest(f.sid),null)
+  assert.equal(await f.bridge.permissionRequest(f.sid),null)
   assert.equal((await f.bridge.inspect(f.sid)).state,'idle')
   await assert.rejects(f.bridge.answerPermission(f.sid,'permission-1','allow'),/expired/)
-  assert.equal(f.requests.filter(r=>r.channel==='session:sendMessage').length,0)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:sendPrompt').length,0)
 })
 
 test('native resolution and confirmed cancellation clear owned input waits', async () => {
@@ -139,7 +158,7 @@ test('native resolution and confirmed cancellation clear owned input waits', asy
   f.control({type:'questionRequest',toolCallId:'question-1',request:{}})
   await new Promise(resolve=>setImmediate(resolve))
   assert.equal((await f.bridge.inspect(f.sid)).state,'waiting_input')
-  assert.equal(f.bridge.permissionRequest(f.sid),null)
+  assert.equal(await f.bridge.permissionRequest(f.sid),null)
   f.control({type:'questionResolved',toolCallId:'question-1'})
   await new Promise(resolve=>setImmediate(resolve))
   assert.equal((await f.bridge.inspect(f.sid)).state,'idle')
@@ -147,5 +166,30 @@ test('native resolution and confirmed cancellation clear owned input waits', asy
   await new Promise(resolve=>setImmediate(resolve))
   await f.bridge.cancelWorker(f.sid)
   assert.equal((await f.bridge.inspect(f.sid)).state,'idle')
-  assert.equal(f.requests.filter(r=>r.channel==='session:cancel').length,1)
+  assert.equal(f.sdkCalls.filter(r=>r.channel==='wb:conversations:cancel').length,1)
+})
+
+test('SDK conversation history projects tool progress without reasoning or duplicates', async () => {
+  const f=await fixture(),wake='wake-run-22222222-2222-4222-8222-222222222222'
+  await f.bridge.createWorker('C:/fixture',f.sid,'Rondo')
+  await f.bridge.wakeIdle(f.sid,wake,'fixture')
+  f.history([{type:'reasoning',text:'private'},{type:'tool',toolCallId:'tool-1',title:'Run test',status:'completed',rawOutput:'passed'},{type:'text',messageId:'message-1',text:'Done'}])
+  await f.bridge.projectHistory(f.sid)
+  const updates=f.bridge.drainEvents(f.sid)
+  assert.equal(updates.length,2)
+  assert.equal(updates[0].text,'passed')
+  assert.equal(updates[1].text,'Done')
+  await f.bridge.projectHistory(f.sid)
+  assert.equal(f.bridge.drainEvents(f.sid).length,0)
+})
+
+test('SDK permission is shown and returns the exact selected option', async () => {
+  const f=await fixture();await f.bridge.createWorker('C:/fixture',f.sid,'Rondo')
+  f.pending({id:'permission-sdk',category:'tool',title:'Run command',rawInput:{command:'fixture'},options:[{optionId:'allow',kind:'allow_once',name:'Allow'}]})
+  const pending=await f.bridge.permissionRequest(f.sid)
+  assert.equal(pending.params.command,'fixture')
+  await f.bridge.answerPermission(f.sid,pending.requestId,'allow')
+  const call=f.sdkCalls.find(x=>x.channel==='wb:conversations:resolvePending')
+  assert.equal(call.args[1],'permission-sdk');assert.equal(call.args[2].optionId,'allow')
+  assert.equal(await f.bridge.permissionRequest(f.sid),null)
 })

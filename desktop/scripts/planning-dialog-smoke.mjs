@@ -177,6 +177,11 @@ try {
   )
   assert.equal((await saved()).items.length, 3)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 900))
+  const adoption = page.locator('.task-conversation .plan-adoption').first()
+  await adoption.getByLabel('本次执行模型').selectOption('fixture-small')
+  await adoption.getByLabel('本次审查模型').selectOption('fixture-large')
+  assert.equal(await page.locator('.workflow-strip').count(), 0)
+  await shot('stage-models')
   await page
     .locator('.task-conversation')
     .getByRole('button', { name: '采用 V2，交给 rondo-fixture 执行', exact: true })
@@ -208,6 +213,15 @@ try {
   assert.equal(execution.plan_job_id, v2.job_id)
   assert.equal(execution.plan_id, v2.plan_id)
   assert.equal(execution.plan_version, 2)
+  assert.equal(execution.model, 'fixture-small')
+  const reviewStatus = await page.evaluate(
+    (id) => window.workbench.reviewStatus(id),
+    execution.review_job_id
+  )
+  assert.equal(reviewStatus.model, 'fixture-large')
+  await page.getByLabel('执行和审查进程').waitFor()
+  await page.getByRole('button', { name: '与 rondo-fixture 讨论计划' }).waitFor({ timeout: 15000 })
+  assert.equal(await page.getByRole('textbox', { name: '讨论或修改方案' }).count(), 0)
   await page.getByRole('tab', { name: '文件', exact: true }).click()
   await page.getByRole('button', { name: /fixture.txt/ }).waitFor()
   await shot('execution-result')

@@ -71,7 +71,7 @@ export class NativeClient {
     })
   }
   call(method, ...args) {
-    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'drainEvents', 'permissionRequest', 'answerPermission', 'cancelWorker', 'rpc'].includes(method)) throw Error('Unsupported native operation')
+    if (!['inspect', 'wakeIdle', 'createWorker', 'listModels', 'setModel', 'drainEvents', 'projectHistory', 'permissionRequest', 'answerPermission', 'cancelWorker', 'rpc'].includes(method)) throw Error('Unsupported native operation')
     return this.evaluate(`globalThis.__rondoNativeBridgeV1[${JSON.stringify(method)}](...${JSON.stringify(args)})`, 55000)
   }
   close() { this.socket?.close() }
@@ -95,7 +95,7 @@ async function main(input) {
     }
     if (input.command !== 'run' || !path.isAbsolute(input.workspace) || !existsSync(input.workspace) || typeof input.prompt !== 'string' || input.prompt.length > 80000)
       throw Error('Invalid native execution request')
-    const result = await client.call('createWorker', input.workspace, sid, `Rondo · ${input.title.slice(0, 100)}`)
+    const result = await client.call('createWorker', input.workspace, sid, `Rondo · ${input.title.slice(0, 100)}`, input.model || undefined)
     emit({ event: 'session_created', session_id: result.sessionId, workspace: result.workspace })
     const receipt = await client.call('wakeIdle', sid, input.wake_id, input.prompt, input.model || undefined)
     if (!receipt?.accepted) throw Error(receipt?.error || 'WorkBuddy session is busy or requires input; prompt was not dispatched')
@@ -119,6 +119,7 @@ async function main(input) {
     })
     for (;;) {
       const state = await client.call('inspect', sid)
+      await client.call('projectHistory', sid)
       for (const update of await client.call('drainEvents', sid)) emit({ event: 'progress', update })
       const permission = await client.call('permissionRequest', sid)
       emit({ event: 'state', ...state, in_product_permission: Boolean(permission?.params.options.length) })

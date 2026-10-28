@@ -117,9 +117,11 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
         plan_job_id: JobId | None = None,
         expected_plan_id: str | None = None,
+        model_choice: dict[str, str] | None = None,
+        review_model_choice: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run a saved current plan in native WorkBuddy, then Codex review; changes_requested may trigger ONE repair and final review. At most two native turns and two reviews, using both quotas. Never replay unknown dispatches."""
-        return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id, plan_job_id, expected_plan_id)
+        return await asyncio.to_thread(_invoke, executions.start_execution, task_id, request_id, plan_job_id, expected_plan_id, model_choice, review_model_choice)
 
     @server.tool(structured_output=True)
     def get_execution_status(job_id: JobId) -> dict[str, Any]:
@@ -132,9 +134,9 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
         return _invoke(executions.cancel, job_id)
 
     @server.tool(structured_output=True)
-    async def start_task_repair(source_review_job_id: JobId) -> dict[str, Any]:
+    async def start_task_repair(source_review_job_id: JobId, model_choice: dict[str, str] | None = None) -> dict[str, Any]:
         """Run the task's ONE native WorkBuddy repair from its latest current changes_requested review, then one Codex re-review. Consumes both quotas. Stable source identity reuses the same repair; no third round."""
-        return await asyncio.to_thread(_invoke, executions.start_repair, source_review_job_id)
+        return await asyncio.to_thread(_invoke, executions.start_repair, source_review_job_id, model_choice)
 
     @server.tool(structured_output=True)
     async def start_task_plan(
@@ -191,10 +193,15 @@ def create_server(store: TaskStore, reviews: ReviewJobs | None = None, tasks: Ta
     async def start_task_review(
         task_id: TaskId,
         request_id: Annotated[str, Field(strict=True, min_length=1, max_length=128)],
+        model_choice: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Review a prepared task using its SAVED workspace/base. Stop editing first. Can consume Codex quota."""
         context = _invoke(tasks.context, task_id)
-        return await asyncio.to_thread(_invoke, reviews.start_review, task_id, context['workspace'], context['base_commit'], request_id)
+        from .model_settings import validate_model_choice
+        from functools import partial
+        _invoke(validate_model_choice, model_choice)
+        operation = partial(reviews.start_review, input_data={'model_choice': model_choice} if model_choice else None)
+        return await asyncio.to_thread(_invoke, operation, task_id, context['workspace'], context['base_commit'], request_id)
 
     @server.tool(structured_output=True)
     def create_task(

@@ -17,7 +17,7 @@ const api: DesktopAPI = {
   startTask: (input) => invoke('start-task', input),
   context: (id) => invoke('context', id),
   changes: (id) => invoke('changes', id),
-  startReview: (id, request) => invoke('start-review', id, request),
+  startReview: (id, request, model) => invoke('start-review', id, request, model),
   reviewStatus: (id) => invoke('review-status', id),
   readReview: (id, after = 0) => invoke('read-review', id, after),
   cancelReview: (id) => invoke('cancel-review', id),
@@ -29,9 +29,9 @@ const api: DesktopAPI = {
     invoke('planning-message', id, request, message, model),
   planningConversation: (id) => invoke('planning-conversation', id),
   workbuddyStatus: (launch = false) => invoke('workbuddy-status', launch),
-  startExecution: (id, request, planJob, planId) =>
-    invoke('start-execution', id, request, planJob, planId),
-  startRepair: (id) => invoke('start-repair', id),
+  startExecution: (id, request, planJob, planId, model, reviewModel) =>
+    invoke('start-execution', id, request, planJob, planId, model, reviewModel),
+  startRepair: (id, model) => invoke('start-repair', id, model),
   executionStatus: (id) => invoke('execution-status', id),
   cancelExecution: (id) => invoke('cancel-execution', id),
   openWorkspace: (id) => invoke('open-workspace', id),

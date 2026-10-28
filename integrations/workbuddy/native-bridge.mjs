@@ -1,7 +1,7 @@
 export const RENDERER_BRIDGE = String.raw`(async function(){
-  if(globalThis.__rondoNativeBridgeV1?.revision===7) return true;
+  if(globalThis.__rondoNativeBridgeV1?.revision===9) return true;
   globalThis.__rondoNativeBridgeV1?.close?.();
-  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map(), inputs=new Map();
+  const mc=new MessageChannel(), pending=new Map(), markers=new Map(), outgoing=new Map(), progress=new Map(), inputs=new Map(), workspaces=new Map(), configuredModels=new Map(), historySeen=new Map();
   let sequence=0, openResolve, closed=false;
   const opened=new Promise(resolve=>openResolve=resolve);
   const marker=(sid,id)=>{if(typeof id==='string'&&/^wake-run-[a-f0-9-]{36}$/.test(id)){if(!markers.has(sid))markers.set(sid,new Set());markers.get(sid).add(id);}};
@@ -55,12 +55,15 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     const active=await rpc('daemon:getActiveSessions',[]);
     if(!Array.isArray(active))throw Error('Incompatible native activity response');
     const session=await rpc('session:get',[sid]);
-    if(!session||!session.cwd)throw Error('Native worker session was not found');
-    const waiting=inputs.get(sid)?.size||session.pendingInputKind||(session.pendingPermissions?.length)||(session.pendingQuestions?.length)||(session.pendingElicitations?.length);
-    if(waiting)return {state:'waiting_input',workspace:session.cwd,reason:'WorkBuddy requires native permission or input'};
-    if(outgoing.has(sid)||active.some(s=>(s.sessionId||s.id)===sid||s.cwd===session.cwd)||session.isProcessing||session.stopRequested||session.hasActiveTeamMembers||session.hasActiveToolCalls)return {state:'busy',workspace:session.cwd,reason:'Native WorkBuddy session is active'};
-    if(!['completed','failed','cancelled','idle','stopped','pending','terminated'].includes(String(session.status).toLowerCase()))return {state:'busy',workspace:session.cwd,reason:'Native state is not confirmed idle: '+String(session.status)};
-    return {state:'idle',workspace:session.cwd};
+    const conversation=await globalThis.__wbInvoke('wb:conversations:get',{},sid);
+    if(!conversation||conversation.errorCode||conversation.info?.id!==sid)throw Error('Native worker conversation was not found');
+    const workspace=session?.cwd||conversation.info?.space?.cwd||workspaces.get(sid);
+    if(!workspace)throw Error('Native worker workspace was not found');
+    const waiting=inputs.get(sid)?.size||session?.pendingInputKind||(session?.pendingPermissions?.length)||(session?.pendingQuestions?.length)||(session?.pendingElicitations?.length)||conversation.info.state==='pending';
+    if(waiting)return {state:'waiting_input',workspace,reason:'WorkBuddy requires native permission or input'};
+    if(outgoing.has(sid)||active.some(s=>(s.sessionId||s.id)===sid||s.cwd===workspace)||session?.isProcessing||session?.stopRequested||session?.hasActiveTeamMembers||session?.hasActiveToolCalls||['working','planning'].includes(conversation.info.state))return {state:'busy',workspace,reason:'Native WorkBuddy session is active'};
+    if(session?.status&&!['completed','failed','cancelled','idle','stopped','pending','terminated'].includes(String(session.status).toLowerCase()))return {state:'busy',workspace,reason:'Native state is not confirmed idle: '+String(session.status)};
+    return {state:'idle',workspace};
   };
   const findWake=async(sid,wakeId)=>{
     if(markers.get(sid)?.has(wakeId))return true;
@@ -101,30 +104,40 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
     if(state.state!=='idle'||outgoing.has(sid))return {accepted:false};
     // Lock before sending. Native sendMessage has no independent busy rejection.
     const operation={wakeId,error:undefined};outgoing.set(sid,operation);
-    let actualModel;
-    try{actualModel=model?(await applyModel(sid,model)).model:(await listModels(sid)).currentModel;}catch(error){outgoing.delete(sid);return {accepted:false,error:error.message};}
-    const meta={'codebuddy.ai':{requestId:wakeId,userMessageId:wakeId,messageRequestId:wakeId,emitSyntheticUserPromptLive:true}};
-    rpc('session:sendMessage',[sid,[{type:'text',text:prompt}],meta],0).then(()=>outgoing.delete(sid),error=>{operation.error=error.message;outgoing.delete(sid);});
+    const actualModel=configuredModels.get(sid);
+    if(model&&actualModel!==model){outgoing.delete(sid);return {accepted:false,error:'WorkBuddy model selection was not confirmed'};}
+    // Use the same conversation admission as WorkBuddy's UI, so it owns the request.
+    Promise.resolve().then(()=>globalThis.__wbInvoke('wb:conversations:sendPrompt',{},sid,[{type:'text',text:prompt}],{clientRequestId:wakeId,emitUserMessage:true,_meta:{'codebuddy.ai/conversationRequestId':wakeId}})).then(result=>{if(result?.errorCode||result?.__wbError)operation.error=String(result.message||result.errorCode);outgoing.delete(sid);},error=>{operation.error=error.message;outgoing.delete(sid);});
     const deadline=Date.now()+8000;
     while(Date.now()<deadline){
       if(markers.get(sid)?.has(wakeId))return {accepted:true,receipt:wakeId,model:actualModel};
+      const history=await globalThis.__wbInvoke('wb:conversations:requests',{},sid,null);
+      if((history?.items||[]).some(x=>[x.id,x.requestId,x.clientRequestId,x.conversationRequestId].includes(wakeId)))return {accepted:true,receipt:wakeId,model:actualModel};
       if(operation.error)throw Error(operation.error);
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     throw Error('Native submission receipt is uncertain; do not automatically replay');
   };
-  const createWorker=async(workspace,sessionId,title)=>{
+  const createWorker=async(workspace,sessionId,title,model)=>{
+    if(typeof globalThis.__wbInvoke!=='function')throw Error('WorkBuddy conversation interface is unavailable');
+    if(model&&!(await listModels()).models.some(m=>m.id===model))throw Error('Model is not available in WorkBuddy; prompt was not sent');
     progress.set(sessionId,[]);
     inputs.set(sessionId,new Map());
-    const initialized=await rpc('workspace:initialize',[{cwd:workspace}]);
-    if(!initialized?.success)throw Error(initialized?.error||'Native workspace initialization failed');
-    const created=await rpc('session:create',[{cwd:workspace,sessionId,isPlayground:false}],45000);
-    if(created?.sessionId!==sessionId||created?.cwd!==workspace)throw Error('Native session creation returned a different identity or workspace; do not replay');
-    if(title)await rpc('session:rename',[sessionId,title]);
-    await rpc('session:notifyListenerReady',[sessionId]);
-    return {sessionId:created.sessionId,workspace:created.cwd};
+    const created=await globalThis.__wbInvoke('wb:conversations:create',{}, {conversationId:sessionId,cwd:workspace,transport:'local',title,...model?{model}:{}});
+    const info=created?.info, normalized=x=>String(x||'').replaceAll('\\','/').replace(/\/$/,'').toLowerCase();
+    if(info?.id!==sessionId||normalized(info?.space?.cwd)!==normalized(workspace))throw Error('Native conversation creation returned a different identity or workspace; do not replay');
+    const actual=created?.configManager?.model||info?.model;
+    if(model&&actual!==model)throw Error('WorkBuddy did not confirm the selected model; prompt was not sent');
+    workspaces.set(sessionId,workspace);configuredModels.set(sessionId,actual);
+    return {sessionId,workspace};
   };
-  const permissionRequest=sid=>{
+  const permissionRequest=async sid=>{
+    const native=await globalThis.__wbInvoke('wb:conversations:getPendingInfo',{},sid);
+    for(const [id,entry] of inputs.get(sid)||[])if(entry.sdk&&id!==native?.id)inputs.get(sid).delete(id);
+    if(native?.id&&['tool','sandbox','plan'].includes(native.category)&&Array.isArray(native.options)&&native.options.length){
+      const tool=native.toolCall||{};
+      inputs.get(sid)?.set(native.id,{type:'permissionRequest',requestId:native.id,sdk:true,request:{toolCall:{title:native.title||native.description||tool.title||'WorkBuddy 请求确认',rawInput:tool.rawInput||native.rawInput||{}},options:native.options}});
+    }
     const input=Array.from(inputs.get(sid)?.values()||[]).find(x=>x.type==='permissionRequest');
     if(!input)return null;
     const tool=input.request.toolCall||{};
@@ -134,16 +147,38 @@ export const RENDERER_BRIDGE = String.raw`(async function(){
   const answerPermission=async(sid,requestId,optionId)=>{
     const input=inputs.get(sid)?.get(requestId);
     if(!input||!input.request.options?.some(x=>x.optionId===optionId))throw Error('Permission request expired or option is invalid');
-    const accepted=await rpc('session:resolvePermission',[sid,requestId,optionId]);
-    if(accepted!==true)throw Error('Native permission response was not accepted; refresh the session');
+    const accepted=input.sdk?await globalThis.__wbInvoke('wb:conversations:resolvePending',{},sid,requestId,{optionId}):await rpc('session:resolvePermission',[sid,requestId,optionId]);
+    if(accepted===false||accepted?.errorCode||accepted?.__wbError||(!input.sdk&&accepted!==true))throw Error('Native permission response was not accepted; refresh the session');
     inputs.get(sid).delete(requestId);
     return true;
   };
   const cancelWorker=async sid=>{
-    await rpc('session:cancel',[sid]);
+    const result=await globalThis.__wbInvoke('wb:conversations:cancel',{},sid);
+    if(result?.errorCode||result?.__wbError)throw Error('Native conversation cancellation was not accepted');
     inputs.get(sid)?.clear();
   };
+  const projectHistory=async sid=>{
+    const queue=progress.get(sid);if(!queue)return;
+    const result=await globalThis.__wbInvoke('wb:conversations:requests',{},sid,null),items=result?.items;
+    if(!Array.isArray(items))throw Error('Incompatible WorkBuddy conversation history');
+    if(items.length>1)throw Error('Multiple requests in a dedicated worker conversation; inspect before continuing');
+    const seen=historySeen.get(sid)||new Map();historySeen.set(sid,seen);
+    for(const item of items)for(const [index,block] of (item.assistantMessage?.content||[]).entries()){
+      const key=String(block.toolCallId||block.messageId||(item.id+':'+index));
+      if(block.type==='text'&&typeof block.text==='string'){
+        const previous=seen.get(key)||'';const delta=block.text.startsWith(previous)?block.text.slice(previous.length):block.text;
+        if(delta)queue.push({sessionUpdate:'agent_message_chunk',text:delta.slice(-8000)});
+        seen.set(key,block.text);
+      }else if(block.type==='tool'){
+        const text=typeof block.rawOutput==='string'?block.rawOutput:JSON.stringify(block.rawOutput||'');
+        const signature=JSON.stringify([block.status,block.title,text]);
+        if(seen.get(key)!==signature)queue.push({sessionUpdate:'tool_call_update',toolCallId:key,title:block.title||block.toolName||'WorkBuddy 工具',status:block.status,text:text.slice(-8000)});
+        seen.set(key,signature);
+      }
+    }
+    if(queue.length>100)queue.splice(0,queue.length-100);
+  };
   const drainEvents=sid=>{const queue=progress.get(sid);if(!queue)return [];return queue.splice(0);};
-  globalThis.__rondoNativeBridgeV1={revision:7,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,permissionRequest,answerPermission,cancelWorker,close:()=>mc.port1.close()};
+  globalThis.__rondoNativeBridgeV1={revision:9,rpc,inspect,findWake,wakeIdle,createWorker,listModels,setModel,drainEvents,projectHistory,permissionRequest,answerPermission,cancelWorker,close:()=>mc.port1.close()};
   return true;
 })()`;

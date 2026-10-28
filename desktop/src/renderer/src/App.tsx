@@ -59,7 +59,8 @@ import { ComposerLayout } from './vendor/codex/ComposerLayout'
 import { TaskTimeline } from './TaskTimeline'
 import { WorkspaceInspector } from './WorkspaceInspector'
 import { taskFlow, type TaskAction } from './taskFlow'
-import { WorkflowBar, PlanAdoption } from './WorkflowBar'
+import { PlanAdoption, ModelSelector } from './WorkflowBar'
+import type { ModelChoice } from './WorkflowBar'
 const PatchView = lazy(() => import('./PatchView'))
 const api = window.workbench
 const terminal = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
@@ -149,6 +150,9 @@ export default function App() {
   const [planJob, setPlanJob] = useState<ReviewStatus>()
   const [planResult, setPlanResult] = useState<PlanResult>()
   const [execution, setExecution] = useState<ExecutionStatus>()
+  const [manualReviewModel, setManualReviewModel] = useState<ModelChoice>()
+  const [executionModel, setExecutionModel] = useState<ModelChoice>()
+  const [workflowReviewModel, setWorkflowReviewModel] = useState<ModelChoice>()
   const [notice, setNotice] = useState('')
   const generation = useRef(0)
   const startRequest = useRef({ fingerprint: '', id: '' })
@@ -190,6 +194,9 @@ export default function App() {
     setInspectorRequest({ seq: 0, tab: 'plan' })
     setChangesError('')
     setExecution(undefined)
+    setManualReviewModel(undefined)
+    setExecutionModel(undefined)
+    setWorkflowReviewModel(undefined)
     try {
       const selected = await api.context(id)
       if (seq !== generation.current) return
@@ -464,7 +471,7 @@ export default function App() {
     await protect(async () => {
       if (reviewRequest.current.task !== id)
         reviewRequest.current = { task: id, id: crypto.randomUUID() }
-      const status = await api.startReview(id, reviewRequest.current.id)
+      const status = await api.startReview(id, reviewRequest.current.id, manualReviewModel)
       if (seq === generation.current) {
         setReview(undefined)
         setJob(status)
@@ -505,16 +512,16 @@ export default function App() {
       }
     }
   }
-  function taskAction(action: TaskAction) {
+  function taskAction(action: TaskAction, model?: ModelChoice) {
     if (action === 'plan') startPlan()
     else if (action === 'review') startReview()
     else if (action === 'execute') startExecution()
-    else if (action === 'repair') startRepair()
+    else if (action === 'repair') startRepair(model)
     else if (action === 'refresh') protect(refreshTask)
     else if (action === 'changes') showChanges()
     else if (action === 'guide') protect(async () => api?.openGuide())
   }
-  async function startExecution() {
+  async function startExecution(model?: ModelChoice, reviewModel?: ModelChoice) {
     if (!api || !context) return
     const id = context.task_id,
       seq = generation.current
@@ -533,7 +540,9 @@ export default function App() {
         id,
         executionRequest.current.id,
         planResult.job_id,
-        planResult.plan_id
+        planResult.plan_id,
+        model,
+        reviewModel
       )
       if (seq === generation.current) {
         setExecution(started)
@@ -542,12 +551,12 @@ export default function App() {
     })
     if (seq === generation.current) setBusy(false)
   }
-  async function startRepair() {
+  async function startRepair(model?: ModelChoice) {
     if (!api || !job) return
     const seq = generation.current
     setBusy(true)
     await protect(async () => {
-      const started = await api.startRepair(job.job_id)
+      const started = await api.startRepair(job.job_id, model)
       if (seq === generation.current) setExecution(started)
     })
     if (seq === generation.current) setBusy(false)
@@ -644,6 +653,12 @@ export default function App() {
       <PlanAdoption
         plan={planResult}
         executor={agentName((context?.agents || defaultAgents).executor)}
+        executorId={(context?.agents || defaultAgents).executor}
+        reviewerId={(context?.agents || defaultAgents).reviewer}
+        executionModel={executionModel}
+        reviewModel={workflowReviewModel}
+        onExecutionModel={setExecutionModel}
+        onReviewModel={setWorkflowReviewModel}
         busy={busy}
         onExecute={startExecution}
       />
@@ -661,7 +676,14 @@ export default function App() {
             <span>使用所选审查 Agent 的账号额度</span>
             <span>每项任务最多两次</span>
           </div>
-          <Button disabled={busy} onClick={startReview}>
+          <ModelSelector
+            agent={(context?.agents || defaultAgents).reviewer}
+            role="审查"
+            busy={busy}
+            value={manualReviewModel}
+            onChange={setManualReviewModel}
+          />
+          <Button disabled={busy} onClick={() => startReview()}>
             <ShieldCheck />
             发起 {reviewerName} 审查
           </Button>
@@ -734,17 +756,26 @@ export default function App() {
             </>
           )}
           {terminal.has(job.status) && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || reviewAttempts >= 2}
-              onClick={() => {
-                reviewRequest.current = { task: 0, id: '' }
-                startReview()
-              }}
-            >
-              {reviewAttempts >= 2 ? '审查次数已用完（2/2）' : '新一轮审查（消耗额度）'}
-            </Button>
+            <>
+              <ModelSelector
+                agent={(context?.agents || defaultAgents).reviewer}
+                role="审查"
+                busy={busy}
+                value={manualReviewModel}
+                onChange={setManualReviewModel}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || reviewAttempts >= 2}
+                onClick={() => {
+                  reviewRequest.current = { task: 0, id: '' }
+                  startReview()
+                }}
+              >
+                {reviewAttempts >= 2 ? '审查次数已用完（2/2）' : '新一轮审查（消耗额度）'}
+              </Button>
+            </>
           )}
         </>
       )}
@@ -971,11 +1002,6 @@ export default function App() {
           </div>
         ) : (
           <div className="task-workbench">
-            <WorkflowBar
-              flow={flow!}
-              executor={agentName((context.agents || defaultAgents).executor)}
-              reviewer={reviewerName}
-            />
             <ResizablePanelGroup direction="horizontal" className="task-panels">
               <ResizablePanel id="timeline" order={1} defaultSize={62} minSize={42}>
                 <div className="timeline-pane conversation-pane">

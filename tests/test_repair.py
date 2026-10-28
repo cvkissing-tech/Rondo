@@ -1,6 +1,8 @@
 """Real SQLite/native lifecycle with explicit offline model fixtures."""
 import time
 import unittest
+import json
+from unittest.mock import patch
 
 from agent_review_loop.repair import path_matches_contract, unauthorized_changed_files
 from agent_review_loop.reviews import save_review
@@ -44,8 +46,8 @@ class RepairTests(unittest.TestCase):
                 (self.workspace / 'unrelated.txt').write_text('outside finding scope\n')
         return result
 
-    def completed_flow(self):
-        first = self.execution.start_execution(self.task_id, 'z-initial')
+    def completed_flow(self, **choices):
+        first = self.execution.start_execution(self.task_id, 'z-initial', **choices)
         deadline = time.monotonic() + 35
         while time.monotonic() < deadline:
             with self.store._connection() as db:
@@ -72,6 +74,19 @@ class RepairTests(unittest.TestCase):
         self.assertEqual(owner, 'rondo-workbuddy-' + repair['job_id'])
         self.assertEqual(self.execution.status(first['job_id'])['repair_job_id'], repair['job_id'])
         self.assertEqual(self.execution.start_execution(self.task_id, 'z-initial')['job_id'], first['job_id'])
+
+    def test_execution_and_review_models_remain_separate_through_repair(self):
+        review_choice = {'model': 'review-model', 'effort': 'high'}
+        with patch.object(self.reviews, 'start_review', wraps=self.reviews.start_review) as start:
+            _, repair = self.completed_flow(model_choice={'model': 'execution-model'}, review_model_choice=review_choice)
+        self.assertEqual(repair['phase'], 'completed')
+        self.assertEqual([call.kwargs['input_data']['model_choice'] for call in start.call_args_list], [review_choice, review_choice])
+        with self.store._connection() as db:
+            rows = db.execute('SELECT result_json FROM execution_jobs WHERE task_id=? ORDER BY created_at', (self.task_id,)).fetchall()
+        for row in rows:
+            data = json.loads(row['result_json'])
+            self.assertEqual(data['requested_model'], 'execution-model')
+            self.assertEqual(data['review_model_choice'], review_choice)
 
     def test_no_code_progress_stops_before_paid_review(self):
         self.repair_mode = 'no-progress'
@@ -112,6 +127,26 @@ class RepairTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'REPAIR_SOURCE_STALE')
         self.assertEqual(self.store.get_task(self.task_id)['status'], 'submitted')
         self.assertEqual(self.calls, 1)
+
+    def test_manual_repair_can_choose_a_different_execution_model(self):
+        self.execution._continue_after_review = lambda *_: None
+        first = self.execution.start_execution(self.task_id, 'initial', model_choice={'model': 'first-model'},
+                                               review_model_choice={'model': 'review-model'})
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            state = self.execution.status(first['job_id'])
+            if state['review_job_id'] and self.reviews.status(state['review_job_id'])['status'] == 'succeeded':
+                break
+            time.sleep(.03)
+        repair = self.execution.start_repair(state['review_job_id'], {'model': 'repair-model'})
+        with self.store._connection() as db:
+            row = db.execute('SELECT result_json FROM execution_jobs WHERE id=?', (repair['job_id'],)).fetchone()
+        saved = json.loads(row['result_json'])
+        self.assertEqual(saved['requested_model'], 'repair-model')
+        self.assertEqual(saved['review_model_choice'], {'model': 'review-model'})
+        with self.assertRaises(StoreError) as caught:
+            self.execution.start_repair(state['review_job_id'], {'model': 'different-model'})
+        self.assertEqual(caught.exception.code, 'IDEMPOTENCY_CONFLICT')
 
 
 class PortedPolicyTests(unittest.TestCase):

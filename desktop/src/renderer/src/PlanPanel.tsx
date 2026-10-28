@@ -1,4 +1,4 @@
-import { ListChecks, RefreshCw, Square, Unplug } from 'lucide-react'
+import { ListChecks, RefreshCw, Square } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@jean/components/ui/button'
 import { Badge } from '@jean/components/ui/badge'
@@ -62,12 +62,7 @@ export default function PlanPanel({
         <div className="space-y-4">
           {!job ? (
             <>
-              <p className="supporting">
-                依据所选 Agent 的能力与本机配置读取项目，生成交给执行方的实施步骤。
-              </p>
-              <p className="supporting">
-                生成或发送一条规划消息会使用所选 Agent 的账号额度。也可以在底部输入框补充需求。
-              </p>
+              <p className="supporting">生成计划消耗账号额度。</p>
               <Button disabled={busy} onClick={() => onStart()}>
                 <ListChecks />
                 生成 {agentName} 计划
@@ -88,11 +83,6 @@ export default function PlanPanel({
                   </Button>
                 )}
               </div>
-              {!terminal.has(job.status) && (
-                <p className="supporting">
-                  正在等待本次生成结果。可以切换视图，任务仍在后台继续；不会自动重试。
-                </p>
-              )}
               {job.error_code && (
                 <Alert variant="destructive">
                   <AlertTitle>计划未生成</AlertTitle>
@@ -154,12 +144,7 @@ export default function PlanPanel({
                       </ul>
                     </details>
                   )}
-                  <p className="supporting">
-                    本次读取 {result.context.files.length} 个源码片段，项目共{' '}
-                    {result.context.file_count} 个文件
-                    {result.context.file_list_truncated ? '，文件列表已截断' : ''}
-                    。计划中的验收方式尚未执行。
-                  </p>
+                  <p className="supporting">计划中的验收方式尚未执行。</p>
                   {result.usage?.total?.totalTokens !== undefined && (
                     <p className="supporting">
                       本次用量 {result.usage.total.totalTokens.toLocaleString()} tokens
@@ -170,10 +155,6 @@ export default function PlanPanel({
               )}
             </>
           )}
-          <div className="next-step">
-            <Unplug />
-            <p>有疑问或修改意见，直接在会话底部提出；确认方案后，在底部采用计划并执行。</p>
-          </div>
         </div>
       </ChatEntryContainer>
     </section>

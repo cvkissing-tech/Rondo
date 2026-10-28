@@ -188,9 +188,7 @@ export function PlanningComposer({
       </ComposerLayout>
       <p className="composer-hint" role="status">
         {blocked ||
-          (running
-            ? '正在回答，你可以先写下下一条意见。'
-            : `本次选择仅用于这条对话 · 使用 ${planner} 账号额度 · Enter 发送，Shift+Enter 换行`)}
+          (running ? '正在回答，你可以先写下下一条意见。' : `发送给 ${planner} · 使用账号额度`)}
       </p>
       {modelNotice && (
         <p className="composer-hint" role="status">

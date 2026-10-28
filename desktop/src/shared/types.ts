@@ -208,7 +208,11 @@ export interface DesktopAPI {
   startTask(input: StartInput): Promise<Context>
   context(id: number): Promise<Context>
   changes(id: number): Promise<{ patch: string; truncated: boolean }>
-  startReview(id: number, request: string): Promise<ReviewStatus>
+  startReview(
+    id: number,
+    request: string,
+    model?: { model: string; effort?: string }
+  ): Promise<ReviewStatus>
   reviewStatus(id: string): Promise<ReviewStatus>
   readReview(id: string, after?: number): Promise<Review>
   cancelReview(id: string): Promise<ReviewStatus>
@@ -228,9 +232,14 @@ export interface DesktopAPI {
     id: number,
     request: string,
     planJob?: string,
-    planId?: string
+    planId?: string,
+    model?: { model: string; effort?: string },
+    reviewModel?: { model: string; effort?: string }
   ): Promise<ExecutionStatus>
-  startRepair(sourceReviewId: string): Promise<ExecutionStatus>
+  startRepair(
+    sourceReviewId: string,
+    model?: { model: string; effort?: string }
+  ): Promise<ExecutionStatus>
   executionStatus(id: string): Promise<ExecutionStatus>
   cancelExecution(id: string): Promise<ExecutionStatus>
   openWorkspace(id: number): Promise<void>

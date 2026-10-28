@@ -48,3 +48,12 @@ Kxiandaoyan's live ACP sender explicitly avoids loading/replaying full history b
 prompting. The permission adaptation comes from Rondo's existing ACP answer flow and
 inspection of the installed WorkBuddy handlers; it is not represented as upstream code.
 The installed WorkBuddy 5.9.3 accepts the revision6 transport handshake (zero model turns).
+
+2026-10-28 revision9: Rondo now creates and dispatches its dedicated worker via
+`wb:conversations:create` and `wb:conversations:sendPrompt`, and reads native request
+history and pending permissions through the conversation SDK. The implementation adapts
+the calling pattern from [agent-lab](https://github.com/narutoZed/agent-lab/blob/ca7e45d4a1137cea401e39ff5c747e3aabf21d53/scripts/workbuddy-desktop.mjs)
+and [LazyMind](https://github.com/LazyAGI/LazyMind/blob/1af0e3a637ce9062d4b522bfc13b5fa16a416845/integrations/workbuddy-workflow/connector/src/sdk.ts).
+Rondo still requires a matching workspace and selected model, never automatically grants
+permissions, and does not replay an uncertain submission. This is an integration with the
+installed application's internal interface, validated against WorkBuddy 5.9.3 only.

@@ -80,8 +80,16 @@ function handlers(): void {
     'start-task': (input: StartInput) => backend.call('start_task', { ...input }),
     context: (id: number) => backend.call('get_task_context', { task_id: id }),
     changes: (id: number) => backend.call('get_task_changes', { task_id: id }),
-    'start-review': (id: number, request: string) =>
-      backend.call('start_task_review', { task_id: id, request_id: request }),
+    'start-review': (
+      id: number,
+      request: string,
+      modelChoice?: { model: string; effort?: string }
+    ) =>
+      backend.call('start_task_review', {
+        task_id: id,
+        request_id: request,
+        ...(modelChoice ? { model_choice: modelChoice } : {})
+      }),
     'review-status': (id: string) => backend.call('get_review_status', { job_id: id }),
     'read-review': (id: string, after = 0) =>
       backend.call('read_review', { job_id: id, after_index: after, limit: 5 }),
@@ -106,14 +114,27 @@ function handlers(): void {
     'planning-conversation': (id: number) =>
       backend.call('read_planning_conversation', { task_id: id }),
     'workbuddy-status': (launch = false) => backend.call('workbuddy_status', { launch }),
-    'start-execution': (id: number, request: string, planJob?: string, planId?: string) =>
+    'start-execution': (
+      id: number,
+      request: string,
+      planJob?: string,
+      planId?: string,
+      modelChoice?: { model: string; effort?: string },
+      reviewModelChoice?: { model: string; effort?: string }
+    ) =>
       backend.call('start_task_execution', {
         task_id: id,
         request_id: request,
         ...(planJob ? { plan_job_id: planJob } : {}),
-        ...(planId ? { expected_plan_id: planId } : {})
+        ...(planId ? { expected_plan_id: planId } : {}),
+        ...(modelChoice ? { model_choice: modelChoice } : {}),
+        ...(reviewModelChoice ? { review_model_choice: reviewModelChoice } : {})
       }),
-    'start-repair': (id: string) => backend.call('start_task_repair', { source_review_job_id: id }),
+    'start-repair': (id: string, modelChoice?: { model: string; effort?: string }) =>
+      backend.call('start_task_repair', {
+        source_review_job_id: id,
+        ...(modelChoice ? { model_choice: modelChoice } : {})
+      }),
     'execution-status': (id: string) => backend.call('get_execution_status', { job_id: id }),
     'cancel-execution': (id: string) => backend.call('cancel_execution', { job_id: id }),
     'answer-request': (
